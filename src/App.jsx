@@ -4,6 +4,7 @@ import MobileContainer from './components/MobileContainer'
 import LoginPage from './pages/LoginPage'
 import AttendancePage from './pages/AttendancePage'
 import SavedPage from './pages/SavedPage'
+import DashboardPage from './pages/DashboardPage'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Route path="/" element={<LoginPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/saved" element={<SavedPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
         </Routes>
       </MobileContainer>
     </BrowserRouter>
