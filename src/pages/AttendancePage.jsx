@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../config/brand'
 
@@ -11,6 +11,14 @@ const GROUPS_DATA = {
 
 export default function AttendancePage() {
   const navigate = useNavigate()
+  const sessionUser = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem('user')
+      return raw ? JSON.parse(raw) : null
+    } catch (e) {
+      return null
+    }
+  }, [])
   const [selectedGroup, setSelectedGroup] = useState(1)
   const [students, setStudents] = useState(
     GROUPS_DATA[1].map(name => ({ name, present: false }))
@@ -130,24 +138,7 @@ export default function AttendancePage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '10px',
-                  background: `linear-gradient(135deg, ${BRAND.burgundy}, ${BRAND.burgundyLight})`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: BRAND.gold,
-                  fontFamily: 'Cinzel, serif',
-                  fontSize: '18px',
-                  fontWeight: 700,
-                  boxShadow: `0 4px 12px rgba(128,0,0,0.4)`,
-                }}
-              >
-                S
-              </div>
+              <img src="/logova1.png" alt="logo" style={{ width: '42px', height: '42px', borderRadius: '12px', objectFit: 'cover', boxShadow: `0 4px 12px rgba(128,0,0,0.4)` }} />
               <div>
                 <h2
                   style={{
@@ -158,7 +149,7 @@ export default function AttendancePage() {
                     margin: '0 0 2px 0',
                   }}
                 >
-                  Samuel
+                  {sessionUser?.name || 'Samuel'}
                 </h2>
                 <p
                   style={{

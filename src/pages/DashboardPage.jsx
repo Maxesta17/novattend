@@ -246,23 +246,7 @@ export default function DashboardPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '10px',
-                  background: `linear-gradient(135deg, ${BRAND.gold}, ${BRAND.goldLight})`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: BRAND.burgundy,
-                  fontFamily: 'Cinzel, serif',
-                  fontSize: '16px',
-                  fontWeight: 700,
-                }}
-              >
-                CEO
-              </div>
+              <img src="/logova1.png" alt="logo" style={{ width: '42px', height: '42px', borderRadius: '12px', objectFit: 'cover' }} />
               <div>
                 <h2 style={{ fontFamily: 'Cinzel, serif', fontSize: '16px', fontWeight: 600, color: BRAND.white, margin: '0 0 2px 0' }}>
                   Dashboard

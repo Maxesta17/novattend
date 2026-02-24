@@ -98,47 +98,27 @@ export default function SavedPage() {
           position: 'relative',
         }}
       >
-        {/* CHECK ANIMADO */}
+        {/* LOGO ANIMADO */}
         <div
           style={{
             position: 'relative',
             marginBottom: '32px',
           }}
         >
-          {/* Efecto ripple */}
-          <div
-            className="ripple-effect"
-            style={{
-              position: 'absolute',
-              width: '86px',
-              height: '86px',
-              borderRadius: '50%',
-              border: `2px solid ${BRAND.burgundy}`,
-              top: 0,
-              left: 0,
-            }}
-          />
-
-          {/* Círculo check */}
-          <div
+          <img
             className="check-circle"
+            src="/logova1.png"
+            alt="NovAttend"
             style={{
               width: '86px',
               height: '86px',
               borderRadius: '50%',
-              background: `linear-gradient(135deg, ${BRAND.burgundy}, ${BRAND.burgundyLight})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              objectFit: 'cover',
               boxShadow: `0 8px 24px rgba(128,0,0,0.3)`,
               position: 'relative',
               zIndex: 1,
             }}
-          >
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
+          />
         </div>
 
         {/* TÍTULO */}
