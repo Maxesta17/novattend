@@ -693,22 +693,6 @@ export default function DashboardPage() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => setSelectedStudent(null)}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '24px',
-                color: BRAND.textMuted,
-              }}
-            >
-              ✕
-            </button>
-
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
               <div
                 style={{
@@ -834,22 +818,6 @@ export default function DashboardPage() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => setShowAlertPopup(false)}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '24px',
-                color: BRAND.textMuted,
-              }}
-            >
-              ✕
-            </button>
-
             <h2 style={{ fontFamily: 'Cinzel, serif', fontSize: '18px', fontWeight: 700, color: BRAND.textDark, margin: '0 0 4px 0' }}>
               Alumnos en Alerta
             </h2>
