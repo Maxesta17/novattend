@@ -137,15 +137,21 @@ function doGet(e) {
 }
 
 /**
- * Devuelve convocatorias activas.
+ * Devuelve convocatorias. Por defecto solo las activas por fecha.
+ * Una convocatoria esta activa si: fecha_inicio <= hoy <= fecha_fin.
+ * Parametro ?todas=true devuelve todas sin filtrar.
  */
 function handleGetConvocatorias(e) {
   const todas = sheetToObjects(SHEET_NAMES.CONVOCATORIAS);
-  const soloActivas = e.parameter.todas === 'true'
-    ? todas
-    : todas.filter(c => c.activa === true);
 
-  return jsonResponse(soloActivas);
+  if (e.parameter.todas === 'true') {
+    return jsonResponse(todas);
+  }
+
+  const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const activas = todas.filter(c => c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+
+  return jsonResponse(activas);
 }
 
 /**
@@ -196,6 +202,7 @@ function handleGetAsistencia(e) {
   const profesorId = e.parameter.profesor_id;
   const grupo = e.parameter.grupo;
   const fecha = e.parameter.fecha; // formato: yyyy-MM-dd
+  const alumnoId = e.parameter.alumno_id;
 
   let registros = sheetToObjects(SHEET_NAMES.ASISTENCIA);
 
@@ -211,12 +218,16 @@ function handleGetAsistencia(e) {
   if (fecha) {
     registros = registros.filter(r => r.fecha === fecha);
   }
+  if (alumnoId) {
+    registros = registros.filter(r => r.alumno_id === alumnoId);
+  }
 
   return jsonResponse(registros);
 }
 
 /**
- * Calcula y devuelve resumen de asistencia con porcentajes.
+ * Calcula y devuelve resumen de asistencia con porcentajes por periodo.
+ * Periodos: semanal (7 dias), quincenal (15 dias), mensual (30 dias).
  */
 function handleGetResumen(e) {
   const convocatoriaId = e.parameter.convocatoria_id;
@@ -238,7 +249,7 @@ function handleGetResumen(e) {
     alumnos = alumnos.filter(a => a.grupo === grupo);
   }
 
-  // Obtener registros de asistencia
+  // Obtener registros de asistencia de la convocatoria
   let registros = sheetToObjects(SHEET_NAMES.ASISTENCIA)
     .filter(r => r.convocatoria_id === convocatoriaId);
 
@@ -249,33 +260,78 @@ function handleGetResumen(e) {
     registros = registros.filter(r => r.grupo === grupo);
   }
 
-  // Agrupar registros por alumno_id
+  // Calcular limites de fecha para cada periodo
+  const tz = Session.getScriptTimeZone();
+  const hoy = new Date();
+  const fmt = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+  const hoyStr = fmt(hoy);
+
+  const hace7 = new Date(hoy);
+  hace7.setDate(hoy.getDate() - 7);
+  const hace7Str = fmt(hace7);
+
+  const hace15 = new Date(hoy);
+  hace15.setDate(hoy.getDate() - 15);
+  const hace15Str = fmt(hace15);
+
+  const hace30 = new Date(hoy);
+  hace30.setDate(hoy.getDate() - 30);
+  const hace30Str = fmt(hace30);
+
+  // Agrupar registros por alumno_id con desglose por periodo
   const porAlumno = {};
   registros.forEach(r => {
     if (!porAlumno[r.alumno_id]) {
-      porAlumno[r.alumno_id] = { total: 0, presentes: 0 };
+      porAlumno[r.alumno_id] = {
+        total: 0, presentes: 0,
+        sem_total: 0, sem_presentes: 0,
+        quin_total: 0, quin_presentes: 0,
+        mens_total: 0, mens_presentes: 0
+      };
     }
-    porAlumno[r.alumno_id].total++;
-    if (r.presente === true) {
-      porAlumno[r.alumno_id].presentes++;
+    const stats = porAlumno[r.alumno_id];
+    const fecha = r.fecha;
+    const presente = r.presente === true;
+
+    stats.total++;
+    if (presente) stats.presentes++;
+
+    if (fecha >= hace7Str && fecha <= hoyStr) {
+      stats.sem_total++;
+      if (presente) stats.sem_presentes++;
+    }
+    if (fecha >= hace15Str && fecha <= hoyStr) {
+      stats.quin_total++;
+      if (presente) stats.quin_presentes++;
+    }
+    if (fecha >= hace30Str && fecha <= hoyStr) {
+      stats.mens_total++;
+      if (presente) stats.mens_presentes++;
     }
   });
 
+  // Helper para calcular porcentaje
+  const pct = (presentes, total) => total > 0 ? Math.round((presentes / total) * 100) : 0;
+
   // Construir resumen
   const resumen = alumnos.map(a => {
-    const stats = porAlumno[a.id] || { total: 0, presentes: 0 };
-    const porcentaje = stats.total > 0
-      ? Math.round((stats.presentes / stats.total) * 100)
-      : 0;
+    const s = porAlumno[a.id] || {
+      total: 0, presentes: 0,
+      sem_total: 0, sem_presentes: 0,
+      quin_total: 0, quin_presentes: 0,
+      mens_total: 0, mens_presentes: 0
+    };
 
     return {
       alumno_id: a.id,
       nombre: a.nombre,
       profesor_id: a.profesor_id,
       grupo: a.grupo,
-      clases_total: stats.total,
-      clases_presentes: stats.presentes,
-      porcentaje: porcentaje
+      semanal: pct(s.sem_presentes, s.sem_total),
+      quincenal: pct(s.quin_presentes, s.quin_total),
+      mensual: pct(s.mens_presentes, s.mens_total),
+      clases_total: s.total,
+      clases_presentes: s.presentes
     };
   });
 
