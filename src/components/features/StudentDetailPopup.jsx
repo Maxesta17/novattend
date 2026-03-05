@@ -1,6 +1,9 @@
+import { useState, useEffect, useMemo } from 'react'
 import Modal from '../ui/Modal.jsx'
 import Avatar from '../ui/Avatar.jsx'
 import ProgressBar from '../ui/ProgressBar.jsx'
+import { isApiEnabled } from '../../config/api'
+import { getAsistenciaAlumno } from '../../services/api'
 
 /**
  * Popup con detalle de asistencia de un alumno.
@@ -12,7 +15,8 @@ import ProgressBar from '../ui/ProgressBar.jsx'
  * @param {number} props.student.weekly - Porcentaje semanal
  * @param {number} props.student.biweekly - Porcentaje quincenal
  * @param {number} props.student.monthly - Porcentaje mensual
- * @param {string[]} props.student.absences - Fechas de inasistencia (YYYY-MM-DD)
+ * @param {string[]} [props.student.absences] - Fechas de inasistencia (YYYY-MM-DD, solo mock)
+ * @param {string} [props.convocatoriaId] - ID de convocatoria para cargar faltas via API
  * @param {function} props.onClose - Handler al cerrar
  */
 
@@ -27,7 +31,44 @@ const getAttendanceColor = (pct) => {
   return { color: 'text-error', bg: 'bg-error-soft', bar: 'bg-error', border: 'border-error', status: 'Alerta — contactar alumno' }
 }
 
-export default function StudentDetailPopup({ student, onClose }) {
+export default function StudentDetailPopup({ student, convocatoriaId, onClose }) {
+  const [apiAbsences, setApiAbsences] = useState([])
+  const [loadingAbsences, setLoadingAbsences] = useState(false)
+
+  // Mock: si el alumno ya trae faltas locales, usarlas directamente
+  const mockAbsences = useMemo(() => student?.absences ?? [], [student])
+  const shouldFetchApi = isApiEnabled() && !!convocatoriaId && !student?.absences?.length
+
+  // Carga de faltas bajo demanda via API
+  useEffect(() => {
+    if (!student || !shouldFetchApi) return
+
+    let cancelled = false
+
+    const fetchAbsences = async () => {
+      setLoadingAbsences(true)
+      setApiAbsences([])
+      try {
+        const records = await getAsistenciaAlumno(convocatoriaId, student.id)
+        if (cancelled) return
+        const dates = (records || [])
+          .filter((r) => r.presente === false)
+          .map((r) => r.fecha)
+          .sort((a, b) => b.localeCompare(a))
+        setApiAbsences(dates)
+      } catch {
+        if (!cancelled) setApiAbsences([])
+      } finally {
+        if (!cancelled) setLoadingAbsences(false)
+      }
+    }
+
+    fetchAbsences()
+    return () => { cancelled = true }
+  }, [student, convocatoriaId, shouldFetchApi])
+
+  const absences = shouldFetchApi ? apiAbsences : mockAbsences
+
   if (!student) return null
 
   const initials = student.name.split(' ').map(n => n[0]).join('')
@@ -76,13 +117,17 @@ export default function StudentDetailPopup({ student, onClose }) {
       })}
 
       {/* Fechas de inasistencia */}
-      {student.absences?.length > 0 && (
+      {loadingAbsences ? (
+        <p className="mt-5 font-montserrat text-xs text-text-muted text-center">
+          Cargando faltas...
+        </p>
+      ) : absences.length > 0 && (
         <div className="mt-5">
           <h4 className="font-cinzel text-xs font-semibold text-text-dark mb-2">
-            Dias de inasistencia ({student.absences.length})
+            Dias de inasistencia ({absences.length})
           </h4>
           <div className="flex flex-wrap gap-1.5">
-            {student.absences.map(date => (
+            {absences.map(date => (
               <span
                 key={date}
                 className="font-montserrat text-[10px] px-2 py-1 rounded-md bg-error-soft text-error font-medium"

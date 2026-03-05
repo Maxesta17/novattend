@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TEACHERS_DATA } from '../config/teachers.js'
+import { isApiEnabled } from '../config/api.js'
+import { getConvocatorias, getProfesores, getResumen } from '../services/api.js'
 import PageHeader from '../components/features/PageHeader.jsx'
 import TeacherCard from '../components/features/TeacherCard.jsx'
 import StudentDetailPopup from '../components/features/StudentDetailPopup.jsx'
@@ -9,26 +11,104 @@ import StatCard from '../components/ui/StatCard.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import SearchInput from '../components/ui/SearchInput.jsx'
 
+/**
+ * Transforma la respuesta plana de la API en la jerarquia teacher->group->students.
+ * @param {Array} profesores - Lista de profesores de la API
+ * @param {Array} resumen - Lista plana de resumen con porcentajes
+ * @returns {Array} Estructura compatible con TeacherCard
+ */
+function buildTeachersHierarchy(profesores, resumen) {
+  return profesores.map(prof => {
+    const profRows = resumen.filter(r => r.profesor_id === prof.id)
+    const groupIds = [...new Set(profRows.map(r => r.grupo))]
+    const groups = groupIds.map(gId => ({
+      id: `${gId}-${prof.id}`,
+      number: Number(gId.replace(/\D/g, '')) || gId,
+      students: profRows
+        .filter(r => r.grupo === gId)
+        .map(r => ({
+          id: r.alumno_id,
+          name: r.nombre,
+          weekly: r.semanal ?? 0,
+          biweekly: r.quincenal ?? 0,
+          monthly: r.mensual ?? 0,
+        })),
+    }))
+    return {
+      id: prof.id,
+      name: prof.nombre,
+      initial: (prof.nombre || '?')[0].toUpperCase(),
+      groups,
+    }
+  })
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const [teachers, setTeachers] = useState(null)
+  const [convocatoria, setConvocatoria] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [expandedTeacher, setExpandedTeacher] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showAlertPopup, setShowAlertPopup] = useState(false)
 
-  const totalStudents = TEACHERS_DATA.reduce(
-    (acc, t) => acc + t.groups.reduce((g, gr) => g + gr.students.length, 0), 0
-  )
-  const globalAttendance = Math.round(
-    TEACHERS_DATA.reduce((acc, t) =>
-      acc + t.groups.reduce((g, gr) =>
-        g + gr.students.reduce((s, st) => s + st.monthly, 0) / gr.students.length, 0
-      ) / t.groups.length, 0
-    ) / TEACHERS_DATA.length
-  )
+  // Carga de datos: API o mock
+  const loadData = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      if (!isApiEnabled()) {
+        setTeachers(TEACHERS_DATA)
+        setConvocatoria(null)
+        return
+      }
+      const convocatorias = await getConvocatorias()
+      const activeConv = convocatorias?.[0] ?? null
+      setConvocatoria(activeConv)
+      if (!activeConv) {
+        setTeachers([])
+        return
+      }
+      const [profesores, resumen] = await Promise.all([
+        getProfesores(),
+        getResumen(activeConv.id),
+      ])
+      setTeachers(buildTeachersHierarchy(profesores || [], resumen || []))
+    } catch (err) {
+      setError(err.message || 'Error al cargar datos')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const allStudents = useMemo(() =>
-    TEACHERS_DATA.flatMap(teacher =>
+  useEffect(() => { loadData() }, [])
+
+  // Estadisticas globales
+  const totalStudents = useMemo(() => {
+    if (!teachers) return 0
+    return teachers.reduce(
+      (acc, t) => acc + t.groups.reduce((g, gr) => g + gr.students.length, 0), 0
+    )
+  }, [teachers])
+
+  const globalAttendance = useMemo(() => {
+    if (!teachers || teachers.length === 0) return 0
+    return Math.round(
+      teachers.reduce((acc, t) =>
+        acc + t.groups.reduce((g, gr) => {
+          if (gr.students.length === 0) return g
+          return g + gr.students.reduce((s, st) => s + st.monthly, 0) / gr.students.length
+        }, 0) / (t.groups.length || 1), 0
+      ) / teachers.length
+    )
+  }, [teachers])
+
+  // Listado plano de alumnos para busqueda y alertas
+  const allStudents = useMemo(() => {
+    if (!teachers) return []
+    return teachers.flatMap(teacher =>
       teacher.groups.flatMap(group =>
         group.students.map(student => ({
           ...student,
@@ -37,8 +117,8 @@ export default function DashboardPage() {
           group: group.number,
         }))
       )
-    ), []
-  )
+    )
+  }, [teachers])
 
   const alertStudents = useMemo(() => allStudents.filter(s => s.weekly <= 80), [allStudents])
 
@@ -47,13 +127,36 @@ export default function DashboardPage() {
     return allStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [searchQuery, allStudents])
 
+  // Estado de carga
+  if (loading) {
+    return (
+      <div className="min-h-dvh min-h-screen flex items-center justify-center bg-off-white">
+        <p className="font-montserrat text-sm text-text-muted">Cargando dashboard...</p>
+      </div>
+    )
+  }
+
+  // Estado de error
+  if (error) {
+    return (
+      <div className="min-h-dvh min-h-screen flex flex-col items-center justify-center gap-3 bg-off-white px-6">
+        <p className="font-montserrat text-sm text-error text-center">{error}</p>
+        <button onClick={loadData} className="font-montserrat text-sm text-burgundy underline">
+          Reintentar
+        </button>
+      </div>
+    )
+  }
+
+  const subtitle = convocatoria?.nombre || 'LingNova Academy'
+
   return (
     <>
       <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-off-white box-border pb-10">
         {/* Header */}
         <PageHeader
           title="Dashboard"
-          subtitle="LingNova Academy"
+          subtitle={subtitle}
           badge={<Badge variant="admin">ADMIN</Badge>}
           onLogout={() => { sessionStorage.removeItem('user'); navigate('/') }}
         >
@@ -105,7 +208,7 @@ export default function DashboardPage() {
           <h3 className="font-cinzel text-[15px] font-semibold text-text-dark mt-4 mb-3">
             Profesores
           </h3>
-          {TEACHERS_DATA.map(teacher => (
+          {(teachers || []).map(teacher => (
             <TeacherCard
               key={teacher.id}
               teacher={teacher}
@@ -120,6 +223,7 @@ export default function DashboardPage() {
       {/* Popups */}
       <StudentDetailPopup
         student={selectedStudent}
+        convocatoriaId={convocatoria?.id}
         onClose={() => setSelectedStudent(null)}
       />
 
