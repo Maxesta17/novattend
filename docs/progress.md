@@ -2,7 +2,7 @@
 
 ## Ultimo Hito
 - **Fecha:** 2026-03-05
-- **Hito:** Fase 12 completada — Hooks custom + deuda tecnica cerrada + tests ampliados + offline PWA
+- **Hito:** Fase 13 — CacheService en Apps Script + deploy Vercel actualizado + prueba E2E exitosa
 
 ## Resumen de Cambios (Fases 1-11)
 
@@ -22,7 +22,7 @@
 - Flujo convocatorias: login -> consulta activas -> selector si 2+ -> asistencia
 - Dashboard CEO conectado a API real con getResumen y getAsistenciaAlumno
 
-### Fase 12 — Gestion de convocatorias en Google Sheets + Optimizaciones frontend
+### Fase 12 — Gestion de convocatorias + Optimizaciones + Deuda tecnica
 
 #### Backend: Apps Script (`gestionConvocatorias.gs`)
 - **`crearConvocatoria()`** — Crea separador de color + 28 hojas de grupo por convocatoria
@@ -39,74 +39,98 @@
 - Flujo Aurora: Solo escribe nombres en columna A. Todo lo demas es automatico.
 
 #### Optimizaciones frontend
-- **`AttendancePage.jsx`** — Cache de alumnos con `useRef` por grupo. Prefetch paralelo de G2/G3/G4 al montar el componente. Cambio de tab instantaneo sin recarga de API.
-- **`AttendancePage.jsx`** — Mapeo `profesorId` corregido: `prof-${username}` para coincidir con IDs en hoja PROFESORES.
-- **`LoginPage.jsx`** — Timeout de seguridad de 8s (`Promise.race`) para la consulta de convocatorias activas. Evita que el usuario espere indefinidamente si la API no responde.
-- **`animations.css`** — Delays escalonados mas rapidos (0s, 0.1s, 0.18s, 0.25s, 0.35s, 0.4s, 0.5s, 0.7s). Animaciones mas agiles en la entrada de elementos.
+- **`AttendancePage.jsx`** — Cache de alumnos con `useRef` por grupo. Prefetch paralelo de G2/G3/G4.
+- **`LoginPage.jsx`** — Timeout de seguridad de 8s (`Promise.race`) para convocatorias activas.
+- **`animations.css`** — Delays escalonados mas rapidos.
 
-#### Decisiones tecnicas
-- Cache con `useRef` en vez de `useState` para evitar re-renders innecesarios al almacenar datos de grupos no visibles.
-- Prefetch paralelo con `forEach` + `.catch(() => {})` silencioso para no bloquear la UI si un grupo falla.
-- `Promise.race` con timeout de 8s en LoginPage: balance entre esperar la API y no frustrar al usuario.
-- Patron de limpieza `cancelled` en useEffect para evitar actualizaciones de estado en componentes desmontados.
-
-#### Archivos modificados
-- `src/pages/AttendancePage.jsx` — cache + prefetch + fix prof-ID
-- `src/pages/LoginPage.jsx` — timeout 8s en consulta de convocatorias
-- `src/styles/animations.css` — delays escalonados mas rapidos
-- `docs/apps-script/gestionConvocatorias.gs` — sistema completo de gestion
-- `docs/apps-script/importarAlumnos.gs` — script legacy (reemplazado)
-
-#### Estado
-- Script pegado en Apps Script. Hojas viejas (sin prefijo) eliminadas.
-- Listo para crear primera convocatoria con el nuevo sistema.
-
-### Fase 12 (cierre) — Deuda tecnica cerrada
+#### Deuda tecnica cerrada
 - **Tests ampliados:** De 4 suites/19 tests a 8 suites/55 tests. Nuevas suites: LoginPage, ConvocatoriaPage, StudentRow, api.
-- **Pagina offline PWA:** `public/offline.html` con branding NovAttend (logo, icono wifi-off, boton reintentar, colores burgundy/gold, fuentes Cinzel/Montserrat).
-- **Hooks custom:** `src/hooks/useStudents.js` y `src/hooks/useConvocatorias.js` extraidos de AttendancePage y DashboardPage para separar logica de vista.
+- **Pagina offline PWA:** `public/offline.html` con branding NovAttend.
+- **Hooks custom:** `src/hooks/useStudents.js` y `src/hooks/useConvocatorias.js` extraidos de paginas.
 - **Workbox configurado:** `navigateFallback: '/offline.html'` en vite.config.js.
+
+### Fase 13 — CacheService en Apps Script + Deploy
+
+#### CacheService (Code.gs)
+- **`cachedGet(key, fetchFn)`** — Wrapper que lee de `CacheService.getScriptCache()`, si miss ejecuta fetchFn y guarda con TTL 120s.
+- **`cacheInvalidate(prefixes)`** — Invalida claves por prefijo usando indice `_keys`.
+- **`cacheTrackKey(key)`** — Registra claves activas para poder invalidar por prefijo.
+- **Endpoints cacheados:** getConvocatorias (`conv`), getProfesores (`prof`), getAlumnos (`alu_{conv}_{prof}_{grupo}`), getResumen (`res_{conv}_{prof}_{grupo}`).
+- **getAsistencia NO cacheado** — Consulta bajo demanda, siempre fresco.
+- **Invalidacion automatica en POST:**
+  - `guardarAsistencia` -> invalida `res_{convocatoria_id}_*`
+  - `crearAlumno` -> invalida `alu_{convocatoria_id}_*`
+  - `actualizarAlumno` -> invalida `alu_*`
+- **Impacto:** Primera carga ~3-5s (cold), cargas posteriores ~200-500ms (cache hit).
+
+#### Prueba E2E (Playwright)
+- Login teacher (samuel): funciona, detecta convocatoria activa, va directo a /attendance
+- Alumnos reales: Antonio Perez Burrul cargado en G1 de Samuel
+- Toggle asistencia: funciona, contadores se actualizan correctamente
+- Login CEO (admin): dashboard carga 7 profesores reales
+- Pagina offline: se muestra correctamente con branding
+
+#### Deploy Vercel
+- Push a GitHub (Maxesta18/novattend) con todos los cambios
+- `VITE_API_URL` configurada en Vercel Production
+- Deploy manual con `vercel --prod --force` (clean build)
+- URL produccion: https://novattend.vercel.app
+- **Nota:** Service Worker puede cachear version vieja. Si muestra datos mock, hacer: DevTools > Application > Service Workers > Unregister + Ctrl+Shift+R.
 
 ## Estado
 - **Rama:** main
-- **Build:** funcional
+- **Build:** funcional, JS 271KB
 - **Lint:** 0 errores
 - **Tests:** 55 passing (8 suites)
-- **Fase completada:** 12 (completada)
+- **Fase completada:** 13
+- **Commits recientes:**
+  - `3b47a5b` feat: CacheService en Apps Script
+  - `a1a78c1` feat: fase 12 completa — hooks, tests, offline PWA, convocatorias
+
+## Estructura de Carpetas Actual
+- `src/config/`: api.js, users.js, teachers.js
+- `src/services/`: api.js (capa de servicios fetch)
+- `src/hooks/`: useStudents.js (156 lineas), useConvocatorias.js (68 lineas)
+- `src/components/ui/`: Button, StatCard, Avatar, Badge, Modal, ProgressBar, ToggleSwitch, SearchInput
+- `src/components/features/`: PageHeader, GroupTabs, StudentRow, StudentDetailPopup, AlertList, TeacherCard, ConvocatoriaSelector
+- `src/components/`: MobileContainer, ErrorBoundary, ProtectedRoute
+- `src/pages/`: LoginPage, ConvocatoriaPage, AttendancePage, SavedPage, DashboardPage
+- `src/utils/`: buildTeachersHierarchy.js
+- `src/tests/`: 8 archivos test (Badge, Button, StatCard, ProtectedRoute, LoginPage, ConvocatoriaPage, StudentRow, api)
+- `public/`: offline.html, logova1.png
+- `docs/apps-script/`: Code.gs (con CacheService), gestionConvocatorias.gs, importarAlumnos.gs (legacy)
 
 ## Deuda Tecnica
-### Resuelta en fase 12
-- Rendimiento en cambio de grupo (era una recarga API por cada tab, ahora es instantaneo via cache)
-- Timeout inexistente en LoginPage al consultar convocatorias (ahora 8s maximo)
-- Animaciones de entrada lentas (reducidos delays)
-- Ampliar tests (de 4 suites/19 tests a 8 suites/55 tests)
-- Pagina offline fallback PWA (`public/offline.html` + Workbox navigateFallback)
-- Extraer hooks custom (`useStudents`, `useConvocatorias`) para separar logica de vista
-- ~~Selector de convocatoria en Dashboard si hay 2+ activas~~ (resuelto)
+### Resuelta
+- Rendimiento en cambio de grupo (cache useRef + prefetch)
+- Timeout en LoginPage (8s maximo)
+- Animaciones de entrada lentas (delays reducidos)
+- Tests ampliados (8 suites, 55 tests)
+- Pagina offline fallback PWA
+- Hooks custom (useStudents, useConvocatorias)
+- Selector de convocatoria en Dashboard
+- Rendimiento dashboard (CacheService 120s en Apps Script)
 
 ### Pendiente
 - Validar que `actualizarEstadisticas()` se ejecuta correctamente tras guardar asistencia
 - Considerar migracion a TypeScript en el futuro
 
 ## Archivos de Apps Script
-- `docs/apps-script/Code.gs` — API REST principal (doGet, doPost, setupSheets)
-- `docs/apps-script/gestionConvocatorias.gs` — Gestion de convocatorias y alumnos (crearConvocatoria, sincronizarAlumnos, actualizarEstadisticas, onEdit, onOpen)
+- `docs/apps-script/Code.gs` — API REST principal con CacheService (doGet, doPost, cache helpers, setupSheets)
+- `docs/apps-script/gestionConvocatorias.gs` — Gestion de convocatorias y alumnos
 - `docs/apps-script/importarAlumnos.gs` — Script legacy (ya no se usa)
 
 ## Logica de Negocio (Convocatorias)
 - Convocatoria activa = `fecha_inicio <= hoy <= fecha_fin` (automatico)
 - Cada convocatoria tiene sus propios alumnos independientes
-- Varias convocatorias pueden convivir simultaneamente (abril, mayo, etc.)
+- Varias convocatorias pueden convivir simultaneamente
 - Alumnos se mantienen en su grupo durante toda la convocatoria (excepciones manuales en Sheet)
 - 7 profesores activos x 4 grupos = 28 hojas por convocatoria
 - Profesores: Samuel, Maria Wolf, Nadine, Marta Battistella, Elisabeth Shick, Myriam Marcia, Sonja
 
-### Resuelto post-fase 12
-- Selector de convocatoria en DashboardPage (dropdown en header cuando hay 2+ activas)
-- `buildTeachersHierarchy` extraido a `src/utils/buildTeachersHierarchy.js` para cumplir limite 250 lineas
-- Nuevo componente: `src/components/features/ConvocatoriaSelector.jsx` (37 lineas)
-
 ## Siguiente Paso
-1. Validacion end-to-end con datos reales (crear convocatoria, inscribir alumnos, pasar lista, verificar estadisticas)
-2. Onboarding de profesores (entregar credenciales, explicar flujo)
-3. Considerar mejoras UX basadas en feedback real
+1. Verificar que https://novattend.vercel.app carga datos reales (no mock) — si muestra mock, limpiar Service Worker
+2. Pegar Code.gs actualizado (con CacheService) en Apps Script y hacer nuevo deploy de Web App
+3. Validacion end-to-end con datos reales (pasar lista con samuel, verificar en dashboard con admin)
+4. Onboarding de profesores (entregar credenciales, explicar flujo)
+5. Considerar mejoras UX basadas en feedback real
