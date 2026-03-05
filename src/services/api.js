@@ -107,6 +107,18 @@ export async function getResumen(convocatoriaId, profesorId, grupo) {
   })
 }
 
+/**
+ * Obtener registros de asistencia de un alumno concreto
+ * @param {string} convocatoriaId
+ * @param {string} alumnoId
+ */
+export async function getAsistenciaAlumno(convocatoriaId, alumnoId) {
+  return apiGet('getAsistencia', {
+    convocatoria_id: convocatoriaId,
+    alumno_id: alumnoId
+  })
+}
+
 // ============================================================
 // Endpoints de escritura
 // ============================================================
