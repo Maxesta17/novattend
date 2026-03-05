@@ -55,7 +55,7 @@ export default function DashboardPage() {
           title="Dashboard"
           subtitle="LingNova Academy"
           badge={<Badge variant="admin">ADMIN</Badge>}
-          onLogout={() => { sessionStorage.removeItem('novattend_user'); navigate('/') }}
+          onLogout={() => { sessionStorage.removeItem('user'); navigate('/') }}
         >
           <div className="flex gap-1.5 mb-3">
             <StatCard value={totalStudents} label="Alumnos" color="gold" variant="dark" />

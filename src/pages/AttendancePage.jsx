@@ -73,7 +73,7 @@ export default function AttendancePage() {
         title={sessionUser?.name || 'Samuel'}
         subtitle={today}
         badge={<Badge>LINGNOVA</Badge>}
-        onLogout={() => { sessionStorage.removeItem('novattend_user'); navigate('/') }}
+        onLogout={() => { sessionStorage.removeItem('user'); navigate('/') }}
       >
         <GroupTabs
           groups={[1, 2, 3, 4]}
