@@ -478,6 +478,138 @@ function actualizarEstadisticas() {
 }
 
 // ============================================================
+// ACTUALIZAR ESTADISTICAS — UN SOLO GRUPO
+// ============================================================
+
+/**
+ * Actualiza columnas B, C, D de UNA sola hoja de grupo.
+ * Se llama automaticamente desde handleGuardarAsistencia en Code.gs.
+ *
+ * @param {string} convocatoriaId - Ej: "conv-mar26"
+ * @param {string} profesorId - Ej: "prof-samuel"
+ * @param {string} grupo - Ej: "G1"
+ */
+function actualizarEstadisticasGrupo(convocatoriaId, profesorId, grupo) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Obtener prefijo de la convocatoria: "conv-mar26" -> "mar26" -> "MAR26"
+  const prefijo = convocatoriaId.replace('conv-', '').toUpperCase();
+
+  // Obtener nombre del profesor
+  const profSheet = ss.getSheetByName('PROFESORES');
+  const profData = profSheet.getDataRange().getValues();
+  let nombreProfesor = '';
+  for (let i = 1; i < profData.length; i++) {
+    if (profData[i][0] && profData[i][0].toString().trim() === profesorId) {
+      nombreProfesor = profData[i][1].toString().trim();
+      break;
+    }
+  }
+
+  if (!nombreProfesor) {
+    Logger.log('actualizarEstadisticasGrupo: profesor no encontrado: ' + profesorId);
+    return;
+  }
+
+  // Construir nombre de hoja: "MAR26 - Samuel - G1"
+  const hojaNombre = prefijo + ' - ' + nombreProfesor + ' - ' + grupo;
+  const sheet = ss.getSheetByName(hojaNombre);
+  if (!sheet) {
+    Logger.log('actualizarEstadisticasGrupo: hoja no encontrada: ' + hojaNombre);
+    return;
+  }
+
+  // Leer alumnos de la hoja ALUMNOS para mapear nombre -> alumno_id
+  const alumnosSheet = ss.getSheetByName('ALUMNOS');
+  const alumnosData = alumnosSheet.getDataRange().getValues();
+  const nombreToId = {};
+  for (let i = 1; i < alumnosData.length; i++) {
+    if (alumnosData[i][0] &&
+        alumnosData[i][2] === convocatoriaId &&
+        alumnosData[i][3] === profesorId &&
+        alumnosData[i][4] === grupo) {
+      nombreToId[alumnosData[i][1].toString().trim().toLowerCase()] = alumnosData[i][0].toString();
+    }
+  }
+
+  // Leer asistencia filtrada para este grupo
+  const asistSheet = ss.getSheetByName('ASISTENCIA');
+  const asistData = asistSheet.getDataRange().getValues();
+  const tz = Session.getScriptTimeZone();
+  const stats = {};
+
+  for (let i = 1; i < asistData.length; i++) {
+    if (asistData[i][2] !== convocatoriaId ||
+        asistData[i][3] !== profesorId ||
+        asistData[i][4] !== grupo) continue;
+
+    const alumnoId = asistData[i][1] ? asistData[i][1].toString() : '';
+    if (!alumnoId) continue;
+
+    if (!stats[alumnoId]) {
+      stats[alumnoId] = { total: 0, presentes: 0, ultimaFecha: '' };
+    }
+
+    stats[alumnoId].total++;
+    if (asistData[i][5] === true) stats[alumnoId].presentes++;
+
+    let fecha = asistData[i][0];
+    if (fecha instanceof Date) {
+      fecha = Utilities.formatDate(fecha, tz, 'yyyy-MM-dd');
+    }
+    if (fecha && fecha > stats[alumnoId].ultimaFecha) {
+      stats[alumnoId].ultimaFecha = fecha;
+    }
+  }
+
+  // Leer nombres de la hoja de grupo y calcular columnas B/C/D
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 3) return;
+
+  const filasB = [];
+  const filasC = [];
+  const filasD = [];
+
+  for (let i = 2; i < data.length; i++) {
+    const nombreAlumno = data[i][0] ? data[i][0].toString().trim() : '';
+    if (!nombreAlumno) {
+      filasB.push(['']);
+      filasC.push(['']);
+      filasD.push(['']);
+      continue;
+    }
+
+    const alumnoId = nombreToId[nombreAlumno.toLowerCase()];
+    const s = alumnoId ? stats[alumnoId] : null;
+
+    if (s && s.total > 0) {
+      const pct = Math.round((s.presentes / s.total) * 100);
+      let ultimaCorta = '';
+      if (s.ultimaFecha) {
+        const partes = s.ultimaFecha.split('-');
+        ultimaCorta = partes[2] + '/' + partes[1];
+      }
+      filasB.push([pct + '%']);
+      filasC.push([ultimaCorta]);
+      filasD.push([s.total]);
+    } else {
+      filasB.push(['0%']);
+      filasC.push(['']);
+      filasD.push([0]);
+    }
+  }
+
+  // Escribir columnas B, C, D
+  const numFilas = filasB.length;
+  if (numFilas > 0) {
+    sheet.getRange(3, 2, numFilas, 1).setValues(filasB);
+    sheet.getRange(3, 3, numFilas, 1).setValues(filasC);
+    sheet.getRange(3, 4, numFilas, 1).setValues(filasD);
+    sheet.getRange(3, 2, numFilas, 3).setHorizontalAlignment('center');
+  }
+}
+
+// ============================================================
 // TRIGGER AUTOMATICO — onEdit
 // ============================================================
 

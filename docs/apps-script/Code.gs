@@ -500,6 +500,13 @@ function handleGuardarAsistencia(body) {
   // Invalidar cache de resumen para esta convocatoria
   cacheInvalidate(['res_' + convocatoria_id]);
 
+  // Actualizar estadisticas de la hoja de grupo afectada
+  try {
+    actualizarEstadisticasGrupo(convocatoria_id, profesor_id, grupo);
+  } catch (err) {
+    Logger.log('Error actualizando estadisticas: ' + err.message);
+  }
+
   // Log
   const presentes = alumnos.filter(a => a.presente).length;
   writeLog(

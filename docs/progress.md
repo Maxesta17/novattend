@@ -164,12 +164,11 @@ Se ejecuto una auditoria completa de UI contra reglas opinionadas de calidad. Se
 - Hooks custom (useStudents, useConvocatorias)
 - Selector de convocatoria en Dashboard
 - Rendimiento dashboard (CacheService 120s en Apps Script)
+- actualizarEstadisticasGrupo() — stats B/C/D se actualizan auto al guardar asistencia
+- Deuda tecnica limpia: TypeScript descartado (innecesario), shadcn/ui descartado (componentes propios OK), API key 21st.dev configurada
 
 ### Pendiente
-- Validar que `actualizarEstadisticas()` se ejecuta correctamente tras guardar asistencia
-- Considerar migracion a TypeScript en el futuro
-- Configurar API key de 21st.dev en MCP si se quiere usar su libreria de componentes
-- Considerar instalar shadcn/ui para componentes accesibles (Switch, Skeleton, etc.)
+- (Sin deuda tecnica pendiente)
 
 ## Archivos de Apps Script
 - `docs/apps-script/Code.gs` — API REST principal con CacheService (doGet, doPost, cache helpers, setupSheets)
@@ -185,9 +184,8 @@ Se ejecuto una auditoria completa de UI contra reglas opinionadas de calidad. Se
 - Profesores: Samuel, Maria Wolf, Nadine, Marta Battistella, Elisabeth Shick, Myriam Marcia, Sonja
 
 ## Siguiente Paso
-1. Verificar que https://novattend.vercel.app carga datos reales (no mock) — si muestra mock, limpiar Service Worker
-2. Pegar Code.gs actualizado (con CacheService) en Apps Script y hacer nuevo deploy de Web App
-3. Hacer deploy a Vercel con los cambios de fase 14 (`vercel --prod`)
-4. Validacion end-to-end con datos reales (pasar lista con samuel, verificar en dashboard con admin)
+1. Copiar Code.gs y gestionConvocatorias.gs actualizados al editor de Apps Script
+2. Hacer nuevo deploy de Web App en Apps Script (Deploy > New deployment)
+3. Hacer deploy a Vercel con los cambios (`vercel --prod`)
+4. Validacion end-to-end: pasar lista con samuel, verificar que columnas B/C/D se actualizan en la hoja de grupo
 5. Onboarding: Aurora rellena alumnos (tutorial-aurora.md), profesores instalan PWA
-6. Considerar mejoras UX basadas en feedback real
