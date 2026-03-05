@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { USERS } from '../config/users'
+import { isApiEnabled } from '../config/api'
+import { getConvocatorias } from '../services/api'
 import Button from '../components/ui/Button.jsx'
 
 export default function LoginPage() {
@@ -9,8 +11,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [shake, setShake] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError('')
     const found = USERS.find(u =>
       u.username.toLowerCase() === (username || '').trim().toLowerCase() && u.password === password
@@ -22,8 +25,39 @@ export default function LoginPage() {
       return
     }
     try { sessionStorage.setItem('user', JSON.stringify(found)) } catch { /* ignorar error de storage */ }
-    if (found.role === 'ceo') navigate('/dashboard')
-    else navigate('/attendance', { state: { user: found } })
+
+    if (found.role === 'ceo') {
+      navigate('/dashboard')
+      return
+    }
+
+    if (!isApiEnabled()) {
+      navigate('/attendance')
+      return
+    }
+
+    // Mostrar loading inmediatamente
+    setLoading(true)
+
+    // Timeout de seguridad para que el usuario no espere demasiado
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+
+    try {
+      const convocatorias = await Promise.race([getConvocatorias(), timeout])
+      if (!convocatorias || convocatorias.length === 0) {
+        setError('No hay convocatorias activas')
+        setLoading(false)
+        return
+      }
+      if (convocatorias.length === 1) {
+        navigate('/attendance', { state: { convocatoria: convocatorias[0] } })
+      } else {
+        navigate('/convocatorias', { state: { convocatorias } })
+      }
+    } catch {
+      setError('Error al conectar con el servidor. Reintenta.')
+      setLoading(false)
+    }
   }
 
   return (
@@ -81,8 +115,8 @@ export default function LoginPage() {
             onChange={e => setPassword(e.target.value)}
           />
 
-          <Button onClick={handleLogin} fullWidth>
-            Iniciar sesión
+          <Button onClick={handleLogin} fullWidth loading={loading}>
+            {loading ? 'Cargando...' : 'Iniciar sesión'}
           </Button>
 
           {error && (

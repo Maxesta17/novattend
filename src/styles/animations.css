@@ -102,7 +102,7 @@
 
 /* Filas de lista */
 .animate-slide-up {
-  animation: slideUp 0.4s ease-out forwards;
+  animation: slideUp 0.25s ease-out forwards;
   opacity: 0;
 }
 

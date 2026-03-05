@@ -3,6 +3,7 @@ import './App.css'
 import MobileContainer from './components/MobileContainer'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
+import ConvocatoriaPage from './pages/ConvocatoriaPage'
 import AttendancePage from './pages/AttendancePage'
 import SavedPage from './pages/SavedPage'
 import DashboardPage from './pages/DashboardPage'
@@ -13,6 +14,9 @@ function App() {
       <MobileContainer>
         <Routes>
           <Route path="/" element={<LoginPage />} />
+          <Route path="/convocatorias" element={
+            <ProtectedRoute allowedRole="teacher"><ConvocatoriaPage /></ProtectedRoute>
+          } />
           <Route path="/attendance" element={
             <ProtectedRoute allowedRole="teacher"><AttendancePage /></ProtectedRoute>
           } />

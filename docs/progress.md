@@ -2,150 +2,111 @@
 
 ## Ultimo Hito
 - **Fecha:** 2026-03-05
-- **Hito:** Fase 4 completada — todas las paginas recompuestas con Tailwind + componentes
+- **Hito:** Fase 12 completada — Hooks custom + deuda tecnica cerrada + tests ampliados + offline PWA
 
-## Resumen de Cambios (Fases 1-4)
+## Resumen de Cambios (Fases 1-11)
 
-### Fase 1 — Infraestructura
-- `tailwind.config.js` — tokens `warning` y `warning-soft`
-- `src/styles/animations.css` — 9 keyframes + clases de utilidad + delays
-- `src/main.jsx` — import de animations.css
+### Fases 1-5 — Infraestructura + Componentes + Limpieza
+- Tailwind config con tokens, animaciones CSS, 8 componentes UI, 6 features
+- Paginas recompuestas: SavedPage, AttendancePage, DashboardPage, LoginPage
+- brand.js eliminado, 0 inline styles en paginas, todos <250 lineas
 
-### Fase 2 — Componentes UI atomicos (8)
-- `src/components/ui/` — Button, StatCard, Avatar, Badge, Modal, ProgressBar, ToggleSwitch, SearchInput
+### Fases 6-8 — Backend + API + Deploy
+- Google Sheets como backend (5 hojas: CONVOCATORIAS, PROFESORES, ALUMNOS, ASISTENCIA, LOG)
+- Apps Script API REST (Code.gs): doGet/doPost con endpoints completos
+- Capa de servicios en src/services/api.js
+- Deploy en Vercel + GitHub
 
-### Fase 3 — Componentes features (6)
-- `src/components/features/` — PageHeader, GroupTabs, StudentRow, StudentDetailPopup, AlertList, TeacherCard
+### Fases 9-11 — Deuda tecnica + Convocatorias + Dashboard API
+- ErrorBoundary, PWA con Workbox, 19 tests (Vitest)
+- Flujo convocatorias: login -> consulta activas -> selector si 2+ -> asistencia
+- Dashboard CEO conectado a API real con getResumen y getAsistenciaAlumno
 
-### Fase 4 — Recomposicion de paginas
-- **SavedPage:** 241 → 58 lineas, cero inline styles
-- **AttendancePage:** 497 → 139 lineas, cero inline styles
-- **DashboardPage:** 859 → 132 lineas (datos extraidos a `src/config/teachers.js`, UI a TeacherCard)
-- **LoginPage:** 363 → 119 lineas, cero inline styles, input extraido a LoginInput
-- **MobileContainer:** simplificado, solo conserva media query necesaria
-- **brand.js:** ya no se importa en ninguna pagina (candidato a eliminacion en Fase 5)
+### Fase 12 — Gestion de convocatorias en Google Sheets + Optimizaciones frontend
 
-## Estado
-- **Rama:** main
-- **Build:** funcional, JS 258KB (antes 269KB)
-- **Lint:** 0 errores (antes 11)
-- **style={{}}:** 0 en paginas, 3 en componentes (valores dinamicos inevitables)
-- **Max lineas por archivo:** 140 (TeacherCard.jsx) — todos bajo 250
-- **Fase completada:** 4 de 5
+#### Backend: Apps Script (`gestionConvocatorias.gs`)
+- **`crearConvocatoria()`** — Crea separador de color + 28 hojas de grupo por convocatoria
+- **`sincronizarAlumnos()`** — Lee nombres de hojas de grupo, genera IDs (`alu-XXXX`), vuelca a ALUMNOS
+- **`actualizarEstadisticas()`** — Actualiza columnas B/C/D (Asistencia %, Ultima clase, Total clases) en hojas de grupo
+- **`onEdit()`** — Trigger automatico: sincroniza ALUMNOS cuando Aurora escribe un nombre en columna A, fila 3+
+- **`onOpen()`** — Menu "NovAttend" en el spreadsheet (crear conv, sync manual, actualizar stats)
 
-## Decisiones Tomadas
-- Enfoque bottom-up: componentes atomicos primero, recomponer paginas despues
-- Tokens Tailwind sin prefijos: `bg-burgundy` en vez de `bg-brand-burgundy`
-- JSDoc obligatorio solo en componentes nuevos
-- fadeUp unificado (opacidad + translateY) en todas las paginas
-- DashboardPage fragmentada en: teachers.js (datos), TeacherCard.jsx (UI), DashboardPage.jsx (orquestador)
-- useEffect eliminado en AttendancePage, reemplazado por handler directo (corrige lint)
+#### Estructura de hojas por convocatoria
+- Separador con color: `[ MAR26 ]` (hoja protegida con info)
+- 28 hojas de grupo: `MAR26 - Samuel - G1`, `MAR26 - Samuel - G2`, etc.
+- Patron: `PREFIJO - NombreProfesor - GX`
+- Convocatoria ID derivado del prefijo: `conv-mar26`
+- Flujo Aurora: Solo escribe nombres en columna A. Todo lo demas es automatico.
 
-### Fase 5 — Limpieza
-- `src/config/brand.js` eliminado (sin importaciones)
-- `CLAUDE.md` actualizado: seccion "Estado Actual", Gotchas, estructura de carpetas
+#### Optimizaciones frontend
+- **`AttendancePage.jsx`** — Cache de alumnos con `useRef` por grupo. Prefetch paralelo de G2/G3/G4 al montar el componente. Cambio de tab instantaneo sin recarga de API.
+- **`AttendancePage.jsx`** — Mapeo `profesorId` corregido: `prof-${username}` para coincidir con IDs en hoja PROFESORES.
+- **`LoginPage.jsx`** — Timeout de seguridad de 8s (`Promise.race`) para la consulta de convocatorias activas. Evita que el usuario espere indefinidamente si la API no responde.
+- **`animations.css`** — Delays escalonados mas rapidos (0s, 0.1s, 0.18s, 0.25s, 0.35s, 0.4s, 0.5s, 0.7s). Animaciones mas agiles en la entrada de elementos.
 
-## Estado
-- **Rama:** main
-- **Build:** funcional, JS 258KB
-- **Lint:** 0 errores
-- **style={{}}:** 0 en paginas, 3 en componentes (valores dinamicos)
-- **Max lineas por archivo:** 140 (TeacherCard.jsx)
-- **Fase completada:** 5 de 5
+#### Decisiones tecnicas
+- Cache con `useRef` en vez de `useState` para evitar re-renders innecesarios al almacenar datos de grupos no visibles.
+- Prefetch paralelo con `forEach` + `.catch(() => {})` silencioso para no bloquear la UI si un grupo falla.
+- `Promise.race` con timeout de 8s en LoginPage: balance entre esperar la API y no frustrar al usuario.
+- Patron de limpieza `cancelled` en useEffect para evitar actualizaciones de estado en componentes desmontados.
 
-### Fase 6 — Backend Google Sheets
-- Disenada estructura de 5 hojas: CONVOCATORIAS, PROFESORES, ALUMNOS, ASISTENCIA, LOG
-- Soporta multiples convocatorias simultaneas en un solo Google Sheet
-- Especificacion tecnica: `docs/google-sheets-backend.md`
-- Manual de usuario: `docs/manual-usuario.md`
-- Excel original analizado: `public/Control de Asistencia Global .xlsx`
+#### Archivos modificados
+- `src/pages/AttendancePage.jsx` — cache + prefetch + fix prof-ID
+- `src/pages/LoginPage.jsx` — timeout 8s en consulta de convocatorias
+- `src/styles/animations.css` — delays escalonados mas rapidos
+- `docs/apps-script/gestionConvocatorias.gs` — sistema completo de gestion
+- `docs/apps-script/importarAlumnos.gs` — script legacy (reemplazado)
 
-### Fase 7 — Auth completa + Fechas de faltas
-- `src/components/ProtectedRoute.jsx` — guardia de ruta con validacion de sesion y rol
-- `src/App.jsx` — rutas /attendance, /saved y /dashboard protegidas
-- `src/components/features/PageHeader.jsx` — boton de logout (prop onLogout)
-- `src/pages/AttendancePage.jsx` y `DashboardPage.jsx` — pasan onLogout al header
-- `src/config/teachers.js` — funcion generateAbsences + campo absences en todos los alumnos
-- `src/components/features/StudentDetailPopup.jsx` — seccion "Dias de inasistencia" con chips de fechas
-- `src/components/features/TeacherCard.jsx` — muestra ultima falta en fila de alumno
+#### Estado
+- Script pegado en Apps Script. Hojas viejas (sin prefijo) eliminadas.
+- Listo para crear primera convocatoria con el nuevo sistema.
+
+### Fase 12 (cierre) — Deuda tecnica cerrada
+- **Tests ampliados:** De 4 suites/19 tests a 8 suites/55 tests. Nuevas suites: LoginPage, ConvocatoriaPage, StudentRow, api.
+- **Pagina offline PWA:** `public/offline.html` con branding NovAttend (logo, icono wifi-off, boton reintentar, colores burgundy/gold, fuentes Cinzel/Montserrat).
+- **Hooks custom:** `src/hooks/useStudents.js` y `src/hooks/useConvocatorias.js` extraidos de AttendancePage y DashboardPage para separar logica de vista.
+- **Workbox configurado:** `navigateFallback: '/offline.html'` en vite.config.js.
 
 ## Estado
 - **Rama:** main
 - **Build:** funcional
 - **Lint:** 0 errores
-- **Fase completada:** 7
+- **Tests:** 55 passing (8 suites)
+- **Fase completada:** 12 (completada)
 
-### Fase 8 — Backend API + Deploy
-- `src/config/api.js` — configuracion de URL del Apps Script (via VITE_API_URL)
-- `src/services/api.js` — capa de servicios con fetch (GET/POST) a la API REST
-- `docs/apps-script/Code.gs` — API REST completa para Google Apps Script
-- `docs/apps-script/Migracion.gs` — script de migracion de datos del Sheet viejo
-- `docs/setup-google-sheet.md` — guia paso a paso para montar el backend
-- `docs/manual-usuario.md` — manual para profesores y administradores
-- Proyecto subido a GitHub y desplegado en Vercel
+## Deuda Tecnica
+### Resuelta en fase 12
+- Rendimiento en cambio de grupo (era una recarga API por cada tab, ahora es instantaneo via cache)
+- Timeout inexistente en LoginPage al consultar convocatorias (ahora 8s maximo)
+- Animaciones de entrada lentas (reducidos delays)
+- Ampliar tests (de 4 suites/19 tests a 8 suites/55 tests)
+- Pagina offline fallback PWA (`public/offline.html` + Workbox navigateFallback)
+- Extraer hooks custom (`useStudents`, `useConvocatorias`) para separar logica de vista
+- ~~Selector de convocatoria en Dashboard si hay 2+ activas~~ (resuelto)
 
-## Estado
-- **Rama:** main
-- **Build:** funcional, JS 261KB
-- **Lint:** 0 errores
-- **Fase completada:** 8
+### Pendiente
+- Validar que `actualizarEstadisticas()` se ejecuta correctamente tras guardar asistencia
+- Considerar migracion a TypeScript en el futuro
 
-### Fase 9 — Deuda tecnica
-- `src/components/ErrorBoundary.jsx` — error boundary global (class component, UI con design system)
-- `src/main.jsx` — App envuelta en ErrorBoundary
-- `vite.config.js` — Workbox configurado: precache de app shell + runtime caching (Google Fonts CacheFirst, API NetworkFirst)
-- Vitest + @testing-library/react + jest-dom + user-event instalados
-- `src/tests/setup.js` — setup global de jest-dom
-- 4 suites de tests: ProtectedRoute (4), Button (6), Badge (5), StatCard (4) = 19 tests
-- Scripts: `npm test` (run), `npm run test:watch` (watch)
-- Build: 262KB JS, PWA precachea 9 entries con SW generado
-
-## Estado
-- **Rama:** main
-- **Build:** funcional, JS 262KB
-- **Lint:** 0 errores
-- **Tests:** 19 passing (4 suites)
-- **Fase completada:** 9
-
-### Fase 10 — Flujo de convocatorias + conexion API
-- `docs/apps-script/Code.gs` — convocatorias activas por fecha (`fecha_inicio <= hoy <= fecha_fin`), ya no usa checkbox `activa`
-- `src/pages/ConvocatoriaPage.jsx` — selector de convocatoria activa (cards con nombre y fechas)
-- `src/pages/LoginPage.jsx` — flujo post-login: consulta convocatorias activas, redirige segun cantidad (0=error, 1=directo, 2+=selector)
-- `src/pages/AttendancePage.jsx` — recibe convocatoria via state, carga alumnos desde API, guarda asistencia con convocatoria_id. Fallback a datos mock si API deshabilitada
-- `src/pages/SavedPage.jsx` — muestra nombre de convocatoria, boton volver preserva convocatoria
-- `src/App.jsx` — nueva ruta `/convocatorias` protegida para teacher
-- Grupos ahora son strings: G1, G2, G3, G4 (consistente con el backend)
-
-## Estado
-- **Rama:** main
-- **Build:** funcional, JS 266KB
-- **Lint:** 0 errores
-- **Tests:** 19 passing (4 suites)
-- **Fase completada:** 10
-
-### Fase 11 — Dashboard CEO conectado a API real
-- `docs/apps-script/Code.gs` — getResumen con porcentajes semanal/quincenal/mensual, getAsistencia con filtro alumno_id
-- `src/services/api.js` — nuevo getAsistenciaAlumno(convocatoriaId, alumnoId)
-- `src/pages/DashboardPage.jsx` — conectado a API con fallback mock, buildTeachersHierarchy transforma datos planos a jerarquia
-- `src/components/features/StudentDetailPopup.jsx` — carga fechas de falta bajo demanda via API
-- Diseno documentado en `docs/plans/2026-03-05-dashboard-api-design.md`
-
-## Estado
-- **Rama:** main
-- **Build:** funcional, JS 269KB
-- **Lint:** 0 errores
-- **Tests:** 19 passing (4 suites)
-- **Fase completada:** 11
+## Archivos de Apps Script
+- `docs/apps-script/Code.gs` — API REST principal (doGet, doPost, setupSheets)
+- `docs/apps-script/gestionConvocatorias.gs` — Gestion de convocatorias y alumnos (crearConvocatoria, sincronizarAlumnos, actualizarEstadisticas, onEdit, onOpen)
+- `docs/apps-script/importarAlumnos.gs` — Script legacy (ya no se usa)
 
 ## Logica de Negocio (Convocatorias)
-- Convocatoria activa = `fecha_inicio <= hoy <= fecha_fin` (automatico, sin intervencion manual)
-- Todos los profesores participan en todas las convocatorias activas
-- Cada convocatoria tiene 4 grupos fijos: G1, G2, G3, G4
-- Alumnos no se mueven entre convocatorias/grupos (excepto caso aislado manual en Sheet)
+- Convocatoria activa = `fecha_inicio <= hoy <= fecha_fin` (automatico)
+- Cada convocatoria tiene sus propios alumnos independientes
+- Varias convocatorias pueden convivir simultaneamente (abril, mayo, etc.)
+- Alumnos se mantienen en su grupo durante toda la convocatoria (excepciones manuales en Sheet)
+- 7 profesores activos x 4 grupos = 28 hojas por convocatoria
+- Profesores: Samuel, Maria Wolf, Nadine, Marta Battistella, Elisabeth Shick, Myriam Marcia, Sonja
+
+### Resuelto post-fase 12
+- Selector de convocatoria en DashboardPage (dropdown en header cuando hay 2+ activas)
+- `buildTeachersHierarchy` extraido a `src/utils/buildTeachersHierarchy.js` para cumplir limite 250 lineas
+- Nuevo componente: `src/components/features/ConvocatoriaSelector.jsx` (37 lineas)
 
 ## Siguiente Paso
-- Copiar Code.gs actualizado al editor de Apps Script y redesplegar
-- Pendiente:
-  - Ampliar cobertura de tests (paginas, features)
-  - Pagina offline fallback para PWA
-  - Selector de convocatoria en Dashboard si hay 2+ activas
+1. Validacion end-to-end con datos reales (crear convocatoria, inscribir alumnos, pasar lista, verificar estadisticas)
+2. Onboarding de profesores (entregar credenciales, explicar flujo)
+3. Considerar mejoras UX basadas en feedback real

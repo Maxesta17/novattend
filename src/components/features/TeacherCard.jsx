@@ -14,9 +14,9 @@ import { getAttendanceScheme } from '../../config/teachers.js'
 export default function TeacherCard({ teacher, isExpanded, onToggle, onStudentClick }) {
   const [expandedGroups, setExpandedGroups] = useState({})
   const teacherStudents = teacher.groups.flatMap(g => g.students)
-  const teacherAttendance = Math.round(
-    teacherStudents.reduce((acc, s) => acc + s.monthly, 0) / teacherStudents.length
-  )
+  const teacherAttendance = teacherStudents.length > 0
+    ? Math.round(teacherStudents.reduce((acc, s) => acc + s.monthly, 0) / teacherStudents.length)
+    : 0
   const scheme = getAttendanceScheme(teacherAttendance)
 
   const toggleGroup = (groupId) => {
@@ -70,9 +70,9 @@ export default function TeacherCard({ teacher, isExpanded, onToggle, onStudentCl
 }
 
 function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onStudentClick }) {
-  const groupAttendance = Math.round(
-    group.students.reduce((acc, s) => acc + s.monthly, 0) / group.students.length
-  )
+  const groupAttendance = group.students.length > 0
+    ? Math.round(group.students.reduce((acc, s) => acc + s.monthly, 0) / group.students.length)
+    : 0
   const scheme = getAttendanceScheme(groupAttendance)
 
   return (

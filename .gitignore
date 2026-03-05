@@ -26,7 +26,12 @@ dist-ssr
 # Claude Code
 .claude/
 
+# Env
+.env
+.env.*
+
 # Archivos pesados y capturas
 *.xlsx
 *.png
 *.jpg
+.vercel

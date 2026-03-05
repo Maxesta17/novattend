@@ -16,7 +16,7 @@ export default function SavedPage() {
 
   if (!state) return null
 
-  const { present, total, group } = state
+  const { present, total, group, convocatoria } = state
   const absent = total - present
   const percentage = Math.round((present / total) * 100)
   const today = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -39,7 +39,8 @@ export default function SavedPage() {
 
       {/* Subtitulo */}
       <p className="animate-fade-up delay-6 font-montserrat text-[13px] text-text-muted m-0 mb-7 text-center">
-        Samuel — Grupo {group} · {today}
+        {group} · {today}
+        {convocatoria && <span className="block mt-0.5 text-[11px]">{convocatoria.nombre}</span>}
       </p>
 
       {/* Card resumen */}
@@ -50,7 +51,13 @@ export default function SavedPage() {
       </div>
 
       {/* Boton volver */}
-      <Button onClick={() => navigate('/attendance')} className="px-8">
+      <Button
+        onClick={() => convocatoria
+          ? navigate('/attendance', { state: { convocatoria } })
+          : navigate('/attendance')
+        }
+        className="px-8"
+      >
         Volver al inicio
       </Button>
     </div>

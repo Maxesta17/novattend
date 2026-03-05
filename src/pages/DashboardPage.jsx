@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TEACHERS_DATA } from '../config/teachers.js'
 import { isApiEnabled } from '../config/api.js'
-import { getConvocatorias, getProfesores, getResumen } from '../services/api.js'
+import { getProfesores, getResumen } from '../services/api.js'
+import useConvocatorias from '../hooks/useConvocatorias.js'
 import PageHeader from '../components/features/PageHeader.jsx'
 import TeacherCard from '../components/features/TeacherCard.jsx'
 import StudentDetailPopup from '../components/features/StudentDetailPopup.jsx'
@@ -10,43 +11,21 @@ import AlertList from '../components/features/AlertList.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import SearchInput from '../components/ui/SearchInput.jsx'
-
-/**
- * Transforma la respuesta plana de la API en la jerarquia teacher->group->students.
- * @param {Array} profesores - Lista de profesores de la API
- * @param {Array} resumen - Lista plana de resumen con porcentajes
- * @returns {Array} Estructura compatible con TeacherCard
- */
-function buildTeachersHierarchy(profesores, resumen) {
-  return profesores.map(prof => {
-    const profRows = resumen.filter(r => r.profesor_id === prof.id)
-    const groupIds = [...new Set(profRows.map(r => r.grupo))]
-    const groups = groupIds.map(gId => ({
-      id: `${gId}-${prof.id}`,
-      number: Number(gId.replace(/\D/g, '')) || gId,
-      students: profRows
-        .filter(r => r.grupo === gId)
-        .map(r => ({
-          id: r.alumno_id,
-          name: r.nombre,
-          weekly: r.semanal ?? 0,
-          biweekly: r.quincenal ?? 0,
-          monthly: r.mensual ?? 0,
-        })),
-    }))
-    return {
-      id: prof.id,
-      name: prof.nombre,
-      initial: (prof.nombre || '?')[0].toUpperCase(),
-      groups,
-    }
-  })
-}
+import ConvocatoriaSelector from '../components/features/ConvocatoriaSelector.jsx'
+import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const {
+    convocatorias,
+    selectedConvocatoria: convocatoria,
+    setSelectedConvocatoria,
+    loading: convsLoading,
+    error: convsError,
+    reload,
+  } = useConvocatorias()
+
   const [teachers, setTeachers] = useState(null)
-  const [convocatoria, setConvocatoria] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedTeacher, setExpandedTeacher] = useState(null)
@@ -54,28 +33,60 @@ export default function DashboardPage() {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showAlertPopup, setShowAlertPopup] = useState(false)
 
-  // Carga de datos: API o mock
-  const loadData = async () => {
+  // Carga datos de una convocatoria concreta
+  const loadConvData = async (conv) => {
+    const [profesores, resumen] = await Promise.all([
+      getProfesores(),
+      getResumen(conv.id),
+    ])
+    setTeachers(buildTeachersHierarchy(profesores || [], resumen || []))
+  }
+
+  // Cuando el hook carga las convocatorias, cargar datos de la seleccionada
+  useEffect(() => {
+    if (convsLoading) return
+
+    if (convsError) {
+      setError(convsError)
+      setLoading(false)
+      return
+    }
+
+    if (!isApiEnabled()) {
+      setTeachers(TEACHERS_DATA)
+      setLoading(false)
+      return
+    }
+
+    if (!convocatoria) {
+      setTeachers([])
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
     setLoading(true)
     setError(null)
+    loadConvData(convocatoria)
+      .then(() => { if (!cancelled) setLoading(false) })
+      .catch(err => {
+        if (!cancelled) {
+          setError(err.message || 'Error al cargar datos')
+          setLoading(false)
+        }
+      })
+    return () => { cancelled = true }
+  }, [convsLoading, convsError, convocatoria]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cambio de convocatoria desde el selector
+  const handleConvChange = async (conv) => {
+    setSelectedConvocatoria(conv)
+    setLoading(true)
+    setError(null)
+    setExpandedTeacher(null)
+    setSearchQuery('')
     try {
-      if (!isApiEnabled()) {
-        setTeachers(TEACHERS_DATA)
-        setConvocatoria(null)
-        return
-      }
-      const convocatorias = await getConvocatorias()
-      const activeConv = convocatorias?.[0] ?? null
-      setConvocatoria(activeConv)
-      if (!activeConv) {
-        setTeachers([])
-        return
-      }
-      const [profesores, resumen] = await Promise.all([
-        getProfesores(),
-        getResumen(activeConv.id),
-      ])
-      setTeachers(buildTeachersHierarchy(profesores || [], resumen || []))
+      await loadConvData(conv)
     } catch (err) {
       setError(err.message || 'Error al cargar datos')
     } finally {
@@ -83,14 +94,9 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
-
-  // Estadisticas globales
   const totalStudents = useMemo(() => {
     if (!teachers) return 0
-    return teachers.reduce(
-      (acc, t) => acc + t.groups.reduce((g, gr) => g + gr.students.length, 0), 0
-    )
+    return teachers.reduce((acc, t) => acc + t.groups.reduce((g, gr) => g + gr.students.length, 0), 0)
   }, [teachers])
 
   const globalAttendance = useMemo(() => {
@@ -105,7 +111,6 @@ export default function DashboardPage() {
     )
   }, [teachers])
 
-  // Listado plano de alumnos para busqueda y alertas
   const allStudents = useMemo(() => {
     if (!teachers) return []
     return teachers.flatMap(teacher =>
@@ -127,7 +132,6 @@ export default function DashboardPage() {
     return allStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [searchQuery, allStudents])
 
-  // Estado de carga
   if (loading) {
     return (
       <div className="min-h-dvh min-h-screen flex items-center justify-center bg-off-white">
@@ -136,12 +140,11 @@ export default function DashboardPage() {
     )
   }
 
-  // Estado de error
   if (error) {
     return (
       <div className="min-h-dvh min-h-screen flex flex-col items-center justify-center gap-3 bg-off-white px-6">
         <p className="font-montserrat text-sm text-error text-center">{error}</p>
-        <button onClick={loadData} className="font-montserrat text-sm text-burgundy underline">
+        <button onClick={reload} className="font-montserrat text-sm text-burgundy underline">
           Reintentar
         </button>
       </div>
@@ -160,6 +163,11 @@ export default function DashboardPage() {
           badge={<Badge variant="admin">ADMIN</Badge>}
           onLogout={() => { sessionStorage.removeItem('user'); navigate('/') }}
         >
+          <ConvocatoriaSelector
+            convocatorias={convocatorias}
+            selectedId={convocatoria?.id}
+            onChange={handleConvChange}
+          />
           <div className="flex gap-1.5 mb-3">
             <StatCard value={totalStudents} label="Alumnos" color="gold" variant="dark" />
             <StatCard value={`${globalAttendance}%`} label="Asistencia" color="gold" variant="dark" />
