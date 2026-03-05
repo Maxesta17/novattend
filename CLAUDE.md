@@ -25,7 +25,8 @@
 ## Arquitectura y Stack
 - **Framework:** React 19 + Vite 7 + React Router 7 (SPA).
 - **Estilo:** Tailwind CSS 3 (Mobile-first, max-width 430px).
-- **PWA:** vite-plugin-pwa con display standalone. Pendiente estrategia de cache offline.
+- **PWA:** vite-plugin-pwa con Workbox (precache app shell + runtime caching: Google Fonts CacheFirst, API NetworkFirst).
+- **Tests:** Vitest + @testing-library/react + jest-dom. Setup en `src/tests/setup.js`.
 - **Estado:** `sessionStorage` para Auth + React State para UI.
 - **Estructura de Carpetas:**
     - `src/config/`: Datos mock (`users.js`, `teachers.js`).
@@ -34,12 +35,15 @@
     - `src/components/features/`: Componentes con logica de negocio (PageHeader, GroupTabs, StudentRow, StudentDetailPopup, AlertList, TeacherCard).
     - `src/components/MobileContainer.jsx`: Wrapper mobile (componente especial, no ui ni feature).
     - `src/pages/`: Vistas de ruta (deben ser ligeras y orquestadoras).
+    - `src/components/ErrorBoundary.jsx`: Error boundary global (class component).
+    - `src/tests/`: Tests unitarios (Vitest + Testing Library).
     - `src/hooks/`: (pendiente) Logica de extraccion de datos, validacion y auth.
     - `docs/`: Registro de progreso y especificaciones tecnicas.
 
 ## Rutas
 - `/` -> LoginPage (autenticacion)
-- `/attendance` -> AttendancePage (teacher - marcar asistencia)
+- `/convocatorias` -> ConvocatoriaPage (teacher - selector de convocatoria, solo si 2+ activas)
+- `/attendance` -> AttendancePage (teacher - marcar asistencia, recibe convocatoria via state)
 - `/saved` -> SavedPage (confirmacion tras guardar)
 - `/dashboard` -> DashboardPage (ceo - analiticas)
 
@@ -48,6 +52,8 @@
 - `npm run build`: Build de produccion.
 - `npm run lint`: Ejecucion obligatoria antes de cada entrega de codigo.
 - `npm run preview`: Previsualizacion de build local.
+- `npm test`: Ejecutar tests unitarios (Vitest).
+- `npm run test:watch`: Tests en modo watch.
 
 ## Design System (Strict)
 - **Fondo General:** `bg-dark-bg` (via `MobileContainer`).
@@ -61,8 +67,8 @@
 
 ## Autenticacion y Roles
 - **Roles:** `teacher` (acceso `/attendance`) | `ceo` (acceso `/dashboard`).
-- **Persistencia:** Objeto JSON en `sessionStorage` bajo la clave `novattend_user`.
-- **Seguridad:** Guardias de ruta pendientes (ver Gotchas).
+- **Persistencia:** Objeto JSON en `sessionStorage` bajo la clave `user`.
+- **Seguridad:** Guardias de ruta implementadas via `ProtectedRoute.jsx`.
 
 ## Convenciones de Codigo
 - **Commits:** Conventional Commits en espanol (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
@@ -71,16 +77,24 @@
 
 ## Gotchas
 - `src/styles/animations.css` define keyframes CSS custom (fadeUp, slideUp). No usar `@keyframes` en Tailwind config.
-- No hay guardias de ruta — cualquier URL es accesible sin sesion.
+- Guardias de ruta implementadas en `ProtectedRoute.jsx` — valida sesion y rol.
 - `MobileContainer.jsx` esta en `src/components/` (raiz), no en `ui/` ni `features/`.
 - Quedan 3 `style={{}}` en componentes para valores dinamicos (ej: width de ProgressBar). Son inevitables.
 
+## Logica de Negocio (Convocatorias)
+- **Activa por fecha:** `fecha_inicio <= hoy <= fecha_fin` (automatico, sin checkbox manual).
+- **Todos los profesores** participan en todas las convocatorias activas.
+- **Grupos fijos:** G1, G2, G3, G4 en cada convocatoria.
+- **Alumnos fijos** por convocatoria/grupo (no se mueven).
+- **Flujo teacher:** Login -> consulta convocatorias activas -> 1=directo, 2+=selector -> asistencia.
+
 ## Estado Actual del Proyecto
-- **Fase:** MVP funcional — Fases 1-5 completadas. Sin backend, datos mock.
-- **Componentes:** 8 ui/ atomicos + 6 features/ + 4 paginas recompuestas con Tailwind.
-- **Datos mock:** 7 profesores x 4 grupos x 12 alumnos = 336 alumnos.
-- **Metricas:** 0 estilos inline en paginas, 0 errores lint, todos los archivos < 250 lineas, build JS 258KB.
-- **Deuda tecnica pendiente:** Sin tests, sin logout, sin guardias de ruta, sin error boundaries, sin estrategia cache offline PWA.
+- **Fase:** 11 completada — Dashboard CEO conectado a API real.
+- **Componentes:** 8 ui/ + 6 features/ + ErrorBoundary + ProtectedRoute + 5 paginas.
+- **Backend:** Google Apps Script (Web App) + capa de servicios en `src/services/api.js`.
+- **Tests:** 19 tests (4 suites) — ProtectedRoute, Button, Badge, StatCard.
+- **Metricas:** 0 estilos inline en paginas, 0 errores lint, todos < 250 lineas, build JS 269KB.
+- **Deuda tecnica pendiente:** Ampliar tests, pagina offline fallback PWA, selector convocatoria en Dashboard si 2+ activas.
 
 ---
 *Nota para el Agente: Al iniciar, lee este archivo y `docs/progress.md`. Si `docs/progress.md` no existe, crealo tras tu primera intervencion que produzca cambios en el codigo.*

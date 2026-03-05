@@ -90,10 +90,62 @@
 - **Lint:** 0 errores
 - **Fase completada:** 8
 
+### Fase 9 — Deuda tecnica
+- `src/components/ErrorBoundary.jsx` — error boundary global (class component, UI con design system)
+- `src/main.jsx` — App envuelta en ErrorBoundary
+- `vite.config.js` — Workbox configurado: precache de app shell + runtime caching (Google Fonts CacheFirst, API NetworkFirst)
+- Vitest + @testing-library/react + jest-dom + user-event instalados
+- `src/tests/setup.js` — setup global de jest-dom
+- 4 suites de tests: ProtectedRoute (4), Button (6), Badge (5), StatCard (4) = 19 tests
+- Scripts: `npm test` (run), `npm run test:watch` (watch)
+- Build: 262KB JS, PWA precachea 9 entries con SW generado
+
+## Estado
+- **Rama:** main
+- **Build:** funcional, JS 262KB
+- **Lint:** 0 errores
+- **Tests:** 19 passing (4 suites)
+- **Fase completada:** 9
+
+### Fase 10 — Flujo de convocatorias + conexion API
+- `docs/apps-script/Code.gs` — convocatorias activas por fecha (`fecha_inicio <= hoy <= fecha_fin`), ya no usa checkbox `activa`
+- `src/pages/ConvocatoriaPage.jsx` — selector de convocatoria activa (cards con nombre y fechas)
+- `src/pages/LoginPage.jsx` — flujo post-login: consulta convocatorias activas, redirige segun cantidad (0=error, 1=directo, 2+=selector)
+- `src/pages/AttendancePage.jsx` — recibe convocatoria via state, carga alumnos desde API, guarda asistencia con convocatoria_id. Fallback a datos mock si API deshabilitada
+- `src/pages/SavedPage.jsx` — muestra nombre de convocatoria, boton volver preserva convocatoria
+- `src/App.jsx` — nueva ruta `/convocatorias` protegida para teacher
+- Grupos ahora son strings: G1, G2, G3, G4 (consistente con el backend)
+
+## Estado
+- **Rama:** main
+- **Build:** funcional, JS 266KB
+- **Lint:** 0 errores
+- **Tests:** 19 passing (4 suites)
+- **Fase completada:** 10
+
+### Fase 11 — Dashboard CEO conectado a API real
+- `docs/apps-script/Code.gs` — getResumen con porcentajes semanal/quincenal/mensual, getAsistencia con filtro alumno_id
+- `src/services/api.js` — nuevo getAsistenciaAlumno(convocatoriaId, alumnoId)
+- `src/pages/DashboardPage.jsx` — conectado a API con fallback mock, buildTeachersHierarchy transforma datos planos a jerarquia
+- `src/components/features/StudentDetailPopup.jsx` — carga fechas de falta bajo demanda via API
+- Diseno documentado en `docs/plans/2026-03-05-dashboard-api-design.md`
+
+## Estado
+- **Rama:** main
+- **Build:** funcional, JS 269KB
+- **Lint:** 0 errores
+- **Tests:** 19 passing (4 suites)
+- **Fase completada:** 11
+
+## Logica de Negocio (Convocatorias)
+- Convocatoria activa = `fecha_inicio <= hoy <= fecha_fin` (automatico, sin intervencion manual)
+- Todos los profesores participan en todas las convocatorias activas
+- Cada convocatoria tiene 4 grupos fijos: G1, G2, G3, G4
+- Alumnos no se mueven entre convocatorias/grupos (excepto caso aislado manual en Sheet)
+
 ## Siguiente Paso
-- Crear el Google Sheet real siguiendo `docs/setup-google-sheet.md`
-- Ejecutar migracion con `docs/apps-script/Migracion.gs`
-- Configurar VITE_API_URL en Vercel con la URL del Web App
-- Pendiente tambien:
-  - Tests unitarios
-  - Estrategia de cache offline PWA
+- Copiar Code.gs actualizado al editor de Apps Script y redesplegar
+- Pendiente:
+  - Ampliar cobertura de tests (paginas, features)
+  - Pagina offline fallback para PWA
+  - Selector de convocatoria en Dashboard si hay 2+ activas
