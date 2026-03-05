@@ -20,6 +20,77 @@ const SHEET_NAMES = {
 };
 
 // ============================================================
+// CACHE
+// ============================================================
+
+const CACHE_TTL = 120; // segundos (2 minutos)
+const cache_ = CacheService.getScriptCache();
+
+/**
+ * Lee del cache o ejecuta fetchFn y guarda el resultado.
+ * Si el JSON supera 100KB, devuelve sin cachear.
+ */
+function cacheGet(key, fetchFn) {
+  const cached = cache_.get(key);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  const data = fetchFn();
+  const json = JSON.stringify(data);
+
+  // Limite de CacheService: 100KB por entrada
+  if (json.length < 100000) {
+    cache_.put(key, json, CACHE_TTL);
+  }
+
+  return data;
+}
+
+/**
+ * Invalida todas las claves que coincidan con los prefijos dados.
+ * CacheService no soporta iteracion, asi que mantenemos un registro
+ * de claves activas en una clave especial '_keys'.
+ */
+function cacheInvalidate(prefixes) {
+  const keysJson = cache_.get('_keys');
+  if (!keysJson) return;
+
+  const keys = JSON.parse(keysJson);
+  const toRemove = keys.filter(k => prefixes.some(p => k.startsWith(p)));
+
+  if (toRemove.length > 0) {
+    cache_.removeAll(toRemove);
+    const remaining = keys.filter(k => !toRemove.includes(k));
+    if (remaining.length > 0) {
+      cache_.put('_keys', JSON.stringify(remaining), CACHE_TTL * 3);
+    } else {
+      cache_.remove('_keys');
+    }
+  }
+}
+
+/**
+ * Registra una clave en el indice de claves activas.
+ */
+function cacheTrackKey(key) {
+  const keysJson = cache_.get('_keys');
+  const keys = keysJson ? JSON.parse(keysJson) : [];
+  if (!keys.includes(key)) {
+    keys.push(key);
+    cache_.put('_keys', JSON.stringify(keys), CACHE_TTL * 3);
+  }
+}
+
+/**
+ * Wrapper: cachea con tracking de clave.
+ */
+function cachedGet(key, fetchFn) {
+  cacheTrackKey(key);
+  return cacheGet(key, fetchFn);
+}
+
+// ============================================================
 // UTILIDADES
 // ============================================================
 
@@ -142,56 +213,61 @@ function doGet(e) {
  * Parametro ?todas=true devuelve todas sin filtrar.
  */
 function handleGetConvocatorias(e) {
-  const todas = sheetToObjects(SHEET_NAMES.CONVOCATORIAS);
-
   if (e.parameter.todas === 'true') {
-    return jsonResponse(todas);
+    return jsonResponse(sheetToObjects(SHEET_NAMES.CONVOCATORIAS));
   }
 
-  const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const activas = todas.filter(c => c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+  const data = cachedGet('conv', function() {
+    const todas = sheetToObjects(SHEET_NAMES.CONVOCATORIAS);
+    const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return todas.filter(c => c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+  });
 
-  return jsonResponse(activas);
+  return jsonResponse(data);
 }
 
 /**
  * Devuelve profesores activos.
  */
 function handleGetProfesores(e) {
-  const todos = sheetToObjects(SHEET_NAMES.PROFESORES);
-  const soloActivos = e.parameter.todos === 'true'
-    ? todos
-    : todos.filter(p => p.activo === true);
+  if (e.parameter.todos === 'true') {
+    return jsonResponse(sheetToObjects(SHEET_NAMES.PROFESORES));
+  }
 
-  return jsonResponse(soloActivos);
+  const data = cachedGet('prof', function() {
+    return sheetToObjects(SHEET_NAMES.PROFESORES).filter(p => p.activo === true);
+  });
+
+  return jsonResponse(data);
 }
 
 /**
  * Devuelve alumnos filtrados por convocatoria y/o profesor.
  */
 function handleGetAlumnos(e) {
-  const convocatoriaId = e.parameter.convocatoria_id;
-  const profesorId = e.parameter.profesor_id;
-  const grupo = e.parameter.grupo;
+  const convocatoriaId = e.parameter.convocatoria_id || '';
+  const profesorId = e.parameter.profesor_id || '';
+  const grupo = e.parameter.grupo || '';
 
-  let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS);
-
-  // Solo activos por defecto
-  if (e.parameter.todos !== 'true') {
-    alumnos = alumnos.filter(a => a.activo === true);
+  // Sin cache si piden todos (incluidos inactivos)
+  if (e.parameter.todos === 'true') {
+    let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS);
+    if (convocatoriaId) alumnos = alumnos.filter(a => a.convocatoria_id === convocatoriaId);
+    if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
+    if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
+    return jsonResponse(alumnos);
   }
 
-  if (convocatoriaId) {
-    alumnos = alumnos.filter(a => a.convocatoria_id === convocatoriaId);
-  }
-  if (profesorId) {
-    alumnos = alumnos.filter(a => a.profesor_id === profesorId);
-  }
-  if (grupo) {
-    alumnos = alumnos.filter(a => a.grupo === grupo);
-  }
+  const cacheKey = 'alu_' + convocatoriaId + '_' + profesorId + '_' + grupo;
+  const data = cachedGet(cacheKey, function() {
+    let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS).filter(a => a.activo === true);
+    if (convocatoriaId) alumnos = alumnos.filter(a => a.convocatoria_id === convocatoriaId);
+    if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
+    if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
+    return alumnos;
+  });
 
-  return jsonResponse(alumnos);
+  return jsonResponse(data);
 }
 
 /**
@@ -231,54 +307,47 @@ function handleGetAsistencia(e) {
  */
 function handleGetResumen(e) {
   const convocatoriaId = e.parameter.convocatoria_id;
-  const profesorId = e.parameter.profesor_id;
-  const grupo = e.parameter.grupo;
+  const profesorId = e.parameter.profesor_id || '';
+  const grupo = e.parameter.grupo || '';
 
   if (!convocatoriaId) {
     return jsonError('convocatoria_id es obligatorio para getResumen', 400);
   }
 
-  // Obtener alumnos filtrados
+  const cacheKey = 'res_' + convocatoriaId + '_' + profesorId + '_' + grupo;
+  const data = cachedGet(cacheKey, function() {
+    return computeResumen(convocatoriaId, profesorId, grupo);
+  });
+
+  return jsonResponse(data);
+}
+
+/**
+ * Calcula resumen de asistencia (extraido para cacheabilidad).
+ */
+function computeResumen(convocatoriaId, profesorId, grupo) {
   let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS)
     .filter(a => a.activo === true && a.convocatoria_id === convocatoriaId);
 
-  if (profesorId) {
-    alumnos = alumnos.filter(a => a.profesor_id === profesorId);
-  }
-  if (grupo) {
-    alumnos = alumnos.filter(a => a.grupo === grupo);
-  }
+  if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
+  if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
 
-  // Obtener registros de asistencia de la convocatoria
   let registros = sheetToObjects(SHEET_NAMES.ASISTENCIA)
     .filter(r => r.convocatoria_id === convocatoriaId);
 
-  if (profesorId) {
-    registros = registros.filter(r => r.profesor_id === profesorId);
-  }
-  if (grupo) {
-    registros = registros.filter(r => r.grupo === grupo);
-  }
+  if (profesorId) registros = registros.filter(r => r.profesor_id === profesorId);
+  if (grupo) registros = registros.filter(r => r.grupo === grupo);
 
-  // Calcular limites de fecha para cada periodo
   const tz = Session.getScriptTimeZone();
   const hoy = new Date();
   const fmt = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
   const hoyStr = fmt(hoy);
 
-  const hace7 = new Date(hoy);
-  hace7.setDate(hoy.getDate() - 7);
-  const hace7Str = fmt(hace7);
+  const hace7 = new Date(hoy);  hace7.setDate(hoy.getDate() - 7);
+  const hace15 = new Date(hoy); hace15.setDate(hoy.getDate() - 15);
+  const hace30 = new Date(hoy); hace30.setDate(hoy.getDate() - 30);
+  const hace7Str = fmt(hace7), hace15Str = fmt(hace15), hace30Str = fmt(hace30);
 
-  const hace15 = new Date(hoy);
-  hace15.setDate(hoy.getDate() - 15);
-  const hace15Str = fmt(hace15);
-
-  const hace30 = new Date(hoy);
-  hace30.setDate(hoy.getDate() - 30);
-  const hace30Str = fmt(hace30);
-
-  // Agrupar registros por alumno_id con desglose por periodo
   const porAlumno = {};
   registros.forEach(r => {
     if (!porAlumno[r.alumno_id]) {
@@ -310,11 +379,9 @@ function handleGetResumen(e) {
     }
   });
 
-  // Helper para calcular porcentaje
   const pct = (presentes, total) => total > 0 ? Math.round((presentes / total) * 100) : 0;
 
-  // Construir resumen
-  const resumen = alumnos.map(a => {
+  return alumnos.map(a => {
     const s = porAlumno[a.id] || {
       total: 0, presentes: 0,
       sem_total: 0, sem_presentes: 0,
@@ -334,8 +401,6 @@ function handleGetResumen(e) {
       clases_presentes: s.presentes
     };
   });
-
-  return jsonResponse(resumen);
 }
 
 // ============================================================
@@ -432,6 +497,9 @@ function handleGuardarAsistencia(body) {
     sheet.getRange(sheet.getLastRow() + 1, 1, filas.length, 7).setValues(filas);
   }
 
+  // Invalidar cache de resumen para esta convocatoria
+  cacheInvalidate(['res_' + convocatoria_id]);
+
   // Log
   const presentes = alumnos.filter(a => a.presente).length;
   writeLog(
@@ -483,6 +551,9 @@ function handleCrearAlumno(body) {
     body.telefono || '',
     true // activo
   ]);
+
+  // Invalidar cache de alumnos para esta convocatoria
+  cacheInvalidate(['alu_' + convocatoria_id]);
 
   writeLog(body.usuario || 'admin', 'CREAR_ALUMNO', nombre + ' | ' + grupo + ' | ' + convocatoria_id);
 
@@ -538,6 +609,9 @@ function handleActualizarAlumno(body) {
       camposActualizados.push(campo + '=' + campos[campo]);
     }
   });
+
+  // Invalidar cache de alumnos (puede cambiar grupo/profesor)
+  cacheInvalidate(['alu_']);
 
   writeLog(
     body.usuario || 'admin',
