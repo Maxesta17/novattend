@@ -75,12 +75,25 @@
 - **Lint:** 0 errores
 - **Fase completada:** 7
 
+### Fase 8 — Backend API + Deploy
+- `src/config/api.js` — configuracion de URL del Apps Script (via VITE_API_URL)
+- `src/services/api.js` — capa de servicios con fetch (GET/POST) a la API REST
+- `docs/apps-script/Code.gs` — API REST completa para Google Apps Script
+- `docs/apps-script/Migracion.gs` — script de migracion de datos del Sheet viejo
+- `docs/setup-google-sheet.md` — guia paso a paso para montar el backend
+- `docs/manual-usuario.md` — manual para profesores y administradores
+- Proyecto subido a GitHub y desplegado en Vercel
+
+## Estado
+- **Rama:** main
+- **Build:** funcional, JS 261KB
+- **Lint:** 0 errores
+- **Fase completada:** 8
+
 ## Siguiente Paso
-- Crear el Google Sheet con la nueva estructura de 5 hojas
-- Escribir el codigo Apps Script (doGet/doPost) para exponer la API REST
-- Conectar el frontend React a los endpoints del Apps Script
-- Subir proyecto a GitHub
-- Deploy en Vercel
+- Crear el Google Sheet real siguiendo `docs/setup-google-sheet.md`
+- Ejecutar migracion con `docs/apps-script/Migracion.gs`
+- Configurar VITE_API_URL en Vercel con la URL del Web App
 - Pendiente tambien:
   - Tests unitarios
   - Estrategia de cache offline PWA

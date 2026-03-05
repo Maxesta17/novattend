@@ -25,3 +25,8 @@ dist-ssr
 
 # Claude Code
 .claude/
+
+# Archivos pesados y capturas
+*.xlsx
+*.png
+*.jpg
