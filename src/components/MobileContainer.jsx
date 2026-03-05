@@ -1,23 +1,15 @@
+/**
+ * Contenedor mobile-first con frame de dispositivo en desktop.
+ * Nota: las media queries de desktop requieren CSS puro (Tailwind no soporta
+ * selectores como #root desde un componente). Se mantiene un bloque <style>
+ * minimo para eso.
+ * @param {object} props
+ * @param {React.ReactNode} props.children - Contenido de la pagina
+ */
 export default function MobileContainer({ children }) {
   return (
     <>
       <style>{`
-        html, body {
-          margin: 0;
-          padding: 0;
-          overflow-x: hidden;
-        }
-
-        #root {
-          min-height: 100vh;
-          width: 100%;
-        }
-
-        .mobile-container {
-          width: 100%;
-          min-height: 100vh;
-        }
-
         @media (min-width: 480px) {
           #root {
             background-color: #111111;
@@ -27,9 +19,7 @@ export default function MobileContainer({ children }) {
             padding: 20px 0;
             min-height: 100vh;
           }
-
           .mobile-container {
-            width: 100%;
             max-width: 430px;
             min-height: 100vh;
             border-radius: 40px;
@@ -38,8 +28,7 @@ export default function MobileContainer({ children }) {
           }
         }
       `}</style>
-
-      <div className="mobile-container">
+      <div className="mobile-container w-full min-h-screen">
         {children}
       </div>
     </>

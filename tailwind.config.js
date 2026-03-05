@@ -26,8 +26,11 @@ export default {
         'border-light': '#F0ECE7',
         success: '#2E7D32',
         'success-soft': '#E8F5E9',
+        warning: '#E65100',
+        'warning-soft': '#FFF3E0',
         error: '#C62828',
         'error-soft': '#FFEBEE',
+        'dark-bg': '#111111',
       },
       fontFamily: {
         cinzel: ['Cinzel', 'serif'],
