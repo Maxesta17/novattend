@@ -40,6 +40,7 @@ export default function SearchInput({
       {value && onClear && (
         <button
           onClick={onClear}
+          aria-label="Limpiar busqueda"
           className="absolute right-2.5 bg-transparent border-none cursor-pointer text-text-muted text-lg leading-none hover:text-text-dark transition-colors"
         >
           ✕

@@ -11,22 +11,26 @@ export default function ToggleSwitch({
   className = '',
 }) {
   return (
-    <div
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
       className={[
-        'relative w-12 h-7 rounded-full transition-all duration-300 cursor-pointer',
+        'relative w-12 h-7 rounded-full transition-all duration-200 cursor-pointer border-none',
         checked
-          ? 'bg-gradient-to-br from-burgundy to-burgundy-light shadow-[0_2px_8px_rgba(128,0,0,0.3)]'
+          ? 'bg-burgundy shadow-sm'
           : 'bg-[#CDCDCD]',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-burgundy',
         className,
       ].filter(Boolean).join(' ')}
       onClick={onChange}
     >
       <div
         className={[
-          'absolute top-0.5 w-6 h-6 rounded-[11px] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)] transition-[left] duration-300',
+          'absolute top-0.5 size-6 rounded-[11px] bg-white shadow-sm transition-[left] duration-200',
           checked ? 'left-6' : 'left-0.5',
         ].join(' ')}
       />
-    </div>
+    </button>
   )
 }

@@ -39,12 +39,12 @@ export default function StatCard({
   ].filter(Boolean).join(' ')
 
   const valueClasses = [
-    'font-cinzel text-xl font-bold mb-0.5',
+    'font-cinzel text-xl font-bold mb-0.5 tabular-nums',
     isDark ? 'text-gold' : scheme.text,
   ].join(' ')
 
   const labelClasses = [
-    'font-montserrat text-[9.5px] uppercase tracking-[0.5px] font-semibold',
+    'font-montserrat text-[9.5px] uppercase font-semibold',
     isDark ? 'text-white/60' : scheme.text,
   ].join(' ')
 

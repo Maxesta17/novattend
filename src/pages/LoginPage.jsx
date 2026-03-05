@@ -61,42 +61,33 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-[linear-gradient(170deg,#1A1A1A_0%,#2A1A1A_40%,#5C0000_100%)] relative overflow-hidden flex flex-col items-center justify-center px-5 py-6 box-border">
-      {/* Patron decorativo diagonal */}
-      <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(197,160,89,0.02)_2px,rgba(197,160,89,0.02)_4px)] pointer-events-none" />
-
-      {/* Resplandor granate arriba centro */}
-      <div className="absolute -top-[10%] left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[radial-gradient(circle,rgba(128,0,0,0.3)_0%,transparent_70%)] blur-[60px] pointer-events-none" />
-
-      {/* Resplandor dorado abajo derecha */}
-      <div className="absolute -bottom-[5%] -right-[10%] w-[400px] h-[400px] bg-[radial-gradient(circle,rgba(197,160,89,0.15)_0%,transparent_70%)] blur-[40px] pointer-events-none" />
-
+    <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-burgundy-dark relative overflow-hidden flex flex-col items-center justify-center px-5 py-6 box-border">
       {/* Contenedor principal */}
-      <div className="relative z-10 flex flex-col items-center w-full max-w-[360px]">
+      <div className="relative flex flex-col items-center w-full max-w-[360px]">
         {/* Logo */}
         <img
-          className="animate-float animate-fade-up delay-0 w-20 h-20 mb-7 object-cover shadow-[0_0_30px_rgba(128,0,0,0.4),0_0_60px_rgba(128,0,0,0.2)]"
+          className="animate-fade-up delay-0 w-20 h-20 mb-7 object-cover shadow-xl rounded-xl"
           src="/logova1.png"
           alt="NovAttend"
         />
 
         {/* Titulo */}
-        <h1 className="animate-fade-up delay-1 font-cinzel text-[28px] font-bold text-gold m-0 mb-1.5 -tracking-[0.5px] text-center">
+        <h1 className="animate-fade-up delay-1 font-cinzel text-[28px] font-bold text-gold m-0 mb-1.5 text-balance text-center">
           NovAttend
         </h1>
 
         {/* Subtitulo */}
-        <p className="animate-fade-up delay-2 font-montserrat text-[13px] text-white/55 m-0 mb-[22px] font-normal">
+        <p className="animate-fade-up delay-2 font-montserrat text-[13px] text-white/55 m-0 mb-[22px] font-normal text-pretty">
           Control de Asistencia
         </p>
 
         {/* Separador con texto */}
         <div className="animate-fade-up delay-3 flex items-center gap-2 mb-8 w-full justify-center">
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent to-gold/25" />
-          <span className="font-montserrat text-[9px] text-gold/90 tracking-[3px] font-medium whitespace-nowrap">
+          <div className="flex-1 h-px bg-gold/25" />
+          <span className="font-montserrat text-[9px] text-gold/90 uppercase font-medium whitespace-nowrap">
             LINGNOVA ACADEMY
           </span>
-          <div className="flex-1 h-px bg-gradient-to-l from-transparent to-gold/25" />
+          <div className="flex-1 h-px bg-gold/25" />
         </div>
 
         {/* Formulario */}
@@ -120,14 +111,14 @@ export default function LoginPage() {
           </Button>
 
           {error && (
-            <div className={`text-[#FF4D4F] mt-3 font-montserrat text-[13px] text-center ${shake ? 'animate-shake' : ''}`}>
+            <div className={`text-error mt-3 font-montserrat text-[13px] text-center text-pretty ${shake ? 'animate-shake' : ''}`}>
               {error}
             </div>
           )}
         </div>
 
         {/* Disclaimer */}
-        <p className="animate-fade-up delay-6 font-montserrat text-xs text-white/20 mt-5 text-center font-normal">
+        <p className="animate-fade-up delay-6 font-montserrat text-xs text-white/20 mt-5 text-center font-normal text-pretty">
           Acceso exclusivo profesores
         </p>
       </div>

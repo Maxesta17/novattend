@@ -17,10 +17,10 @@ export default function PageHeader({
   return (
     <header
       className={[
-        'sticky top-0 z-50',
-        'bg-[linear-gradient(165deg,#1A1A1A_0%,#2A1A1A_50%,#5C0000_100%)]',
+        'sticky top-0 z-20',
+        'bg-burgundy-dark',
         'rounded-b-3xl px-4 pt-4 pb-3',
-        'shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
+        'shadow-lg',
       ].join(' ')}
     >
       {/* Fila superior: Logo + Nombre + Badge */}
@@ -29,14 +29,14 @@ export default function PageHeader({
           <img
             src="/logova1.png"
             alt="logo"
-            className="w-[42px] h-[42px] rounded-xl object-cover shadow-[0_4px_12px_rgba(128,0,0,0.4)]"
+            className="size-[42px] rounded-xl object-cover shadow-md"
           />
           <div>
-            <h2 className="font-cinzel text-[15px] font-semibold text-white m-0 mb-0.5">
+            <h2 className="font-cinzel text-[15px] font-semibold text-white m-0 mb-0.5 text-balance">
               {title}
             </h2>
             {subtitle && (
-              <p className="font-montserrat text-[11px] text-white/45 m-0">
+              <p className="font-montserrat text-[11px] text-white/45 m-0 text-pretty">
                 {subtitle}
               </p>
             )}

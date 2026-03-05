@@ -108,12 +108,12 @@
 
 /* Escala con rebote (logo, checkmarks) */
 .animate-pop-in {
-  animation: popIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: popIn 0.7s ease-out;
 }
 
 /* Popup modal */
 .animate-pop-up {
-  animation: popUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: popUp 0.4s ease-out;
 }
 
 /* Rotacion continua para loading */
@@ -145,3 +145,12 @@
 .delay-5 { animation-delay: 0.4s; }
 .delay-6 { animation-delay: 0.5s; }
 .delay-7 { animation-delay: 0.7s; }
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

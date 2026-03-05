@@ -27,7 +27,7 @@ export default function Button({
   ]
 
   const variants = {
-    primary: 'bg-gradient-to-br from-burgundy to-burgundy-light text-white shadow-[0_6px_20px_rgba(128,0,0,0.25)] hover:shadow-[0_8px_28px_rgba(128,0,0,0.35)]',
+    primary: 'bg-burgundy text-white shadow-lg hover:shadow-xl hover:bg-burgundy-light',
     ghost: 'bg-transparent border border-gold/25 text-white/80 hover:bg-white/[0.08] hover:border-gold',
     disabled: 'bg-[#CCCCCC] text-white cursor-not-allowed hover:translate-y-0',
   }

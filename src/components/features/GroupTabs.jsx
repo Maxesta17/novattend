@@ -17,7 +17,7 @@ export default function GroupTabs({ groups, selected, onChange }) {
             'font-cinzel text-[13px] font-semibold',
             'transition-all duration-300',
             selected === g
-              ? 'bg-gradient-to-br from-burgundy to-burgundy-light text-gold'
+              ? 'bg-burgundy text-gold'
               : 'bg-white/5 text-white/[0.38]',
           ].join(' ')}
         >

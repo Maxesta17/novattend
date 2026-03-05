@@ -2,7 +2,7 @@
 
 ## Ultimo Hito
 - **Fecha:** 2026-03-05
-- **Hito:** Fase 13 — CacheService en Apps Script + deploy Vercel actualizado + prueba E2E exitosa
+- **Hito:** Fase 14 — Auditoria baseline-ui + correcciones de diseno en 18 archivos
 
 ## Resumen de Cambios (Fases 1-11)
 
@@ -77,13 +77,67 @@
 - URL produccion: https://novattend.vercel.app
 - **Nota:** Service Worker puede cachear version vieja. Si muestra datos mock, hacer: DevTools > Application > Service Workers > Unregister + Ctrl+Shift+R.
 
+### Fase 14 — Auditoria baseline-ui + Correcciones de diseno
+
+#### Auditoria aplicada (skill baseline-ui)
+Se ejecuto una auditoria completa de UI contra reglas opinionadas de calidad. Se corrigieron **15 categorias de violaciones** en **18 archivos**.
+
+#### Gradientes eliminados (11 instancias)
+- LoginPage, PageHeader, SavedPage, Button, ToggleSwitch, GroupTabs, Avatar, ConvocatoriaPage, StudentDetailPopup
+- Reemplazados por colores solidos: `bg-burgundy`, `bg-burgundy-dark`, `bg-off-white`
+
+#### Glows y blur eliminados
+- LoginPage: 3 divs decorativos eliminados (blur-60px, blur-40px, glow shadows de 500x500px)
+- Impacto: mejor rendimiento en moviles de gama baja
+
+#### Sombras estandarizadas
+- Todas las `shadow-[custom]` reemplazadas por escala Tailwind: `shadow-sm`, `shadow-md`, `shadow-lg`, `shadow-xl`, `shadow-2xl`
+
+#### Z-index con escala fija
+- `z-[1000]` (Modal) -> `z-40`
+- `z-50` (PageHeader) -> `z-20`
+- Eliminado `z-[1]` (SavedPage)
+
+#### Accesibilidad
+- **ToggleSwitch**: `<div onClick>` -> `<button role="switch" aria-checked>` con `focus-visible`
+- **SearchInput**: `aria-label="Limpiar busqueda"` en boton X
+- **PageHeader**: ya tenia `aria-label="Cerrar sesion"` (OK)
+
+#### Tipografia
+- `text-balance` en todos los headings (h1-h5)
+- `text-pretty` en todos los parrafos y body text
+- `tabular-nums` en datos numericos (StatCard, TeacherCard, StudentDetailPopup)
+- Eliminados `tracking-[2px]`, `tracking-[0.5px]`, `tracking-[3px]` (Badge, StatCard, LoginPage)
+
+#### Skeletons de carga
+- **AttendancePage**: skeleton con 5 filas pulsantes (avatar + nombre + toggle)
+- **DashboardPage**: skeleton completo con header + 4 teacher cards pulsantes
+
+#### Safe-area-inset
+- Bottom bar de AttendancePage: `pb-[max(22px,env(safe-area-inset-bottom))]`
+
+#### Reduced motion
+- `@media (prefers-reduced-motion: reduce)` anadido en animations.css
+
+#### Custom easing eliminado
+- `cubic-bezier(0.34, 1.56, 0.64, 1)` -> `ease-out` en popIn y popUp
+
+#### `size-*` para elementos cuadrados
+- Avatar y logos usan `size-[42px]`, `size-[86px]` en vez de `w-*` + `h-*`
+
+#### Documentacion creada
+- `docs/tutorial-aurora.md` — Tutorial para Aurora sobre como rellenar alumnos en el spreadsheet
+- Presentacion Gamma para Aurora (enlace externo)
+- Presentacion Gamma para profesores: instalacion PWA + uso de la app (enlace externo)
+
 ## Estado
 - **Rama:** main
 - **Build:** funcional, JS 271KB
-- **Lint:** 0 errores
+- **Lint:** 0 errores, 1 warning (eslint-disable no usado)
 - **Tests:** 55 passing (8 suites)
-- **Fase completada:** 13
+- **Fase completada:** 14
 - **Commits recientes:**
+  - `5a8d528` docs: fase 13 — CacheService en Apps Script + deploy Vercel + E2E
   - `3b47a5b` feat: CacheService en Apps Script
   - `a1a78c1` feat: fase 12 completa — hooks, tests, offline PWA, convocatorias
 
@@ -114,6 +168,8 @@
 ### Pendiente
 - Validar que `actualizarEstadisticas()` se ejecuta correctamente tras guardar asistencia
 - Considerar migracion a TypeScript en el futuro
+- Configurar API key de 21st.dev en MCP si se quiere usar su libreria de componentes
+- Considerar instalar shadcn/ui para componentes accesibles (Switch, Skeleton, etc.)
 
 ## Archivos de Apps Script
 - `docs/apps-script/Code.gs` — API REST principal con CacheService (doGet, doPost, cache helpers, setupSheets)
@@ -131,6 +187,7 @@
 ## Siguiente Paso
 1. Verificar que https://novattend.vercel.app carga datos reales (no mock) — si muestra mock, limpiar Service Worker
 2. Pegar Code.gs actualizado (con CacheService) en Apps Script y hacer nuevo deploy de Web App
-3. Validacion end-to-end con datos reales (pasar lista con samuel, verificar en dashboard con admin)
-4. Onboarding de profesores (entregar credenciales, explicar flujo)
-5. Considerar mejoras UX basadas en feedback real
+3. Hacer deploy a Vercel con los cambios de fase 14 (`vercel --prod`)
+4. Validacion end-to-end con datos reales (pasar lista con samuel, verificar en dashboard con admin)
+5. Onboarding: Aurora rellena alumnos (tutorial-aurora.md), profesores instalan PWA
+6. Considerar mejoras UX basadas en feedback real

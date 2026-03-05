@@ -26,12 +26,12 @@ export default function ConvocatoriaPage() {
   return (
     <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-off-white flex flex-col box-border">
       {/* Header */}
-      <div className="bg-gradient-to-br from-burgundy to-burgundy-light px-5 pt-10 pb-6 rounded-b-[20px]">
+      <div className="bg-burgundy px-5 pt-10 pb-6 rounded-b-[20px]">
         <Badge>LINGNOVA</Badge>
-        <h1 className="font-cinzel text-[22px] font-bold text-white mt-3 mb-1">
+        <h1 className="font-cinzel text-[22px] font-bold text-white mt-3 mb-1 text-balance">
           Convocatorias
         </h1>
-        <p className="font-montserrat text-[13px] text-white/60">
+        <p className="font-montserrat text-[13px] text-white/60 text-pretty">
           Selecciona la convocatoria para pasar lista
         </p>
       </div>
@@ -50,18 +50,18 @@ export default function ConvocatoriaPage() {
           <button
             key={conv.id}
             onClick={() => handleSelect(conv)}
-            className="animate-fade-up w-full bg-white border border-border rounded-2xl p-4 mb-3 cursor-pointer transition-all duration-200 hover:border-gold/40 hover:shadow-[0_4px_16px_rgba(128,0,0,0.08)] text-left"
+            className="animate-fade-up w-full bg-white border border-border rounded-2xl p-4 mb-3 cursor-pointer transition-all duration-200 hover:border-gold/40 hover:shadow-md text-left"
             style={{ animationDelay: `${idx * 0.06}s` }}
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-cinzel text-[15px] font-semibold text-text-dark">
+              <h3 className="font-cinzel text-[15px] font-semibold text-text-dark text-balance">
                 {conv.nombre}
               </h3>
               <Badge variant="status" color="bg-success/10" textColor="text-success">
                 Activa
               </Badge>
             </div>
-            <p className="font-montserrat text-[12px] text-text-muted">
+            <p className="font-montserrat text-[12px] text-text-muted text-pretty">
               {formatDate(conv.fecha_inicio)} — {formatDate(conv.fecha_fin)}
             </p>
           </button>

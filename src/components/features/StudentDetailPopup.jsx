@@ -86,14 +86,14 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
         <Avatar
           initials={initials}
           variant="colored"
-          color="bg-gradient-to-br from-burgundy to-burgundy-light"
+          color="bg-burgundy"
           size="lg"
-          className="mb-3 text-gold shadow-[0_4px_12px_rgba(128,0,0,0.3)]"
+          className="mb-3 text-gold shadow-md"
         />
-        <h3 className="font-cinzel text-lg font-bold text-text-dark m-0 mb-1 text-center">
+        <h3 className="font-cinzel text-lg font-bold text-text-dark m-0 mb-1 text-balance text-center">
           {student.name}
         </h3>
-        <p className="font-montserrat text-xs text-text-muted m-0 text-center">
+        <p className="font-montserrat text-xs text-text-muted m-0 text-pretty text-center">
           {student.teacher} · Grupo {student.group}
         </p>
       </div>
@@ -107,7 +107,7 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
               <span className="font-montserrat text-xs font-medium text-text-dark">
                 {metric.label}
               </span>
-              <span className={`font-cinzel text-xs font-semibold ${scheme.color}`}>
+              <span className={`font-cinzel text-xs font-semibold tabular-nums ${scheme.color}`}>
                 {metric.value}%
               </span>
             </div>

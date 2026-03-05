@@ -113,21 +113,29 @@ export default function AttendancePage() {
       <div className="flex-1 pb-[110px] overflow-auto">
         <div className="px-4">
           <div className="flex items-center justify-between mb-3.5">
-            <h3 className="font-cinzel text-[15px] font-semibold text-text-dark m-0">
+            <h3 className="font-cinzel text-[15px] font-semibold text-text-dark m-0 text-balance">
               Alumnos · {selectedGroup}
             </h3>
             <button
               onClick={toggleAll}
-              className="bg-gradient-to-br from-burgundy to-burgundy-light text-gold border-none rounded-md px-2.5 py-1 font-montserrat text-[11px] font-semibold cursor-pointer transition-all duration-300"
+              className="bg-burgundy text-gold border-none rounded-md px-2.5 py-1 font-montserrat text-[11px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-burgundy-light"
             >
               Marcar todo
             </button>
           </div>
 
           {loadingStudents && (
-            <p className="font-montserrat text-sm text-text-muted text-center py-6">
-              Cargando alumnos...
-            </p>
+            <div className="space-y-2 py-4">
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white border border-border-light animate-pulse">
+                  <div className="size-[38px] rounded-[9px] bg-border-light" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 bg-border-light rounded w-3/4" />
+                  </div>
+                  <div className="w-12 h-7 rounded-full bg-border-light" />
+                </div>
+              ))}
+            </div>
           )}
 
           {!loadingStudents && students.map((student, idx) => {
@@ -146,7 +154,7 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pt-3 pb-[22px] bg-gradient-to-t from-off-white to-off-white/90 shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
+      <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pt-3 pb-[max(22px,env(safe-area-inset-bottom))] bg-off-white shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
         <Button
           variant={presentCount === 0 ? 'disabled' : 'primary'}
           loading={saving}

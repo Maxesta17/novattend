@@ -18,11 +18,11 @@ export default function Modal({
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 bg-black/60 flex items-center justify-center z-[1000] p-5"
+      className="animate-fade-in fixed inset-0 bg-black/60 flex items-center justify-center z-40 p-5"
       onClick={onClose}
     >
       <div
-        className={`animate-pop-up bg-white rounded-[20px] p-6 w-full shadow-[0_20px_60px_rgba(0,0,0,0.3)] ${className}`}
+        className={`animate-pop-up bg-white rounded-[20px] p-6 w-full shadow-2xl ${className}`}
         style={{ maxWidth }}
         onClick={e => e.stopPropagation()}
       >

@@ -36,7 +36,7 @@ export default function TeacherCard({ teacher, isExpanded, onToggle, onStudentCl
           className="font-cinzel text-sm font-bold"
         />
         <div className="flex-1">
-          <h4 className="font-cinzel text-sm font-semibold text-text-dark m-0 mb-0.5">
+          <h4 className="font-cinzel text-sm font-semibold text-text-dark m-0 mb-0.5 text-balance">
             {teacher.name}
           </h4>
           <p className="font-montserrat text-[11px] text-text-muted m-0">
@@ -107,7 +107,7 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
                 <Avatar initials={initials} variant="colored" color={s.bg} size="sm" className={s.text} />
                 <div className="flex-1 min-w-0">
                   <div className="font-montserrat text-xs font-medium text-text-dark truncate">{student.name}</div>
-                  <div className="font-montserrat text-[9px] text-text-muted">
+                  <div className="font-montserrat text-[9px] text-text-muted tabular-nums">
                     S:{student.weekly}% Q:{student.biweekly}% M:{student.monthly}%
                     {student.absences?.length > 0 && (
                       <span className="text-error"> · Ult. falta: {student.absences[0]?.split('-').reverse().join('/')}</span>

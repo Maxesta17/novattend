@@ -25,7 +25,7 @@ export default function ProgressBar({
     ? color
     : colorFrom && colorTo
       ? `bg-gradient-to-r ${colorFrom} ${colorTo}`
-      : 'bg-gradient-to-r from-burgundy to-gold'
+      : 'bg-burgundy'
 
   return (
     <div

@@ -15,8 +15,8 @@ export default function Badge({
   className = '',
 }) {
   const variants = {
-    gold: 'bg-gold text-burgundy px-2.5 py-1 rounded-md font-montserrat text-[8.5px] font-bold tracking-[2px] uppercase',
-    admin: 'bg-gold text-burgundy px-2.5 py-1 rounded-md font-montserrat text-[8.5px] font-bold tracking-[2px] uppercase',
+    gold: 'bg-gold text-burgundy px-2.5 py-1 rounded-md font-montserrat text-[8.5px] font-bold uppercase',
+    admin: 'bg-gold text-burgundy px-2.5 py-1 rounded-md font-montserrat text-[8.5px] font-bold uppercase',
     status: `${color || 'bg-success'} ${textColor || 'text-white'} px-1.5 py-0.5 rounded font-cinzel text-[10px] font-semibold`,
   }
 
