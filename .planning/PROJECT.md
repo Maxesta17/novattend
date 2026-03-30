@@ -22,15 +22,17 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 
 ### Active
 
-**Ola 1 — Fixes criticos:**
-- [ ] navigateFallback corregido a /index.html (PWA offline funcional)
-- [ ] Bug SavedPage present===0 corregido
-- [ ] api.js verifica res.ok antes de parsear JSON
-- [ ] Feedback de error visible al guardar/cargar asistencia
-- [ ] Regex de cache API matchea script.googleusercontent.com
-- [ ] Hex hardcodeados reemplazados por tokens Tailwind
-- [ ] html lang="es" + metadata PWA completa
-- [ ] Vulnerabilidades npm resueltas (npm audit fix)
+**Ola 1 — Fixes criticos:** (Validated in Phase 1: Estabilidad Critica)
+- [x] navigateFallback corregido a /index.html (PWA offline funcional)
+- [x] Bug SavedPage present===0 corregido
+- [x] api.js verifica res.ok antes de parsear JSON
+- [x] Feedback de error visible al guardar/cargar asistencia (ErrorBanner)
+- [x] Regex de cache API matchea script.googleusercontent.com
+- [x] Hex hardcodeados reemplazados por tokens Tailwind (token disabled)
+- [x] html lang="es" + metadata PWA completa
+- [x] Vulnerabilidades npm resueltas (npm audit fix)
+- [x] Pagina 404 branded con ruta catch-all
+- [x] apps-script/ ignorado en ESLint config
 
 **Ola 2 — Rendimiento:**
 - [ ] Code-splitting con React.lazy() + Suspense en rutas post-login
@@ -41,7 +43,7 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 
 **Ola 3 — Arquitectura:**
 - [ ] DashboardPage refactorizado a <250 lineas (extraer hooks + subcomponentes)
-- [ ] Ruta 404/NotFound agregada
+- [x] Ruta 404/NotFound agregada (moved to Phase 1)
 - [ ] Focus trap + Escape en Modal
 - [ ] Soporte de teclado en TeacherCard expandible
 - [ ] JSDoc en 11 componentes faltantes
@@ -61,7 +63,7 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
 - **Bundle actual:** 271 KB monolitico (sin code-splitting)
 - **DashboardPage:** 272 lineas (viola limite de 250 de CLAUDE.md)
-- **Tests actuales:** 19 tests, 4 suites, ~35% cobertura
+- **Tests actuales:** 70 tests, 11 suites (post Phase 1)
 - **Deployment:** Vercel (frontend) + Google Apps Script (backend)
 
 ## Constraints
@@ -99,4 +101,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after initialization*
+*Last updated: 2026-03-30 after Phase 1 completion*
