@@ -9,7 +9,7 @@ export default function SavedPage() {
   const state = location.state
 
   useEffect(() => {
-    if (!state || !state.present || state.total === undefined) {
+    if (!state || state.present === undefined || state.total === undefined) {
       navigate('/attendance')
     }
   }, [state, navigate])

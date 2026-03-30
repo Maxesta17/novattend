@@ -25,6 +25,9 @@ async function apiGet(action, params = {}) {
   })
 
   const res = await fetch(url.toString())
+  if (!res.ok) {
+    throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
+  }
   const json = await res.json()
 
   if (json.status === 'error') {
@@ -41,6 +44,9 @@ async function apiPost(action, body = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, ...body })
   })
+  if (!res.ok) {
+    throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
+  }
   const json = await res.json()
 
   if (json.status === 'error') {

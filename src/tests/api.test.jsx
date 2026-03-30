@@ -33,6 +33,7 @@ describe('api.js', () => {
 
   it('apiGet construye URL con action y params', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
     })
 
@@ -47,6 +48,7 @@ describe('api.js', () => {
 
   it('apiGet omite params undefined/null/vacios', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
     })
 
@@ -61,6 +63,7 @@ describe('api.js', () => {
   it('apiGet devuelve data de la respuesta', async () => {
     const mockData = [{ id: 'a1', nombre: 'Ana' }]
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: mockData }),
     })
 
@@ -70,6 +73,7 @@ describe('api.js', () => {
 
   it('apiGet lanza error si status es error', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'error', error: 'No autorizado' }),
     })
 
@@ -78,6 +82,7 @@ describe('api.js', () => {
 
   it('apiGet lanza error generico si no hay mensaje', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'error' }),
     })
 
@@ -91,10 +96,20 @@ describe('api.js', () => {
     expect(global.fetch).not.toHaveBeenCalled()
   })
 
+  it('apiGet lanza error descriptivo cuando res.ok es false (HTTP 500)', async () => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    })
+    await expect(getConvocatorias()).rejects.toThrow('Error HTTP 500: Internal Server Error')
+  })
+
   // --- apiPost ---
 
   it('apiPost envia body con action', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
     })
 
@@ -122,16 +137,27 @@ describe('api.js', () => {
 
   it('apiPost lanza error si status es error', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'error', error: 'Duplicado' }),
     })
 
     await expect(crearAlumno({ nombre: 'Test' })).rejects.toThrow('Duplicado')
   })
 
+  it('apiPost lanza error descriptivo cuando res.ok es false (HTTP 403)', async () => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    })
+    await expect(guardarAsistencia({})).rejects.toThrow('Error HTTP 403: Forbidden')
+  })
+
   // --- Endpoints especificos ---
 
   it('getResumen envia params correctos', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: {} }),
     })
 
@@ -144,6 +170,7 @@ describe('api.js', () => {
 
   it('getAsistenciaAlumno envia alumno_id', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
     })
 
@@ -156,6 +183,7 @@ describe('api.js', () => {
 
   it('actualizarAlumno envia alumno_id y campos en body', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
     })
 
