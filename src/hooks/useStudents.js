@@ -9,6 +9,7 @@
  * @returns {{
  *   students: Array<{id?: string, name: string, present: boolean}>,
  *   loadingStudents: boolean,
+ *   loadError: string|null,
  *   selectedGroup: string,
  *   setSelectedGroup: (grupo: string) => void,
  *   toggleStudent: (index: number) => void,
@@ -41,6 +42,7 @@ export default function useStudents(convocatoria, profesorId) {
   const [selectedGroup, setSelectedGroup] = useState(GROUPS[0])
   const [students, setStudents] = useState([])
   const [loadingStudents, setLoadingStudents] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   // Cache de alumnos por grupo (evita recargas al cambiar de tab)
   const cacheRef = useRef({})
@@ -60,14 +62,16 @@ export default function useStudents(convocatoria, profesorId) {
       return
     }
 
+    setLoadError(null)
     setLoadingStudents(true)
     try {
       const alumnos = await getAlumnos(convocatoria.id, profesorId, grupo)
       const mapped = mapAlumnos(alumnos)
       cacheRef.current[grupo] = mapped
       setStudents(mapped)
-    } catch {
+    } catch (err) {
       setStudents([])
+      setLoadError(err.message || 'No se pudieron cargar los alumnos. Revisa tu conexion.')
     }
     setLoadingStudents(false)
   }, [convocatoria, profesorId])
@@ -94,9 +98,10 @@ export default function useStudents(convocatoria, profesorId) {
           setStudents(mapped)
           setLoadingStudents(false)
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
           setStudents([])
+          setLoadError(err.message || 'No se pudieron cargar los alumnos. Revisa tu conexion.')
           setLoadingStudents(false)
         }
       }
@@ -143,6 +148,7 @@ export default function useStudents(convocatoria, profesorId) {
   return {
     students,
     loadingStudents,
+    loadError,
     selectedGroup,
     setSelectedGroup: handleGroupChange,
     toggleStudent,

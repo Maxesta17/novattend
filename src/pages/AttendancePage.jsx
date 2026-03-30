@@ -10,6 +10,7 @@ import StatCard from '../components/ui/StatCard.jsx'
 import ProgressBar from '../components/ui/ProgressBar.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
+import ErrorBanner from '../components/ui/ErrorBanner.jsx'
 
 export default function AttendancePage() {
   const navigate = useNavigate()
@@ -25,10 +26,12 @@ export default function AttendancePage() {
 
   const profesorId = sessionUser?.username ? `prof-${sessionUser.username}` : null
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   const {
     students,
     loadingStudents,
+    loadError,
     selectedGroup,
     setSelectedGroup,
     toggleStudent,
@@ -43,6 +46,7 @@ export default function AttendancePage() {
   const handleSave = async () => {
     if (presentCount === 0) return
     setSaving(true)
+    setSaveError(null)
 
     if (isApiEnabled() && convocatoria) {
       try {
@@ -57,8 +61,9 @@ export default function AttendancePage() {
             presente: s.present,
           })),
         })
-      } catch {
+      } catch (err) {
         setSaving(false)
+        setSaveError(err.message || 'Error al guardar. Comprueba tu conexion e intentalo de nuevo.')
         return
       }
     } else {
@@ -110,6 +115,12 @@ export default function AttendancePage() {
 
       <ProgressBar value={attendancePercent} className="mx-4 mb-5" />
 
+      {loadError && (
+        <div className="px-4">
+          <ErrorBanner message={loadError} />
+        </div>
+      )}
+
       <div className="flex-1 pb-[110px] overflow-auto">
         <div className="px-4">
           <div className="flex items-center justify-between mb-3.5">
@@ -155,6 +166,7 @@ export default function AttendancePage() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pt-3 pb-[max(22px,env(safe-area-inset-bottom))] bg-off-white shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
+        <ErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
         <Button
           variant={presentCount === 0 ? 'disabled' : 'primary'}
           loading={saving}
