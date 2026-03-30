@@ -36,9 +36,9 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 
 ### Compliance / Limpieza
 
-- [ ] **COMP-01**: 3 hex hardcodeados en Button, ToggleSwitch, MobileContainer reemplazados por tokens Tailwind
-- [ ] **COMP-02**: index.html tiene lang="es" en lugar de lang="en"
-- [ ] **COMP-03**: npm audit fix resuelve vulnerabilidades conocidas
+- [x] **COMP-01**: 3 hex hardcodeados en Button, ToggleSwitch, MobileContainer reemplazados por tokens Tailwind
+- [x] **COMP-02**: index.html tiene lang="es" en lugar de lang="en"
+- [x] **COMP-03**: npm audit fix resuelve vulnerabilidades conocidas
 
 ## v2 Requirements
 
@@ -99,9 +99,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-05 | Phase 2 | Pending |
 | ARCH-01 | Phase 3 | Pending |
 | ARCH-02 | Phase 3 | Pending |
-| COMP-01 | Phase 1 | Pending |
-| COMP-02 | Phase 1 | Pending |
-| COMP-03 | Phase 1 | Pending |
+| COMP-01 | Phase 1 | Complete |
+| COMP-02 | Phase 1 | Complete |
+| COMP-03 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total
