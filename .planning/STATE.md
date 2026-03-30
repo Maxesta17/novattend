@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-30T14:37:45.538Z"
-last_activity: 2026-03-30 — Roadmap creado tras auditoria completa (score 7.3/10, objetivo 8.0/10)
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-03-30T15:17:52.649Z"
+last_activity: 2026-03-30
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, PWA offline funcional.
-**Current focus:** Phase 1 — Estabilidad Critica
+**Current focus:** Phase 01 — estabilidad-critica
 
 ## Current Position
 
-Phase: 1 of 3 (Estabilidad Critica)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-30 — Roadmap creado tras auditoria completa (score 7.3/10, objetivo 8.0/10)
+Phase: 01 (estabilidad-critica) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-03-30
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01 P03 | 5 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - Roadmap: Olas 1-3 primero, 4-5 despues — 80% mejoras con ~19h vs 42h totales
 - Roadmap: No tocar backend Apps Script en este milestone (Ola 4)
 - Phase 2: PWA-04 (registerType: prompt) debe desplegarse ANTES de code-splitting para evitar perdida de estado mid-session (Pitfall critico identificado en research)
+- [Phase 01]: NotFoundPage es publica (sin ProtectedRoute) — cualquier usuario ve el 404
+- [Phase 01]: navigateFallback cambiado a /index.html para SPA offline funcional en deep-links
+- [Phase 01]: regex de cache API ampliado a (google|googleusercontent).com para capturar redirecciones Apps Script
 
 ### Pending Todos
 
@@ -75,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T14:37:45.535Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-estabilidad-critica/01-CONTEXT.md
+Last session: 2026-03-30T15:17:52.642Z
+Stopped at: Completed 01-03-PLAN.md
+Resume file: None

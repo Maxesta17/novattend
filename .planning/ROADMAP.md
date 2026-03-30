@@ -28,11 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. SavedPage muestra el resumen de asistencia correctamente aunque el conteo de presentes sea 0
   4. Una URL invalida (ej: /foo) muestra una pagina 404 amigable con enlace de regreso al login
   5. El build pasa `npm run lint` sin errores y cero estilos inline — todos los hex hardcodeados reemplazados por tokens Tailwind
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 - [ ] 01-01-PLAN.md — Compliance: token disabled, hex replacements, index.html metadata, npm audit
 - [ ] 01-02-PLAN.md — Error handling: api.js res.ok, ErrorBanner, useStudents loadError, SavedPage bug
-- [ ] 01-03-PLAN.md — 404 page + PWA config: NotFoundPage, navigateFallback, regex, manifest
+- [x] 01-03-PLAN.md — 404 page + PWA config: NotFoundPage, navigateFallback, regex, manifest
 
 ### Phase 2: Rendimiento y Bundle
 **Goal**: El bundle inicial se reduce ~50% para teachers, las listas son fluidas bajo carga, y el Service Worker no rompe sesiones activas al actualizarse
@@ -63,6 +63,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Estabilidad Critica | 0/3 | Planned | - |
+| 1. Estabilidad Critica | 1/3 | In Progress|  |
 | 2. Rendimiento y Bundle | 0/? | Not started | - |
 | 3. Arquitectura y Accesibilidad | 0/? | Not started | - |

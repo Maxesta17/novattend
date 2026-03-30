@@ -9,9 +9,9 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 
 ### PWA / Offline
 
-- [ ] **PWA-01**: navigateFallback cambiado de /offline.html a /index.html para que la SPA funcione offline
-- [ ] **PWA-02**: Regex de runtime caching captura script.googleusercontent.com ademas de script.google.com
-- [ ] **PWA-03**: Manifest PWA tiene start_url, scope, y lang="es" correctos
+- [x] **PWA-01**: navigateFallback cambiado de /offline.html a /index.html para que la SPA funcione offline
+- [x] **PWA-02**: Regex de runtime caching captura script.googleusercontent.com ademas de script.google.com
+- [x] **PWA-03**: Manifest PWA tiene start_url, scope, y lang="es" correctos
 - [ ] **PWA-04**: Service worker usa registerType prompt (no autoUpdate) para evitar ChunkLoadError mid-session con code-splitting
 
 ### Error Handling / UX
@@ -19,7 +19,7 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 - [ ] **ERR-01**: api.js verifica res.ok antes de parsear JSON y lanza error descriptivo si falla
 - [ ] **ERR-02**: AttendancePage muestra feedback visual al usuario cuando falla guardar o cargar asistencia
 - [ ] **ERR-03**: SavedPage no redirige cuando present === 0 (bug logico corregido)
-- [ ] **ERR-04**: Ruta 404/NotFound muestra pagina amigable para URLs invalidas
+- [x] **ERR-04**: Ruta 404/NotFound muestra pagina amigable para URLs invalidas
 
 ### Rendimiento
 
@@ -84,14 +84,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PWA-01 | Phase 1 | Pending |
-| PWA-02 | Phase 1 | Pending |
-| PWA-03 | Phase 1 | Pending |
+| PWA-01 | Phase 1 | Complete |
+| PWA-02 | Phase 1 | Complete |
+| PWA-03 | Phase 1 | Complete |
 | PWA-04 | Phase 2 | Pending |
 | ERR-01 | Phase 1 | Pending |
 | ERR-02 | Phase 1 | Pending |
 | ERR-03 | Phase 1 | Pending |
-| ERR-04 | Phase 1 | Pending |
+| ERR-04 | Phase 1 | Complete |
 | PERF-01 | Phase 2 | Pending |
 | PERF-02 | Phase 2 | Pending |
 | PERF-03 | Phase 2 | Pending |
