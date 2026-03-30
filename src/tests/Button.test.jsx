@@ -40,4 +40,11 @@ describe('Button', () => {
     render(<Button fullWidth>Full</Button>)
     expect(screen.getByRole('button').className).toContain('w-full')
   })
+
+  it('variante disabled usa clase bg-disabled (token Tailwind, no hex)', () => {
+    render(<Button variant="disabled">Off</Button>)
+    const btn = screen.getByRole('button')
+    expect(btn.className).toContain('bg-disabled')
+    expect(btn.className).not.toContain('bg-[#')
+  })
 })

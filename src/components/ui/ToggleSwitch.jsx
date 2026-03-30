@@ -19,7 +19,7 @@ export default function ToggleSwitch({
         'relative w-12 h-7 rounded-full transition-all duration-200 cursor-pointer border-none',
         checked
           ? 'bg-burgundy shadow-sm'
-          : 'bg-[#CDCDCD]',
+          : 'bg-disabled',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-burgundy',
         className,
       ].filter(Boolean).join(' ')}

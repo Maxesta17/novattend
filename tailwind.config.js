@@ -31,6 +31,7 @@ export default {
         error: '#C62828',
         'error-soft': '#FFEBEE',
         'dark-bg': '#111111',
+        disabled: '#CCCCCC',
       },
       fontFamily: {
         cinzel: ['Cinzel', 'serif'],

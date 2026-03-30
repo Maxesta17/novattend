@@ -29,7 +29,7 @@ export default function Button({
   const variants = {
     primary: 'bg-burgundy text-white shadow-lg hover:shadow-xl hover:bg-burgundy-light',
     ghost: 'bg-transparent border border-gold/25 text-white/80 hover:bg-white/[0.08] hover:border-gold',
-    disabled: 'bg-[#CCCCCC] text-white cursor-not-allowed hover:translate-y-0',
+    disabled: 'bg-disabled text-white cursor-not-allowed hover:translate-y-0',
   }
 
   const isDisabled = variant === 'disabled' || loading
