@@ -16,9 +16,9 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 
 ### Error Handling / UX
 
-- [ ] **ERR-01**: api.js verifica res.ok antes de parsear JSON y lanza error descriptivo si falla
-- [ ] **ERR-02**: AttendancePage muestra feedback visual al usuario cuando falla guardar o cargar asistencia
-- [ ] **ERR-03**: SavedPage no redirige cuando present === 0 (bug logico corregido)
+- [x] **ERR-01**: api.js verifica res.ok antes de parsear JSON y lanza error descriptivo si falla
+- [x] **ERR-02**: AttendancePage muestra feedback visual al usuario cuando falla guardar o cargar asistencia
+- [x] **ERR-03**: SavedPage no redirige cuando present === 0 (bug logico corregido)
 - [x] **ERR-04**: Ruta 404/NotFound muestra pagina amigable para URLs invalidas
 
 ### Rendimiento
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PWA-02 | Phase 1 | Complete |
 | PWA-03 | Phase 1 | Complete |
 | PWA-04 | Phase 2 | Pending |
-| ERR-01 | Phase 1 | Pending |
-| ERR-02 | Phase 1 | Pending |
-| ERR-03 | Phase 1 | Pending |
+| ERR-01 | Phase 1 | Complete |
+| ERR-02 | Phase 1 | Complete |
+| ERR-03 | Phase 1 | Complete |
 | ERR-04 | Phase 1 | Complete |
 | PERF-01 | Phase 2 | Pending |
 | PERF-02 | Phase 2 | Pending |
