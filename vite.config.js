@@ -19,6 +19,9 @@ export default defineConfig({
         theme_color: '#800000',
         background_color: '#FAFAF8',
         display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        lang: 'es',
         icons: [
           { src: '/logova1.png', sizes: '192x192', type: 'image/png' },
           { src: '/logova1.png', sizes: '512x512', type: 'image/png' }
@@ -26,7 +29,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-        navigateFallback: '/offline.html',
+        navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
@@ -46,7 +49,7 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /^https:\/\/script\.google\.com\/.*/i,
+            urlPattern: /^https:\/\/script\.(google|googleusercontent)\.com\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
