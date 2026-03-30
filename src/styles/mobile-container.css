@@ -1,0 +1,21 @@
+/* Media query de desktop para MobileContainer.
+   El valor #111111 corresponde al token dark-bg de tailwind.config.js.
+   Tailwind 3 no genera CSS vars para extend.colors, por lo que
+   el hex directo es la unica opcion dentro de CSS puro. */
+@media (min-width: 480px) {
+  #root {
+    background-color: #111111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 0;
+    min-height: 100vh;
+  }
+  .mobile-container {
+    max-width: 430px;
+    min-height: 100vh;
+    border-radius: 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+}
