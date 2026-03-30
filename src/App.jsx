@@ -7,6 +7,7 @@ import ConvocatoriaPage from './pages/ConvocatoriaPage'
 import AttendancePage from './pages/AttendancePage'
 import SavedPage from './pages/SavedPage'
 import DashboardPage from './pages/DashboardPage'
+import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/dashboard" element={
             <ProtectedRoute allowedRole="ceo"><DashboardPage /></ProtectedRoute>
           } />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </MobileContainer>
     </BrowserRouter>
