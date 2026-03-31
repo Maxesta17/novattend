@@ -1,17 +1,17 @@
 # Project Research Summary
 
-**Project:** NovAttend — Milestone Post-Auditoria (Olas 1-3)
-**Domain:** React PWA interna — correcciones de bugs, optimizacion de rendimiento, accesibilidad
-**Researched:** 2026-03-30
+**Project:** NovAttend v1.1 Hardening — A11Y, DOCS, SEC, TEST (Olas 4-5)
+**Domain:** React 19 PWA hardening — accesibilidad, documentacion, autenticacion backend, cobertura de tests
+**Researched:** 2026-03-31
 **Confidence:** HIGH
 
 ## Executive Summary
 
-NovAttend es una PWA mobile-first (React 19 + Vite 7 + Tailwind 3) usada por 7 profesores y 1 CEO. La auditoria previa identified un score de 7.3/10 con 20 problemas concretos. La investigacion confirma que el approach correcto para este milestone es quirurgico: corregir bugs criticos primero (Ola 1), optimizar rendimiento a continuacion (Ola 2), y cerrar con refactorizacion de arquitectura y accesibilidad (Ola 3). No hay cambios de stack, no hay nuevas features funcionales — todo el trabajo es mejora de calidad sobre lo construido.
+NovAttend v1.0 es una PWA mobile-first (React 19 + Vite 7 + Tailwind 3) en produccion para 7 profesores y 1 CEO en LingNova Academy. Las Olas 1-3 cerraron bugs criticos, optimizaron el bundle y refactorizaron la arquitectura. Este milestone (Olas 4-5) cierra cuatro areas de deuda tecnica residual: WCAG 2.1 keyboard accessibility (A11Y), JSDoc en 11 componentes (DOCS), autenticacion server-side para el backend de Google Apps Script (SEC), y expansion de cobertura de tests desde un estimado de 35-45% hasta un 60% verificado (TEST). La investigacion confirma que todas estas areas tienen implementaciones claras y documentadas, sin cambios de framework ni dependencias nuevas en produccion.
 
-Los dos riesgos mas serios ya estan identificados y son corregibles en menos de una hora cada uno: el `navigateFallback` que apunta a `/offline.html` (inexistente en el build) rompe toda la PWA offline, y el regex de cache de la API no captura el dominio real de respuesta de Google Apps Script (`script.googleusercontent.com`). Ambos bugs hacen que la PWA funcione correctamente solo cuando hay conexion, invalidando su propuesta de valor central.
+El approach recomendado respeta el orden de dependencias: DOCS primero (cero riesgo de comportamiento), A11Y despues (cambios estructurales de DOM que los tests deben verificar despues de los cambios, no antes), SEC en tercer lugar (cambio coordinado de tres capas: Apps Script + .env + api.js), y TEST al final para escribir aserciones contra contratos estables. La unica nueva dependencia de desarrollo que es prerequisito bloqueante para todo el trabajo de TEST es `@vitest/coverage-v8` — sin ella, `npm test -- --coverage` falla con un error fatal y la cobertura no puede medirse en absoluto.
 
-El riesgo arquitectonico mas importante de las Olas 2 y 3 es la combinacion de code-splitting con `registerType: 'autoUpdate'`: cuando el Service Worker activa una nueva version mientras un profesor tiene la pantalla de asistencia abierta, los chunks con hash nuevo ya no son descargables y el estado en memoria se pierde. Este pitfall debe mitigarse antes de desplegar code-splitting a produccion, ya sea persistiendo el estado de asistencia en `sessionStorage` o cambiando a `registerType: 'prompt'`.
+El riesgo mas critico de este milestone es la restriccion de Google Apps Script: enviar un header `Authorization` a un Web App de GAS provoca un CORS preflight OPTIONS que Apps Script no puede responder, bloqueando silenciosamente toda llamada API. El unico patron viable es pasar el shared secret como parametro de query string en GET y en el body de POST. Esto significa que el token es visible en los logs de red del navegador — un tradeoff aceptado para una herramienta interna de 8 usuarios, pero que debe documentarse explicitamente en lugar de asumirse como seguro. Un riesgo secundario es que `users.js` contiene contrasenas en texto plano en el bundle del cliente; el plan de SEC debe contener una decision explicita de scope: incluir la migracion a verificacion server-side de credenciales o documentarlo como riesgo aceptado con un item de seguimiento para v1.2.
 
 ---
 
@@ -19,197 +19,187 @@ El riesgo arquitectonico mas importante de las Olas 2 y 3 es la combinacion de c
 
 ### Recommended Stack
 
-El stack existente (React 19, Vite 7, Tailwind 3, react-router-dom 7, vite-plugin-pwa) no cambia en este milestone. Las unicas adiciones son dos librerias pequenas y quirurgicas: `focus-trap-react` (v12, compatible con React 19) para el focus trap del Modal en Ola 3, y `use-debounce` (v10, sin dependencias) para el debounce del campo de busqueda en DashboardPage en Ola 2. Ambas son las opciones estandar del ecosistema con alternatives peores descartadas (Radix UI forzaria reescribir Modal; lodash suman 70KB sin razon).
+El stack base no cambia. Cuatro dependencias de desarrollo son recomendadas — ninguna impacta el bundle de produccion:
 
-El React Compiler de React 19 (disponible desde oct 2025) automatizaria la memoizacion, pero activarlo requiere instalar `babel-plugin-react-compiler` — overhead no justificado para memoizar 3 componentes. Se opta por `React.memo` manual selectivo en `StudentRow`, `StatCard` y `TeacherCard`.
+| Dependencia | Version | Proposito | Por que esta eleccion |
+|-------------|---------|----------|----------------------|
+| `@vitest/coverage-v8` | `^4.1.2` | Reporte de cobertura | Proveedor V8 nativo de Node, mas rapido que Istanbul, misma precision desde Vitest 3.2+. La peer dep debe coincidir exactamente con la version de vitest instalada. |
+| `jest-axe` | `^10.0.0` | Deteccion de violaciones ARIA en tests | `vitest-axe` no tiene mantenimiento activo (v0.1.0, 3 anos sin release). `jest-axe` v10 no tiene peer dep de Jest — funciona con Vitest + jsdom. |
+| `eslint-plugin-jsx-a11y` | `^6.10.2` | Linting estatico de ARIA | Compatible con ESLint 9 flat config via `jsxA11y.flatConfigs.recommended`. Detecta gaps de role/keyboard que la revision manual pierde. |
+| `eslint-plugin-jsdoc` | `^62.8.1` | Validacion de JSDoc | Fuerza que los `@param` coincidan con los parametros reales. Previene docs desactualizados. Compatible con flat config. |
 
-**Core technologies:**
-- `focus-trap-react` v12: focus trap en Modal — unica libreria estandar compatible con React 19 sin reescribir el componente visual
-- `use-debounce` v10: debounce de `searchQuery` — cero dependencias, API limpia con `.flush()` y `.cancel()` para testing
-- `React.lazy()` + `Suspense`: code-splitting de rutas — patron nativo de React, sin dependencias extra, reduce bundle inicial ~50-60%
-- `manualChunks` en Vite: vendor splitting — separa react+react-dom en chunk estable cacheable entre deploys
+La autenticacion de Apps Script no requiere dependencias npm. Se implementa con `PropertiesService.getScriptProperties()` (nativo de GAS) para almacenar el API key fuera del codigo fuente, y con comparacion de cadenas en tiempo constante para reducir el riesgo de timing attacks.
+
+**Nota critica de versiones:** `@vitest/coverage-v8` debe coincidir exactamente con la version instalada de `vitest`. La opcion `coverage.all` fue eliminada en Vitest v4 — usar `coverage.include` explicitamente o solo los archivos con tests aparecen en el reporte, inflando artificialmente el porcentaje.
 
 ### Expected Features
 
-La investigacion agrupa los 20 problemas de la auditoria en tres categorias con prioridad clara.
+**Must have (table stakes — cierra deuda tecnica activa):**
 
-**Must have (table stakes — Ola 1):**
-- Correccion `navigateFallback: '/index.html'` — la PWA offline esta completamente rota sin este fix
-- Correccion regex API cache (`googleusercontent.com`) — sin este fix, ningun dato de API se cachea offline
-- Bug `SavedPage present === 0` — redireccion incorrecta cuando hay 0 presentes con datos validos
-- Guard `res.ok` en `api.js` antes de `res.json()` — previene SyntaxError críptico en errores HTTP 4xx/5xx
-- Feedback de error visible en `AttendancePage` y carga de alumnos — profesor no sabe si la accion fallo
-- Tokens Tailwind en lugar de 3 hex hardcodeados (Button, ToggleSwitch, MobileContainer) — compliance con regla de oro
-- `html lang="es"` + metadata PWA completa — WCAG 3.1.1 (A) y instalabilidad Android
-- Ruta 404 con catch-all `path="*"` — pantalla en blanco en URL invalida es comportamiento inesperado
-- `npm audit fix` — 9 vulnerabilidades en devDeps resueltas sin breaking changes
+- **A11Y-01: Soporte de teclado en TeacherCard** — WCAG 2.1 SC 2.1.1 (Nivel A). El trigger de expand/collapse es un `<div onClick>` sin `tabIndex`, `role` ni `onKeyDown`. El CEO no puede operarlo con teclado. Fix: convertir a `<button type="button">` con `aria-expanded={isExpanded}`. El boton nativo proporciona Enter/Space y foco por Tab de forma nativa.
+- **A11Y-02: Atributos ARIA en GroupTabs, AlertList, ProgressBar, StatCard** — `GroupTabs` necesita `role="tablist"` + `role="tab"` + `aria-selected`. Los items de `AlertList` necesitan conversion a `<button>`. `ProgressBar` necesita `role="progressbar"` + `aria-valuenow/min/max`. `StatCard` necesita `role="button"` condicional cuando se provee `onClick`.
+- **DOCS-01: JSDoc en 4 paginas y ~8 componentes adicionales** — `AttendancePage`, `DashboardPage`, `LoginPage` y `SavedPage` no tienen cabecera JSDoc. Son el punto de entrada de cualquier desarrollador nuevo. Adicionalmente, componentes ui/ y hooks menores (`Badge`, `ErrorBanner`, `UpdateBanner`, `LoadingSpinner`, `useConvocatorias`, `useStudents`, `useDebounce`, `buildTeachersHierarchy`) requieren verificacion y adicion de JSDoc.
+- **TEST-01: Instalar `@vitest/coverage-v8` + configurar thresholds** — Sin el proveedor instalado, `--coverage` falla con error fatal. Sin `thresholds` en `vite.config.js`, el objetivo de 60% nunca se enforza automaticamente.
+- **TEST-02: Tests para AttendancePage y DashboardPage** — `AttendancePage` (182 lineas, flujo critico de negocio) no tiene tests. `DashboardPage` (127 lineas) no tiene tests. Son los candidatos de mayor ROI para alcanzar 60%.
+- **SEC-01 a SEC-06: Shared secret auth para Apps Script** — El endpoint de GAS es actualmente publico para cualquier llamante que conozca la URL. Agregar un shared secret almacenado en Script Properties, validado en `doGet`/`doPost` antes de cualquier acceso a datos.
 
-**Should have (differentiators — Ola 2):**
-- Code-splitting con `React.lazy()` en 4 rutas — bundle de 271KB a ~195KB percibido en first load
-- `React.memo` en `StudentRow`, `StatCard`, `TeacherCard` con `useCallback` para handlers — elimina re-renders en cascada
-- Debounce en `searchQuery` del Dashboard — fluidez perceptible al escribir
-- `manualChunks` para vendor split — chunks de react+react-dom cacheables entre deploys
-- Paralelizacion de llamadas API en Dashboard con `Promise.all` — ahorro de ~400ms en primer render
+**Should have (diferenciadores de calidad):**
 
-**Defer (Ola 3 + v2+):**
-- `DashboardPage` refactor a hooks + subcomponentes — compliance con regla 250 lineas, facilita testing
-- Focus trap en `Modal.jsx` con `focus-trap-react` — WCAG 2.1 SC 2.1.2
-- Soporte de teclado en `TeacherCard` (`tabIndex` + `onKeyDown`) — WCAG 2.1 SC 2.1.1
-- JSDoc en 11 componentes faltantes — onboarding y mantenibilidad
-- ARIA labels en componentes interactivos criticos — accesibilidad score 5.0 → 7.0
-- Cola offline con Background Sync API — diferir a Ola 4+
-- Autenticacion server-side — diferir a Ola 4+
+- Focus-visible ring en elementos `<button>` convertidos (patron `focus-visible:outline-burgundy` ya existe en `ToggleSwitch` — copiar)
+- `aria-hidden="true"` en el SVG ChevronIcon decorativo dentro de TeacherCard
+- `aria-label="Buscar profesor"` en `SearchInput` del Dashboard
+- Tests para `TeacherCard` con aserciones ARIA (valida el trabajo de A11Y)
+- Tests para el hook `useStudents` (unico hook sin tests; protege la logica de cache de grupos)
+- Tests para `buildTeachersHierarchy` (funcion pura, ROI alto, sin mocks necesarios)
+- Logging de requests rechazados en Apps Script (una linea; habilita deteccion de accesos no autorizados)
+
+**Defer (v2 o nunca):**
+
+- Rate limiting via Apps Script CacheService — complejidad desproporcionada para 8 usuarios internos
+- OAuth2 completo para Apps Script — requiere redirect URIs, manejo de token refresh; over-engineered para este scope
+- Migracion de credenciales de `users.js` a verificacion server-side — mejora de seguridad valida pero constituye una rearquitectura completa de auth; diferir a v1.2 a menos que se incluya explicitamente en SEC
+- Tests E2E (Playwright/Cypress) — los tests unitarios/de integracion existentes cubren los flujos criticos con menor overhead
+- 100% de cobertura — la relacion costo/beneficio es desfavorable para 8 usuarios internos
 
 ### Architecture Approach
 
-El patron central de Ola 3 es Hook-First Decomposition para `DashboardPage.jsx` (actualmente 272 lineas, viola la regla de 250). Toda la logica (state, efectos, memos, handlers) se extrae a `useDashboard.js` en `src/hooks/`. El JSX se distribuye en tres subcomponentes puros en `src/components/features/` (`DashboardHeader`, `DashboardSearch`, `TeacherList`). `DashboardPage.jsx` queda como orquestador delgado de ~65 lineas. El flujo de datos es unidireccional: hook → pagina → subcomponentes via props, sin Context (un nivel de prop drilling es correcto a esta escala).
+Todos los cambios del hardening son modificaciones a archivos existentes dentro de la arquitectura de cuatro capas actual (pages → features → ui → hooks/services). No se requieren nuevos directorios ni patrones arquitectonicos nuevos ni dependencias de produccion. El trabajo toca cinco de las seis capas: feature components (A11Y), ui components (A11Y), pages (DOCS + TEST), services (SEC), y el backend de Apps Script (SEC). La capa de hooks gana nuevos archivos de test. La capa de config (`users.js`) gana un campo `token` por usuario.
 
-Para code-splitting (Ola 2), `App.jsx` convierte 4 rutas a `React.lazy()` con un unico `<Suspense>` boundary envolviendo `<Routes>`. `LoginPage` permanece estatica (es la ruta de cold start). El fallback del Suspense usa un div de color solido (no spinner) para evitar layout shift en PWA precacheada.
+**Puntos de cambio principales:**
 
-**Major components:**
-1. `useDashboard.js` (nuevo hook en `src/hooks/`) — toda la logica de DashboardPage: state, API calls, memos, handlers
-2. `DashboardHeader.jsx` (nuevo en `features/`) — cabecera con StatCards, ConvocatoriaSelector, badge de alertas
-3. `DashboardSearch.jsx` (nuevo en `features/`) — SearchInput + lista de resultados filtrados
-4. `TeacherList.jsx` (nuevo en `features/`) — lista de TeacherCards con heading de seccion
-5. `App.jsx` (refactorizado) — lazy imports de 4 rutas + Suspense boundary central
+1. `src/components/features/TeacherCard.jsx` — A11Y-01: conversion de div a button + aria-expanded + aria-controls. Actualmente 143 lineas; llegara a ~160 lineas despues del cambio, por debajo del limite de 250.
+2. `apps-script/Codigo.js` + `src/services/api.js` + `src/config/users.js` — SEC: cambio coordinado en tres archivos. Token en Script Properties, inyectado transparentemente por `apiGet`/`apiPost`, validado antes del cache lookup en `doGet`/`doPost`.
+3. `vite.config.js` — TEST: agregar bloque `test.coverage` con proveedor V8, reporter, thresholds e `include`/`exclude` explicitos. Sin esto, la cobertura no se mide.
+4. Cinco nuevos archivos de test: `TeacherCard.test.jsx`, `GroupTabs.test.jsx`, `AlertList.test.jsx`, `buildTeachersHierarchy.test.js`, `useStudents.test.jsx`.
+
+**Patrones establecidos a seguir:**
+
+- Elementos interactivos accesibles: siempre `<button type="button">` en lugar de `<div role="button">` — el boton nativo proporciona comportamiento de teclado, cursor y semantica de forma nativa con menos codigo
+- ARIA disclosure widget: `aria-expanded={isExpanded}` en el trigger; omitir `aria-controls` si el contenido se renderiza condicionalmente con `&&` (el elemento del DOM no existira para ser referenciado cuando este colapsado)
+- Inyeccion de token en el boundary del servicio: `api.js` lee de `sessionStorage` una vez por request, sin prop drilling a traves de componentes
+- Script Properties para secrets: nunca en el codigo fuente de `Code.gs`, siempre en `PropertiesService.getScriptProperties()`
 
 ### Critical Pitfalls
 
-1. **navigateFallback apunta a archivo no precacheado** — cambiar a `'/index.html'` antes de cualquier otro cambio; verificar en DevTools offline mode
-2. **autoUpdate + code-splitting = perdida de datos mid-session** — antes de desplegar Ola 2, persistir estado de asistencia en `sessionStorage` o cambiar a `registerType: 'prompt'`
-3. **React.memo sin useCallback en handlers = memo inutil** — envolver siempre `onToggle`, `onStudentClick` en `useCallback` antes de aplicar `memo` a los hijos
-4. **loadConvData en useEffect sin useCallback = loop infinito de fetch** — al extraer a `useDashboard`, estabilizar con `useCallback([convocatoria])` y eliminar el `eslint-disable` comment
-5. **manualChunks con modulos internos = dependencias circulares en chunks** — aplicar `manualChunks` exclusivamente a `node_modules`, dejar que Rollup maneje el splitting interno
+1. **Header Authorization a Apps Script provoca CORS preflight fatal** — GAS Web Apps no pueden responder al OPTIONS preflight que los headers `Authorization` o `X-API-Key` requieren. La llamada API falla antes de llegar al servidor, con un error de CORS en consola, no un error de auth. Prevencion: pasar el shared secret como `?api_key=` en GET y en el body de POST. Sin excepciones.
+
+2. **`VITE_API_KEY` queda embebido en el bundle de produccion** — Las variables `VITE_*` se sustituyen estaticamente en tiempo de build. La clave es legible en DevTools > Sources en cualquier build deployado. Prevencion: aceptar esta limitacion explicitamente, documentarla en el plan de implementacion, y no usar nombres de variable que impliquen falsa seguridad. Rotacion: actualizar Script Properties + variable de entorno de Vercel si se compromete.
+
+3. **Conversion de div a button rompe el layout flex** — Un `<button>` es inline por defecto. Convertir un `<div class="flex items-center gap-3">` a `<button>` colapsa el ancho y rompe el alineado de Avatar/Chevron. Prevencion: agregar `w-full flex text-left type="button"` a cada button convertido. Probar cada conversion visualmente de forma aislada antes de continuar con la siguiente.
+
+4. **`aria-controls` referencia contenido que no esta en el DOM** — Cuando el contenido se renderiza condicionalmente con `&&`, `aria-controls="panel-id"` apunta a un elemento inexistente cuando esta colapsado. Los lectores de pantalla reportan una referencia rota. Prevencion: usar `aria-expanded` solo (suficiente segun WCAG); agregar `aria-controls` solo si el panel usa `hidden={!isExpanded}` en lugar de `&&`.
+
+5. **El proveedor de cobertura faltante bloquea todo el trabajo de TEST** — `vitest run --coverage` falla con `Error: Failed to load coverage provider "v8"` sin `@vitest/coverage-v8` instalado. Ademas, sin `thresholds` en `vite.config.js`, el objetivo de 60% nunca se enforza. Prevencion: instalar `@vitest/coverage-v8` como primera accion de la fase TEST, y configurar los thresholds en el mismo commit.
 
 ---
 
 ## Implications for Roadmap
 
-Basado en la investigacion, la estructura de 3 olas es la correcta. El orden esta determinado por dependencias tecnicas y perfil de riesgo.
+Basado en la investigacion, la estructura de 3 fases para Olas 4-5 es la correcta. El orden esta determinado por dependencias tecnicas y perfil de riesgo.
 
-### Fase 1 (Ola 1): Estabilidad Critica
+### Fase 1 (Ola 4, Parte A): DOCS + A11Y Foundation
 
-**Razon:** Los bugs de PWA y API hacen que la app sea no-confiable en produccion. Son cambios de bajo riesgo con maximo impacto. Deben ir primero para que Ola 2 construya sobre una base solida.
+**Razon:** DOCS (adiciones de JSDoc) son cambios de cero riesgo verificables puramente por inspeccion de codigo — ideal para arrancar el milestone con momentum. A11Y sigue inmediatamente porque los cambios estructurales del DOM (conversiones div-to-button) deben estar completos antes de que se escriban los tests que los verifican. Escribir tests contra la estructura pre-ARIA y luego cambiar la estructura crea suites de tests con fallo falso y retrabajo innecesario.
 
-**Entrega:** App funcional offline + feedback de error visible al usuario + compliance con CLAUDE.md + manifest PWA completo.
+**Entrega:** Compliance WCAG 2.1 Nivel A en todos los componentes interactivos; cobertura JSDoc completa en los 32+ archivos; reglas de ESLint que enforzan A11Y y calidad de JSDoc automaticamente.
 
-**Features de FEATURES.md:** navigateFallback fix, regex API cache, bug SavedPage, res.ok guard, feedback error AttendancePage, hex → tokens, html lang, ruta 404, npm audit fix.
+**Features de FEATURES.md:** A11Y-01 (teclado TeacherCard), A11Y-02 (GroupTabs, AlertList, ProgressBar, StatCard ARIA), DOCS-01 (paginas + componentes + hooks + utils).
 
-**Evita:** Pitfall 1 (navigateFallback), Pitfall 2 (API regex), Pitfall 3 (res.ok).
+**Evita:** Escribir tests de A11Y antes de que los cambios de A11Y esten estables (anti-patron de ARCHITECTURE.md); JSDoc que duplica nombres de props sin agregar contexto (Pitfall 7 de PITFALLS.md).
 
-**Estimacion:** ~5.5h de trabajo. Sin dependencias bloqueantes entre items — pueden secuenciarse en cualquier orden dentro de la ola.
-
----
-
-### Fase 2 (Ola 2): Rendimiento y Bundle
-
-**Razon:** El code-splitting debe venir antes del refactor de Dashboard (Ola 3) porque son cambios en archivos distintos sin conflictos. Ademas, la preocupacion del autoUpdate + ChunkLoadError (Pitfall 4) debe resolverse en esta ola antes de que el splitting llegue a produccion.
-
-**Entrega:** Bundle inicial ~50-60% mas pequeno para teachers. Vendor chunks cacheables entre deploys. Listas mas fluidas con memo + debounce. Dashboard con carga paralela de API.
-
-**Features de FEATURES.md:** React.lazy (4 rutas), manualChunks, React.memo + useCallback, debounce searchQuery, Promise.all en Dashboard.
-
-**Stack de STACK.md:** `use-debounce` instalado en esta ola. Configuracion `manualChunks` en vite.config.js.
-
-**Evita:** Pitfall 4 (autoUpdate mid-session), Pitfall 5 (memo sin useCallback), Pitfall 6 (chunks no precacheados), Pitfall 7 (circular chunk deps).
-
-**Prerequisito critico:** Pitfall 4 debe mitigarse ANTES de hacer deploy de esta ola. Opcion recomendada: persistir asistencia en sessionStorage en AttendancePage.
-
-**Estimacion:** ~5.5h de trabajo.
+**Instalar en esta fase:** `eslint-plugin-jsx-a11y`, `eslint-plugin-jsdoc`.
 
 ---
 
-### Fase 3 (Ola 3): Arquitectura y Accesibilidad
+### Fase 2 (Ola 4, Parte B + Ola 5, Parte A): TEST Foundation + Coverage Push
 
-**Razon:** El refactor de DashboardPage es el cambio mas complejo y de mayor riesgo de regresion. Va al final para que los cambios de Ola 1 y 2 ya esten verificados en produccion. Los cambios de accesibilidad (focus trap, teclado) tambien van aqui por su interdependencia con el refactor del componente.
+**Razon:** Los tests se escriben contra los contratos de componentes finales y A11Y-estables de la Fase 1. El proveedor de cobertura se instala primero porque desbloquea la medicion del baseline real — sin el, "60% de cobertura" es un objetivo sin medidor. Los nuevos tests para `TeacherCard`, `GroupTabs`, `AlertList`, `buildTeachersHierarchy` y `useStudents` tanto validan el trabajo de A11Y de la Fase 1 como empujan la cobertura hacia el umbral del 60%.
 
-**Entrega:** DashboardPage bajo 250 lineas + testeable en aislamiento. Modal accesible con focus trap + cierre Escape. TeacherCard operable con teclado. JSDoc en 11 componentes. Score accesibilidad 5.0 → 7.0.
+**Entrega:** `@vitest/coverage-v8` instalado y configurado con thresholds enforzados; 5 nuevos archivos de test; cobertura en o por encima del 60% verificada por el umbral.
 
-**Features de FEATURES.md:** DashboardPage refactor (useDashboard + 3 subcomponentes), focus trap Modal, teclado TeacherCard, JSDoc, ARIA.
+**Features de FEATURES.md:** TEST-01 (instalar + configurar cobertura), TEST-02 (tests AttendancePage + DashboardPage), TEST-03 (tests TeacherCard ARIA post-fix).
 
-**Stack de STACK.md:** `focus-trap-react` instalado en esta ola.
+**Evita:** Coverage gaming con tests de solo render (Pitfall 8 de PITFALLS.md); proveedor de cobertura faltante en build time (Pitfall 9).
 
-**Arquitectura de ARCHITECTURE.md:** Hook-First Decomposition — secuencia Phase A (useDashboard) → Phase B (3 subcomponentes) → Phase C (refactor DashboardPage). Phase D+E (code splitting) ya completado en Ola 2.
+**Instalar en esta fase:** `jest-axe`, `@vitest/coverage-v8`.
 
-**Evita:** Pitfall 8 (loop infinito por loadConvData sin useCallback), Pitfall 9 (iOS Safari VoiceOver escapa modal), Pitfall 10 (tests className frágiles rompiendo con refactor).
+---
 
-**Advertencia:** Los tests de `StudentRow` con aserciones `className` deben corregirse ANTES del refactor, no despues.
+### Fase 3 (Ola 5, Parte B): SEC — Backend Auth Hardening
 
-**Estimacion:** ~8h de trabajo (la ola mas larga por complejidad del refactor).
+**Razon:** SEC es la ultima porque es la unica fase que requiere un deploy coordinado multi-capa: `users.js` (agregar campos `token`), `src/services/api.js` (inyectar token en cada request), `apps-script/Codigo.js` (validar token antes de cualquier acceso a datos). Ejecutarla despues de que los tests se estabilicen significa que las adiciones de test post-SEC (aserciones de inyeccion de token en `api.test.jsx` y `LoginPage.test.jsx`) pueden escribirse contra un contrato finalizado. Deployar SEC a mitad del milestone romperia la app para usuarios en produccion mientras los tests aun estan siendo escritos.
+
+**Entrega:** Endpoint de Apps Script protegido por shared secret validado en `doGet`/`doPost` antes del cache lookup; token almacenado en Script Properties (no en el codigo fuente); token inyectado transparentemente en `api.js`; variable de entorno de Vercel actualizada con el nuevo `VITE_API_KEY`.
+
+**Features de FEATURES.md:** SEC-01 a SEC-06 (validacion de shared secret, almacenamiento en PropertiesService, inyeccion de token, logging de requests rechazados).
+
+**Evita:** CORS preflight por header Authorization (Pitfall 1 — critico); auth check despues del cache lookup (Integration Gotcha de PITFALLS.md); decision de scope de credenciales `users.js` como oversight en lugar de decision explicita (Pitfall 3).
+
+**Sin nuevas dependencias npm.**
 
 ---
 
 ### Phase Ordering Rationale
 
-- **Ola 1 primero:** Los bugs de PWA son bloqueantes para la propuesta de valor del producto. Corregirlos antes valida la base sobre la que Ola 2 construye.
-- **Ola 2 antes de Ola 3:** Code-splitting y refactor de Dashboard son independientes en archivos, pero introducir lazy loading antes del refactor evita que el refactor tenga que lidiar simultaneamente con cambios en App.jsx y DashboardPage.jsx.
-- **Ola 3 al final:** El refactor de DashboardPage es el cambio de mayor superficie de codigo. Hacerlo con Olas 1 y 2 ya verificadas en produccion reduce el riesgo de regresion compuesta.
-- **La dependencia critica es Pitfall 4:** El problema de autoUpdate + ChunkLoadError DEBE resolverse en Ola 2 antes del deploy, o se arriesga perdida de datos en el flujo critico del teacher.
+- **DOCS y A11Y agrupados:** Ambos son cambios de calidad de codigo sin dependencias externas. Agruparlos en una fase reduce el context-switching y permite que los plugins de ESLint enforzen ambas preocupaciones desde el mismo commit.
+- **TEST despues de A11Y:** Los tests deben verificar los contratos ARIA finales. Si la estructura de `aria-expanded` de TeacherCard cambia a mitad del sprint, cualquier test escrito antes del cambio debe reescribirse. La secuencia es mas segura.
+- **SEC al final antes de adiciones de test:** Los cambios de `api.js` (inyeccion de token) afectan el `api.test.jsx` existente. Implementar SEC despues del push principal de tests significa que los tests existentes siguen pasando durante SEC, y las aserciones especificas de SEC se agregan en un batch enfocado y de scope claro.
+- **Ninguna fase requiere `/gsd:research-phase`:** Todos los patrones estan establecidos y bien documentados (W3C APG, docs oficiales de Vitest, docs oficiales de Apps Script). El unico area de confianza MEDIUM (token de Apps Script via query param) tiene verificacion comunitaria suficiente para proceder sin investigacion adicional.
 
 ### Research Flags
 
-Fases que necesitan revision durante la planificacion detallada:
+Fases con patrones estandar (sin necesidad de `/gsd:research-phase`):
+- **Fase 1 (DOCS + A11Y):** Los patrones W3C APG y la configuracion de flat config de ESLint estan completamente documentados. Confianza HIGH en todas las decisiones de implementacion.
+- **Fase 2 (TEST):** El proveedor V8 de Vitest y los patrones de Testing Library son documentacion oficial. La integracion de jest-axe es un setup de 2 lineas. Confianza HIGH.
+- **Fase 3 (SEC):** El patron de shared secret via query param tiene confianza MEDIUM (verificado por la comunidad, no documentado oficialmente por Google para este caso de uso exacto). Suficiente para proceder, pero el plan de implementacion debe incluir una nota de fallback: si el token via query param es rechazado por algun motivo, la alternativa es token embebido en el body para todas las requests (ya es el patron de POST; GET necesitaria convertirse a POST).
 
-- **Ola 2 (code-splitting + autoUpdate):** La mitigacion del Pitfall 4 tiene dos opciones (sessionStorage vs registerType: 'prompt') con trade-offs distintos. Requiere decision arquitectonica antes de implementar.
-- **Ola 3 (focus trap iOS Safari):** `focus-trap-react` tiene issues documentados con VoiceOver en iOS Safari. El parametro `initialFocus` debe apuntar al boton de cierre (no al contenedor) para evitar scroll-to-top. Requiere prueba en dispositivo real.
-
-Fases con patrones estandar (sin necesidad de research adicional):
-
-- **Ola 1:** Todos los fixes son cambios de config o logica directa. Patrones bien documentados, sin ambiguedad.
-- **Ola 2 (React.memo + debounce):** Patron `useCallback` + `memo` es texto de manual. `use-debounce` tiene API trivial.
-- **Ola 3 (refactor Dashboard):** La secuencia Phase A-B-C esta completamente especificada en ARCHITECTURE.md. No requiere investigacion adicional.
+Necesita investigacion adicional solo si el scope se expande:
+- Mover credenciales de `users.js` a verificacion server-side (si se incluye explicitamente en el scope de SEC) — requiere diseniar un flujo `doPost({ action: "login" })` e issuance de session token en Apps Script.
+- IP allowlisting en Vercel (si el equipo trabaja desde una IP de oficina fija) — simple de implementar pero necesita confirmacion de la estabilidad de IP del equipo.
 
 ---
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | Versiones confirmadas en npm. Alternativas descartadas con justificacion. React Compiler descartado intencionalmente (no habilitado en el proyecto). |
-| Features | HIGH | Basado en auditoria local de codigo real + docs oficiales. Los 20 problemas son hallazgos directos, no inferencias. |
-| Architecture | HIGH | Hook-First Decomposition verificado en react.dev, patterns.dev, Robin Wieruch 2025. Configuracion manualChunks verificada en docs Vite + articulos 2025. |
-| Pitfalls | HIGH | Pitfalls 1-3 grounded en inspeccion directa del codigo existente. Pitfalls 4-7 verificados con issues reales de GitHub (vite, vite-plugin-pwa, react-modal). |
+| Area | Confianza | Notas |
+|------|-----------|-------|
+| Stack | HIGH | Versiones de todos los paquetes verificadas en npm registry 2026-03-31. La peer dep constraint de vitest/coverage-v8 es un requerimiento duro documentado en docs oficiales. |
+| Features | HIGH | Basado en inspeccion directa del codigo (auditoria archivo por archivo) + patrones oficiales W3C APG. Los patrones ARIA para TeacherCard y GroupTabs verificados contra los ejemplos Disclosure y Tabs del W3C APG. |
+| Architecture | HIGH | Verificado contra el codebase real (todos los archivos revisados). Sin ambiguedad arquitectonica — todos los cambios son modificaciones a archivos existentes usando patrones ya presentes en el codebase (ToggleSwitch como referencia de A11Y, api.js como referencia del boundary de servicio). |
+| Pitfalls | HIGH | El CORS preflight de GAS es una restriccion documentada a nivel de plataforma. El layout break de div-to-button es un comportamiento conocido de HTML. El error del proveedor de cobertura esta documentado en las guias de migracion de Vitest. Solo item MEDIUM: comportamiento exacto del token de GAS via query param a escala (verificado por la comunidad pero no probado oficialmente en esta configuracion de deploy exacta). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Impacto real del code-splitting en LCP:** La estimacion de 50-60% de reduccion es basada en patrones de ecosistema. El numero exacto depende del perfil de red real de los profesores (conexion movil en clase vs WiFi de escuela). Medir con Lighthouse antes y despues.
-- **React.memo con React 19 Compiler futuro:** Si en un milestone posterior se habilita el React Compiler, los `React.memo` manuales de Ola 2 se vuelven redundantes pero no daninos. Documentar como deuda tecnica conocida.
-- **iOS Safari VoiceOver + focus-trap-react:** Los issues de iOS son documentados pero el comportamiento exacto depende de la version de Safari y VoiceOver. Requiere prueba en dispositivo fisico durante Ola 3.
-- **Impacto de paralelizacion API:** El ahorro estimado de ~400ms en Dashboard asume que `getConvocatorias` y `getProfesores` son independientes. Confirmar que Apps Script puede manejar 2 requests concurrentes sin throttling.
+- **Scope de contrasenas en `users.js`:** La investigacion identifica esto como un riesgo de seguridad activo pero el scope de SEC de v1.1 no lo resuelve completamente (la verificacion server-side de credenciales requiere un nuevo flujo `doPost action: "login"`). El plan de implementacion de la Fase 3 debe contener una decision explicita: incluirlo o documentarlo como riesgo conocido aceptado con un item de seguimiento para v1.2. No puede quedar como oversight.
+- **Version lock de peer dep de Vitest:** Si `vitest` se actualiza (ej. de 4.0.18 a 4.1.x) durante el milestone, `@vitest/coverage-v8` debe actualizarse a la misma version minor en el mismo commit. Esto es una trampa de mantenimiento si se ignora en una actualizacion rapida de dependencias. Marcar en el plan de la Fase TEST.
+- **`aria-controls` y renderizado condicional:** La investigacion de arquitectura recomienda omitir `aria-controls` cuando el contenido usa renderizado `&&`. Esta es la eleccion pragmatica pero diverge del patron completo del W3C APG accordion. El plan de implementacion debe confirmar esta decision — `aria-expanded` solo es WCAG-compliant.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `docs/auditoria/00-RESUMEN-EJECUTIVO.md` — auditoria local, 20 hallazgos concretos sobre el codigo real
-- `docs/auditoria/04-pwa-offline.md` — analisis detallado de bugs PWA (navigateFallback, regex API)
-- `docs/auditoria/03-rendimiento.md` — analisis de bundle y oportunidades de optimizacion
-- react.dev/reference/react/lazy — patron React.lazy + Suspense oficial
-- react.dev/reference/react/memo — patron React.memo oficial
-- vite-pwa-org.netlify.app/workbox/generate-sw — configuracion workbox oficial
-- developer.chrome.com/docs/workbox/caching-resources-during-runtime — NetworkFirst + statuses [0,200]
-- react.dev/learn/reusing-logic-with-custom-hooks — Custom hooks, Hook-First Decomposition
-- github.com/focus-trap/focus-trap-react — focus-trap-react v12, compatibilidad React 19
-- github.com/xnimorz/use-debounce — use-debounce v10
+- W3C APG Disclosure Card Pattern — https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/ — patron expanded/controls para TeacherCard
+- W3C APG Tabs Pattern — https://www.w3.org/WAI/ARIA/apg/patterns/tabs/ — role/aria-selected para GroupTabs
+- WCAG 2.1 Keyboard Accessible (2.1.1) — https://www.w3.org/WAI/WCAG21/Understanding/keyboard.html — base para todos los table stakes de A11Y
+- Vitest Coverage Guide — https://vitest.dev/guide/coverage — proveedor V8, thresholds, coverage.include
+- Vitest v4 Migration — https://vitest.dev/guide/migration.html — eliminacion de coverage.all, requerimiento de include
+- Google Apps Script PropertiesService — https://developers.google.com/apps-script/guides/properties — patron Script Properties para secrets
+- Google Apps Script Web Apps docs — https://developers.google.com/apps-script/guides/web — acceso a e.parameter, sin soporte de OPTIONS
+- npm registry — jest-axe@10.0.0, @vitest/coverage-v8@4.1.2, eslint-plugin-jsx-a11y@6.10.2, eslint-plugin-jsdoc@62.8.1 — verificado 2026-03-31
+- Auditoria directa del codebase (2026-03-31) — TeacherCard.jsx, Modal.jsx, ToggleSwitch.jsx, users.js, api.js, Codigo.js — HIGH confidence, verificado linea por linea
 
 ### Secondary (MEDIUM confidence)
-- mykolaaleksandrov.dev/posts/2025/10/react-lazy-suspense-vite-manualchunks — React.lazy + manualChunks 2025
-- soledadpenades.com/posts/2025/use-manual-chunks-with-vite — manualChunks para cache de vendor
-- robinwieruch.de/react-router-lazy-loading — React Router v7 + lazy loading
-- tkdodo.eu/blog/the-uphill-battle-of-memoization — React.memo pitfalls
-- a11y-collective.com/blog/modal-accessibility — patrones accesibles de modal
-- allanchain.github.io/blog/post/pwa-skipwaiting — autoUpdate + skipWaiting pitfall
+- tanaikech — Taking Advantage of Web Apps with GAS — https://github.com/tanaikech/taking-advantage-of-Web-Apps-with-google-apps-script — comportamiento CORS de GAS, patron de auth via query param
+- justin.poehnelt.com — Secure Secrets in Google Apps Script — patron de shared secret via Script Properties
+- eslint-plugin-jsx-a11y GitHub issue #978 — soporte de flat config confirmado para ESLint 9
+- iith.dev/blog/app-script-cors/ — CORS fix para GAS Web Apps, comportamiento OPTIONS no soportado
 
-### Tertiary (issues de GitHub, confirmacion de pitfalls)
-- github.com/vite-pwa/vite-plugin-pwa/issues/139 — navigateFallback allowlist
-- github.com/vitejs/vite/issues/12209 — manualChunks breaking code-splitting
-- github.com/vitejs/vite/issues/20202 — circular dependencies en manualChunks
-- github.com/reactjs/react-modal/issues/713 — iOS Safari focus trap escape
-- blog.sentry.io/fixing-memoization-breaking-re-renders-in-react — memo con inline handlers
+### Tertiary (LOW confidence — necesita validacion durante implementacion)
+- Disponibilidad de `e.headers` en Apps Script: no documentado oficialmente para Web Apps deployadas como "Anyone". Consenso comunitario: headers no reenviados de forma confiable. Decision: no usar headers para auth.
 
 ---
-*Research completed: 2026-03-30*
+*Research completed: 2026-03-31*
 *Ready for roadmap: yes*

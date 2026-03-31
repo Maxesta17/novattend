@@ -1,198 +1,258 @@
-# Technology Stack — NovAttend Optimization Milestone
+# Stack Research — NovAttend v1.1 Hardening (Olas 4-5)
 
-**Project:** NovAttend (Olas 1-3 — rendimiento, estabilidad, accesibilidad)
-**Researched:** 2026-03-30
-**Scope:** Optimizaciones sobre stack existente. No hay cambio de framework.
+**Domain:** PWA mobile-first React — ciclo de hardening (A11Y, DOCS, SEC, TEST)
+**Researched:** 2026-03-31
+**Scope:** Solo adiciones para las nuevas capacidades del milestone. Stack base no cambia.
+**Confidence:** HIGH (versiones verificadas via npm registry + docs oficiales)
 
 ---
 
-## Stack Actual (No Cambiar)
+## Stack Base (No Tocar)
 
-| Technology | Version Instalada | Role |
-|------------|-------------------|------|
+| Technology | Version Instalada | Rol |
+|------------|-------------------|-----|
 | React | ^19.2.0 | UI framework |
 | Vite | ^7.3.1 | Build tool |
 | react-router-dom | ^7.13.0 | SPA routing |
-| @vitejs/plugin-react | ^5.1.1 | React transforms + HMR |
 | vite-plugin-pwa | ^1.2.0 | PWA / Workbox |
 | Tailwind CSS | ^3.4.19 | Styling |
-| Vitest | ^4.0.18 | Tests |
+| Vitest | ^4.0.18 | Test runner |
+| @testing-library/react | ^16.3.2 | Component testing |
+| @testing-library/user-event | ^14.6.1 | Keyboard/interaction simulation |
+| @testing-library/jest-dom | ^6.9.1 | DOM matchers |
 
-Ningun paquete de este conjunto debe cambiarse de version en este milestone. Las adiciones son quirurgicas.
+Nota: `useFocusTrap` custom ya existe en `src/hooks/useFocusTrap.js`. Modal ya tiene ARIA. No reinstalar focus-trap-react.
 
 ---
 
-## Adiciones Recomendadas
+## Adiciones Recomendadas — Por Area
 
-### 1. focus-trap-react
+### A. Cobertura de Tests (`TEST-01..TEST-03`)
+
+#### A1. `@vitest/coverage-v8`
 
 | Campo | Valor |
 |-------|-------|
-| Paquete | `focus-trap-react` |
-| Version | `^12.0.0` |
-| Peer dep | `focus-trap` (instalado automaticamente) |
-| Proposito | Focus trap accesible en Modal.jsx (Ola 3) |
-| Instalacion | `npm install focus-trap-react` |
+| Paquete | `@vitest/coverage-v8` |
+| Version | `^4.1.2` (debe coincidir exactamente con vitest instalado) |
+| Peer dep | `vitest@4.1.2` — version exacta requerida |
+| Proposito | Generar reporte de cobertura con proveedor V8 (nativo de Node) |
+| Instalacion | `npm install -D @vitest/coverage-v8` |
+| Comando | `vitest run --coverage` |
 
-**Por que:** Es la libreria estandar del ecosistema para focus trapping en React. Version 12 es compatible con React 19 (elimino `propTypes`/`defaultProps` que React 19 depreco). La alternativa nativa (`tabIndex` + `onKeyDown` manual) requiere manejar casos borde de DOM que la libreria ya resuelve: restaurar foco al elemento que abrio el modal, ciclar con Tab/Shift+Tab, bloquear scroll del fondo.
+**Por que V8 y no Istanbul:** V8 no requiere pre-transpilacion (Istanbul instrumenta el codigo antes de ejecutarlo). Con Vitest 4, V8 usa analisis AST para remapear coverage, logrando precision comparable a Istanbul. Para este proyecto que ya corre en Node + jsdom, V8 es la opcion mas rapida sin dependencias adicionales.
 
-**Por que no Radix UI o Headless UI:** El proyecto tiene un `Modal.jsx` existente con diseno propio. Envolver con `<FocusTrap>` anade accesibilidad sin reescribir el componente visual. Radix/Headless forzarian una reescritura completa del modal.
+**Configuracion para `vite.config.js`:**
 
-**Confianza:** HIGH — npm confirma v12.0.0 publicada hace menos de un mes, compatible con React 19.
+```js
+test: {
+  coverage: {
+    provider: 'v8',
+    include: ['src/**/*.{js,jsx}'],
+    exclude: [
+      'src/tests/**',
+      'src/main.jsx',
+      'src/config/**',
+      '**/*.config.*',
+    ],
+    thresholds: {
+      lines: 60,
+      functions: 60,
+      branches: 60,
+      statements: 60,
+    },
+    reporter: ['text', 'html'],
+  },
+}
+```
+
+**Nota critica para Vitest 4:** `coverage.all` fue eliminado en v4. Se debe especificar `coverage.include` explicitamente. Sin ello, solo los archivos que tienen tests aparecen en el reporte, lo que puede inflar artificialmente el porcentaje.
+
+**Confianza:** HIGH — verificado en docs oficiales vitest.dev/guide/coverage + npm registry.
 
 ---
 
-### 2. use-debounce
+#### A2. `jest-axe` (A11Y testing en suites existentes)
 
 | Campo | Valor |
 |-------|-------|
-| Paquete | `use-debounce` |
-| Version | `^10.1.1` |
-| Proposito | Debounce del `searchQuery` en DashboardPage |
-| Instalacion | `npm install use-debounce` |
+| Paquete | `jest-axe` |
+| Version | `^10.0.0` |
+| Peer dep | Node >= 16 (sin peer deps de jest/vitest — funciona con ambos) |
+| Proposito | Matchers `toHaveNoViolations` para tests ARIA/accesibilidad en Vitest |
+| Instalacion | `npm install -D jest-axe` |
 
-**Por que:** Paquete sin dependencias, TypeScript nativo, dos hooks bien diferenciados: `useDebounce` (debouncea un valor) y `useDebouncedCallback` (debouncea una funcion). Para DashboardPage, `useDebounce(searchQuery, 300)` es la forma correcta: el valor de busqueda se actualiza con retraso, reduciendo renders durante la escritura.
+**Por que jest-axe y no vitest-axe:** `vitest-axe` (chaance/vitest-axe) esta en version 0.1.0, publicada hace 3 anos, sin actualizaciones. No es mantenido activamente. `jest-axe` 10.0.0 fue publicado hace menos de 12 meses y no tiene dependencias de Jest — el nombre es historico. Funciona con Vitest en entorno jsdom (unico requisito: no usar happy-dom, que ya no es el caso aqui).
 
-**Por que no implementacion custom:** Un `useEffect` + `setTimeout` casero funciona pero no maneja correctamente el flush manual ni la cancelacion. `use-debounce` incluye `.flush()` y `.cancel()` en el callback variant, lo que facilita testing.
+**Setup en `src/tests/setup.js`:**
 
-**Por que no lodash.debounce:** Lodash suma ~70KB. `use-debounce` no tiene dependencias.
+```js
+import { configureAxe, toHaveNoViolations } from 'jest-axe'
+import { expect } from 'vitest'
 
-**Confianza:** HIGH — version 10.1.1 confirmada en npm, mantenimiento activo.
+expect.extend(toHaveNoViolations)
+```
 
----
-
-## Cambios de Configuracion (Sin Nuevos Paquetes)
-
-### 3. Code-splitting con React.lazy() + Suspense
-
-**Patron recomendado para App.jsx:**
+**Patron de uso en tests:**
 
 ```jsx
-// Antes (imports estaticos — todo en un chunk)
-import ConvocatoriaPage from './pages/ConvocatoriaPage'
-import AttendancePage from './pages/AttendancePage'
-import SavedPage from './pages/SavedPage'
-import DashboardPage from './pages/DashboardPage'
+import { axe } from 'jest-axe'
+import { render } from '@testing-library/react'
 
-// Despues (lazy — cada pagina es su propio chunk)
-const ConvocatoriaPage = React.lazy(() => import('./pages/ConvocatoriaPage'))
-const AttendancePage   = React.lazy(() => import('./pages/AttendancePage'))
-const SavedPage        = React.lazy(() => import('./pages/SavedPage'))
-const DashboardPage    = React.lazy(() => import('./pages/DashboardPage'))
+it('no debe tener violaciones ARIA', async () => {
+  const { container } = render(<TeacherCard teacher={mockTeacher} />)
+  const results = await axe(container)
+  expect(results).toHaveNoViolations()
+})
 ```
 
-**Boundary recomendado:** Un solo `<Suspense fallback={<LoadingSpinner />}>` envolviendo todas las `<Routes>`. No poner Suspense dentro de cada ruta — con mobile-first y transiciones rapidas, un boundary central es suficiente y mas simple.
+**Limitacion conocida:** Los checks de contraste de color no funcionan en jsdom. `jest-axe` los desactiva por defecto. Esto es correcto — el contraste del design system ya esta auditado manualmente.
 
-**Que NO lazy-loadear:** `LoginPage` permanece estatica (es la primera vista, no tiene sentido diferir su carga). `ProtectedRoute` y `MobileContainer` tampoco — son wrappers del shell.
-
-**Regla de splitting:** Solo split a nivel de ruta. Las paginas teacher (Convocatoria, Attendance, Saved) tienen uso mutuamente excluyente con Dashboard (CEO). El beneficio real es separar el chunk de Dashboard del de Attendance.
-
-**Confianza:** HIGH — patron documentado en react.dev, sin cambios en React 19.
+**Confianza:** HIGH — npm confirma v10.0.0, Node >= 16, sin peer deps de Jest.
 
 ---
 
-### 4. Vite manualChunks — Vendor Splitting
+### B. Accesibilidad A11Y (`A11Y-01`, `A11Y-02`)
 
-**Configuracion recomendada para vite.config.js:**
+#### B1. `eslint-plugin-jsx-a11y`
+
+| Campo | Valor |
+|-------|-------|
+| Paquete | `eslint-plugin-jsx-a11y` |
+| Version | `^6.10.2` |
+| Peer dep | ESLint >= 9 (compatible con flat config) |
+| Proposito | Reglas de linting estatico para atributos ARIA, roles, keyboard support |
+| Instalacion | `npm install -D eslint-plugin-jsx-a11y` |
+
+**Por que:** La version 6.10.x exporta `jsxA11y.flatConfigs.recommended` para ESLint 9 flat config. El proyecto ya usa ESLint 9 con flat config en `eslint.config.js` — la integracion es directa. Captura clases de errores ARIA que las revisiones manuales pierden: roles interactivos sin handlers de teclado, `img` sin `alt`, etc.
+
+**Integracion en `eslint.config.js`:**
 
 ```js
-build: {
-  rollupOptions: {
-    output: {
-      manualChunks: {
-        'react-vendor': ['react', 'react-dom'],
-        'router-vendor': ['react-router-dom'],
-      }
-    }
-  }
-}
+import jsxA11y from 'eslint-plugin-jsx-a11y'
+
+export default [
+  // ... configs existentes ...
+  {
+    ...jsxA11y.flatConfigs.recommended,
+    files: ['**/*.{js,jsx}'],
+  },
+]
 ```
 
-**Justificacion del split minimo:**
-
-El bundle actual es 271KB monolitico. El proyecto tiene pocas dependencias de produccion (solo react, react-dom, react-router-dom). La estrategia correcta es separar el vendor de React/React-DOM en un chunk estable que el navegador puede cachear entre deploys, sin fragmentar en exceso.
-
-`react-router-dom` en su propio chunk es opcional pero recomendado porque es mas probable que se actualice independientemente de React core.
-
-**Que NO hacer:** No crear un chunk por cada libreria ni usar `vite-plugin-chunk-split`. Con solo 3 dependencias de produccion, la complejidad no esta justificada. `splitVendorChunkPlugin` esta deprecado en Vite 5+ — no usarlo.
-
-**Confianza:** HIGH — confirmado en documentacion oficial de Vite y articulos de 2025.
+**Confianza:** HIGH — npm v6.10.2, flat config soporte confirmado en GitHub issue #978 y releases.
 
 ---
 
-### 5. React.memo — Donde Aplicarlo
-
-**Contexto critico:** React 19 incluye el React Compiler (v1.0 liberado Oct 2025), que automatiza la memoizacion. Sin embargo, el React Compiler es opt-in: requiere instalar `babel-plugin-react-compiler` y `@rolldown/plugin-babel`. Para este milestone, el overhead de instalar y configurar el compiler no esta justificado — el proyecto usa `@vitejs/plugin-react` v5 que aun incluye Babel, pero el compiler es una herramienta adicional separada.
-
-**Decision: memo manual selectivo, sin el compiler.**
-
-**Donde aplicar `React.memo`:**
-
-| Componente | Justificacion |
-|------------|---------------|
-| `StudentRow` | Se renderiza N veces (uno por alumno). La lista puede tener 20-30 items. Memoizar evita re-renders cuando solo cambia otro alumno. |
-| `StatCard` | Componente puro, recibe props primitivos. Sin memo, se re-renderiza cada vez que DashboardPage actualiza estado. |
-| `TeacherCard` | Lista de profesores en Dashboard. Mismo patron que StudentRow. |
-
-**Donde NO aplicar `React.memo`:**
-
-- Componentes que siempre reciben props nuevas en cada render del padre (memo no ayuda).
-- Componentes del shell (MobileContainer, ProtectedRoute) — renderizan una sola vez por navegacion.
-- `Badge`, `Button` — componentes tan simples que el overhead de memo supera el beneficio.
-
-**`useMemo` y `useCallback`:**
-
-Usar solo en casos concretos:
-- `useMemo`: calculos derivados costosos sobre arrays grandes (ej: filtrar/ordenar lista de profesores en Dashboard).
-- `useCallback`: callbacks pasados como props a componentes memorizados con `React.memo` (necesario para que memo funcione; si la funcion cambia referencia en cada render, memo no sirve).
-
-**No usar memoizacion defensiva.** Si el Compiler no esta activo, la heuristica es: "si el profiler muestra un problema, entonces memo". No antes.
-
-**Confianza:** MEDIUM — las recomendaciones generales son HIGH, pero la decision de no activar el Compiler (por complejidad de setup) es una eleccion de arquitectura, no un hecho tecnico.
+No se requieren otras dependencias de produccion para A11Y. El soporte de teclado en `TeacherCard` se implementa con atributos HTML nativos (`role="button"`, `tabIndex={0}`, `onKeyDown`) — zero dependencias nuevas.
 
 ---
 
-### 6. Workbox — Correccion del Cache de API
+### C. Documentacion JSDoc (`DOCS-01`)
 
-**Problema identificado en auditoria:** El regex actual en `vite.config.js` matchea `script.google.com` pero las respuestas de Google Apps Script se sirven desde `script.googleusercontent.com` (el dominio que Google usa para las respuestas del Web App desplegado).
+#### C1. `eslint-plugin-jsdoc`
 
-**Configuracion actual (buggy):**
+| Campo | Valor |
+|-------|-------|
+| Paquete | `eslint-plugin-jsdoc` |
+| Version | `^62.8.1` |
+| Peer dep | ESLint >= 9 (compatible con flat config) |
+| Proposito | Valida que los JSDoc existan y sean correctos (parametros, tipos) |
+| Instalacion | `npm install -D eslint-plugin-jsdoc` |
+
+**Por que:** El milestone requiere JSDoc en 11 componentes. Sin validacion automatica, el JSDoc se vuelve stale con el tiempo. `eslint-plugin-jsdoc` en modo `flat/recommended` valida que los `@param` declarados coincidan con los parametros reales de la funcion, y que los tipos en `@returns` existan. Con ESLint 9 flat config, la integracion es una linea.
+
+**Configuracion minima en `eslint.config.js`:**
+
 ```js
-urlPattern: /^https:\/\/script\.google\.com\/.*/i,
-```
+import jsdoc from 'eslint-plugin-jsdoc'
 
-**Configuracion corregida:**
-```js
-{
-  urlPattern: /^https:\/\/(script\.google\.com|script\.googleusercontent\.com)\/.*/i,
-  handler: 'NetworkFirst',
-  options: {
-    cacheName: 'apps-script-api',
-    expiration: {
-      maxEntries: 50,
-      maxAgeSeconds: 60 * 60 * 24  // 24h
+export default [
+  // ... configs existentes ...
+  {
+    ...jsdoc.configs['flat/recommended'],
+    files: ['src/components/**/*.jsx', 'src/hooks/**/*.js'],
+    rules: {
+      // El proyecto usa JSDoc descriptivo, no requiere @returns en todos
+      'jsdoc/require-returns': 'off',
+      'jsdoc/require-returns-description': 'off',
+      // Si hay @param declarado, debe coincidir con los params reales
+      'jsdoc/check-param-names': 'error',
+      'jsdoc/require-param': 'warn',
     },
-    networkTimeoutSeconds: 10,
-    cacheableResponse: {
-      statuses: [0, 200]
-    }
-  }
+  },
+]
+```
+
+**Por que no JSDoc CLI (generacion de HTML):** El milestone pide JSDoc en componentes como documentacion inline para el equipo dev, no un sitio de docs publico. La validacion via ESLint es suficiente y se integra en el flujo `npm run lint` existente. Un sitio generado seria overhead sin audiencia (8 usuarios internos, dev team de 1).
+
+**Confianza:** HIGH — npm v62.8.1, mantenimiento activo (gajus/eslint-plugin-jsdoc), flat config soporte documentado.
+
+---
+
+### D. Autenticacion Server-Side en Apps Script (`SEC-01..SEC-06`)
+
+No requiere nuevas dependencias npm. El backend vive en `apps-script/Codigo.js` (Google Apps Script V8 runtime). La autenticacion se implementa con primitivas nativas de Apps Script.
+
+#### D1. Patron recomendado: API Key en PropertiesService + HMAC-SHA256
+
+**Por que PropertiesService y no Secret Manager:** Para 8 usuarios internos en una academia, Secret Manager (GCP) es over-engineering. PropertiesService es la solucion nativa de Apps Script: datos aislados del codigo, no visibles en el editor a usuarios sin acceso al script.
+
+**Flujo de autenticacion:**
+
+```
+Cliente (React)                         Apps Script (doGet/doPost)
+-----------                             --------------------------
+1. Envia X-Api-Key en header           2. Lee PropertiesService.getScriptProperties()
+   O como parametro ?key=...              .getProperty('API_KEY')
+                                       3. Compara con tiempo constante (evita timing attacks)
+                                       4. Si no coincide → jsonError('No autorizado', 401)
+                                       5. Si coincide → procesa request
+```
+
+**Problema critico de Apps Script:** Los headers HTTP custom (`X-Api-Key`) NO son accesibles en `doGet(e)` — el objeto `e` solo expone `e.parameter`, `e.parameters`, `e.postData`, `e.queryString`, `e.pathInfo`. Google no expone `e.headers` para Web Apps desplegados como "Anyone".
+
+**Solucion correcta:** Pasar el API key como parametro de query string (`?key=...`) o en el body del POST (`postData`). Esto expone la clave en la URL (logs, historial de browser) — mitigar con HTTPS (ya es el caso) y using POST para operaciones de escritura.
+
+**Implementacion en `Codigo.js`:**
+
+```js
+// En PropertiesService (configurar una sola vez desde el editor de Apps Script)
+// PropertiesService.getScriptProperties().setProperty('API_KEY', 'VALOR_SECRETO_AQUI')
+
+function validateAuth(e) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY')
+  if (!apiKey) return false  // Key no configurada — falla closed
+
+  const incoming = e.parameter.key || ''
+  // Comparacion de longitud constante para evitar timing attacks
+  if (incoming.length !== apiKey.length) return false
+  return Utilities.computeHmacSha256Signature(incoming, 'salt') ===
+         Utilities.computeHmacSha256Signature(apiKey, 'salt')
+}
+
+function doGet(e) {
+  if (!validateAuth(e)) return jsonError('No autorizado', 401)
+  // ... resto del handler
 }
 ```
 
-**Por que `cacheableResponse: { statuses: [0, 200] }` es necesario:** Las respuestas cross-origin sin CORS son "opaque responses" con status 0. Sin incluir `0` en statuses, Workbox no las cachea y el fallback offline no funciona.
+**Alternativa con HMAC por request (mayor seguridad):** Firmar cada request con `timestamp + action` usando la clave compartida. Previene replay attacks. Recomendado si la app crece en usuarios externos. Para 8 usuarios internos, el API key estatico con HTTPS es pragmaticamente suficiente.
 
-**Por que `NetworkFirst` y no `StaleWhileRevalidate`:** Los datos de asistencia son sensibles al tiempo. Un teacher no puede marcar asistencia con datos cacheados de hace 24h. NetworkFirst intenta red primero; si falla (offline), usa cache como fallback. Esto da la semantica correcta.
+**Donde guardar el API_KEY en el frontend:** En `.env` como `VITE_API_SECRET`, nunca hardcodeado. Ya existe el patron `VITE_API_URL` en el proyecto — seguir el mismo patron.
 
-**Problema de `navigateFallback`:** El config actual usa `navigateFallback: '/offline.html'`, pero la auditoria identifica que deberia ser `/index.html` para que el SPA funcione offline. El Service Worker debe servir `index.html` para cualquier ruta de navegacion desconocida, permitiendo que React Router tome el control.
+**Confianza:** MEDIUM — `Utilities.computeHmacSha256Signature` verificado en docs oficiales de Apps Script. La limitacion de que `e.headers` no esta disponible en Web Apps publicos es conocida en la comunidad pero no esta documentada explicitamente por Google (confirmada via busqueda de comunidad + inspeccion de la API reference). La recomendacion de usar `e.parameter.key` es un workaround establecido.
 
-**Correccion:**
-```js
-navigateFallback: '/index.html',
-navigateFallbackDenylist: [/^\/api/, /\.[a-z]+$/i]  // excluir archivos estaticos
+---
+
+## Instalacion — Solo Nuevas Dependencias
+
+```bash
+# Dev dependencies (no afectan bundle de produccion)
+npm install -D @vitest/coverage-v8 jest-axe eslint-plugin-jsx-a11y eslint-plugin-jsdoc
 ```
 
-**Confianza:** MEDIUM-HIGH — el patron NetworkFirst + statuses [0,200] es documentacion oficial de Workbox. La identificacion del bug `googleusercontent.com` proviene de inspeccion directa del config existente y conocimiento del comportamiento de Google Apps Script.
+**Impacto en bundle de produccion:** Cero. Todas son `devDependencies`. El bundle final no cambia.
 
 ---
 
@@ -200,45 +260,55 @@ navigateFallbackDenylist: [/^\/api/, /\.[a-z]+$/i]  // excluir archivos estatico
 
 | Categoria | Recomendado | Alternativa | Por que No |
 |-----------|-------------|-------------|------------|
-| Focus trap | `focus-trap-react` | Radix UI Dialog | Forzaria reescribir Modal.jsx existente |
-| Focus trap | `focus-trap-react` | Implementacion manual | Casos borde de DOM complejos; no justificado |
-| Debounce | `use-debounce` | `lodash.debounce` | +70KB sin razon; lodash no esta en el proyecto |
-| Debounce | `use-debounce` | Hook custom con useEffect | Funciona pero no tiene flush/cancel; peor para testing |
-| Memoizacion | React.memo manual | React Compiler | Compiler requiere instalacion extra; overhead no justificado para 3 componentes |
-| Bundle split | manualChunks minimo | vite-plugin-chunk-split | Over-engineering; solo 3 deps de produccion |
-| Bundle split | manualChunks minimo | splitVendorChunkPlugin | Deprecado en Vite 5+ |
+| A11Y tests | `jest-axe@^10.0.0` | `vitest-axe@0.1.0` | vitest-axe sin mantenimiento activo (3 anos sin release) |
+| A11Y tests | `jest-axe@^10.0.0` | `@axe-core/react` | Requiere componente wrapper en produccion, no en tests |
+| Coverage | `@vitest/coverage-v8` | `@vitest/coverage-istanbul` | Istanbul mas lento; V8 precision comparable desde Vitest 3.2+ |
+| JSDoc validation | `eslint-plugin-jsdoc` | `jsdoc` CLI (generacion HTML) | HTML docs no tiene audiencia; validacion inline es suficiente |
+| Apps Script auth | PropertiesService API key | Google Cloud Secret Manager | Over-engineering para 8 usuarios internos |
+| Apps Script auth | PropertiesService API key | OAuth 2.0 con ScriptApp.getOAuthToken() | Expone OAuth token al cliente — riesgo de seguridad segun docs oficiales |
+| A11Y keyboard | libreria externa | Atributos HTML nativos | `role="button"` + `tabIndex={0}` + `onKeyDown` es suficiente para TeacherCard; cero dependencias |
 
 ---
 
-## Instalacion
+## Compatibilidad de Versiones
 
-```bash
-# Produccion
-npm install focus-trap-react use-debounce
-
-# Sin cambios en devDependencies para este milestone
-```
+| Paquete A | Compatible Con | Notas |
+|-----------|----------------|-------|
+| `@vitest/coverage-v8@4.1.2` | `vitest@4.0.18` | Peer dep requiere version identica de vitest. Si vitest se actualiza a 4.1.x, actualizar coverage-v8 tambien. |
+| `jest-axe@10.0.0` | `vitest@cualquier` | No tiene peer dep de jest/vitest. Requiere `jsdom` (ya configurado). No usar con `happy-dom`. |
+| `eslint-plugin-jsx-a11y@6.10.2` | `eslint@9.39.1` | Flat config via `jsxA11y.flatConfigs.recommended`. API legacy de eslintrc no aplica. |
+| `eslint-plugin-jsdoc@62.8.1` | `eslint@9.39.1` | Flat config via `jsdoc.configs['flat/recommended']`. |
 
 ---
 
-## Impacto Estimado en Bundle
+## Lo que NO Agregar
 
-| Cambio | Efecto Esperado |
-|--------|----------------|
-| React.lazy() en 4 rutas | Chunk inicial ~40-60% mas pequeno; paginas cargan on-demand |
-| manualChunks vendor | react+react-dom en chunk estable, cacheable entre deploys |
-| focus-trap-react | +~8KB gzipped (solo en chunk de Modal) |
-| use-debounce | +~1KB gzipped (sin dependencias) |
+| Evitar | Por que | Usar En Su Lugar |
+|--------|---------|-----------------|
+| `@axe-core/react` | Requiere componente `<Axe>` en el arbol de React — afecta produccion si no se condiciona bien | `jest-axe` en tests — mismo motor, zero impacto en produccion |
+| `vitest-axe` | Sin mantenimiento desde 2022, version 0.1.0 | `jest-axe@10.0.0` — funciona con Vitest+jsdom |
+| `jsdoc` (CLI) | Genera HTML que nadie va a leer; team de 1 dev, 8 usuarios internos | `eslint-plugin-jsdoc` — valida inline en lint |
+| `@vitejs/coverage-istanbul` | Mas lento que V8; precision ya comparable en Vitest 4 | `@vitest/coverage-v8` |
+| `typedoc` | Requiere TypeScript; proyecto es JSX puro | `eslint-plugin-jsdoc` con tipos en JSDoc comments |
+| JWT en Apps Script | Implementacion manual sin libreria validada; complejidad alta | API key en PropertiesService — seguridad suficiente para el scope |
 
 ---
 
 ## Sources
 
-- React.lazy + Suspense: [web.dev code-splitting-suspense](https://web.dev/code-splitting-suspense/) | [react.dev/reference/react/lazy](https://react.dev/reference/react/lazy)
-- Vite manualChunks: [soledadpenades.com 2025](https://soledadpenades.com/posts/2025/use-manual-chunks-with-vite-to-facilitate-dependency-caching/) | [mykolaaleksandrov.dev 2025](https://www.mykolaaleksandrov.dev/posts/2025/10/react-lazy-suspense-vite-manualchunks/) | [Vite Docs](https://v3.vitejs.dev/guide/build)
-- React Compiler: [react.dev/blog/2025/10/07/react-compiler-1](https://react.dev/blog/2025/10/07/react-compiler-1) | [isitdev.com useMemo dead](https://isitdev.com/react-19-compiler-usememo-usecallback-dead-2025/)
-- React.memo en React 19: [react.dev/reference/react/memo](https://react.dev/reference/react/memo) | [dev.to React 19 memoization](https://dev.to/joodi/react-19-memoization-is-usememo-usecallback-no-longer-necessary-3ifn)
-- Workbox runtimeCaching: [Chrome for Developers — Runtime Caching](https://developer.chrome.com/docs/workbox/caching-resources-during-runtime/) | [vite-pwa-org generateSW](https://vite-pwa-org.netlify.app/workbox/generate-sw)
-- focus-trap-react: [github.com/focus-trap/focus-trap-react](https://github.com/focus-trap/focus-trap-react) | [logrocket.com accessible modal](https://blog.logrocket.com/build-accessible-modal-focus-trap-react/)
-- use-debounce: [github.com/xnimorz/use-debounce](https://github.com/xnimorz/use-debounce) | [usehooks.com/usedebounce](https://usehooks.com/usedebounce)
-- @vitejs/plugin-react README: [github.com/vitejs/vite-plugin-react README](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md)
+- `@vitest/coverage-v8` version: npm registry verificado 2026-03-31
+- Vitest coverage config (v4): [vitest.dev/guide/coverage](https://vitest.dev/guide/coverage) — proveedor V8, `coverage.include`, thresholds
+- Vitest v4 migration (coverage.all removido): [vitest.dev/guide/migration](https://vitest.dev/guide/migration.html)
+- `jest-axe` v10.0.0: npm registry verificado, Node >= 16, sin peer dep de Jest
+- `jest-axe` happy-dom limitacion: [github.com/chaance/vitest-axe README](https://github.com/chaance/vitest-axe/blob/main/README.md)
+- `eslint-plugin-jsx-a11y` flat config: [github.com/jsx-eslint/eslint-plugin-jsx-a11y](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y) issue #978
+- `eslint-plugin-jsdoc` v62: [github.com/gajus/eslint-plugin-jsdoc](https://github.com/gajus/eslint-plugin-jsdoc) — flat config documentado
+- Apps Script Utilities HMAC: [developers.google.com/apps-script/reference/utilities](https://developers.google.com/apps-script/reference/utilities/utilities) — `computeHmacSha256Signature` verificado
+- Apps Script PropertiesService: [developers.google.com/apps-script/guides/properties](https://developers.google.com/apps-script/guides/properties)
+- Apps Script Web App event object (sin `e.headers`): [developers.google.com/apps-script/guides/web](https://developers.google.com/apps-script/guides/web)
+- HMAC timing-safe comparison pattern: [authgear.com/post/hmac-api-security](https://www.authgear.com/post/hmac-api-security)
+
+---
+
+*Stack research para: NovAttend v1.1 Hardening — A11Y, DOCS, SEC, TEST*
+*Researched: 2026-03-31*

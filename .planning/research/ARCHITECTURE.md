@@ -1,437 +1,632 @@
-# Architecture Patterns
+# Architecture Research
 
-**Project:** NovAttend — Mejoras Post-Auditoria (Olas 1-3)
-**Domain:** React PWA refactoring — oversized page component decomposition + code splitting
-**Researched:** 2026-03-30
-**Confidence:** HIGH (verified against React 19 docs, Vite 7 build docs, vite-plugin-pwa official docs, current year articles)
-
----
-
-## Problem Statement
-
-`DashboardPage.jsx` is 272 lines with 14 import dependencies. It mixes three distinct concerns in a single file:
-1. Data orchestration (two parallel API calls, convocatoria selection, cancellation tokens)
-2. Derived calculations (totalStudents, globalAttendance, allStudents, alertStudents, searchResults — all `useMemo`)
-3. Presentation (loading skeleton, error state, search results list, teacher list, two popups)
-
-The fix is not cosmetic splitting — it is responsibility separation that makes each piece independently testable and replaceable.
+**Domain:** React 19 PWA hardening — A11Y, DOCS, SEC, TEST
+**Researched:** 2026-03-31
+**Confidence:** HIGH (verified against live codebase, WCAG 2.1 patterns, Apps Script docs)
 
 ---
 
-## Recommended Architecture
+## System Overview
 
-### Pattern: Hook-First Decomposition
-
-The modern React answer to "the container/presentational split" is to push all logic into a custom hook and keep the page as a thin orchestrator that wires together focused sub-components. This is the 2025 consensus pattern (verified: react.dev, patterns.dev, Robin Wieruch).
+The hardening milestone touches four orthogonal concerns that each map onto a specific layer of the existing architecture:
 
 ```
-DashboardPage.jsx  (orchestrator, <80 lines after refactor)
-  ├── hooks/useDashboard.js         (all state + data fetching + memos)
-  ├── features/DashboardHeader.jsx  (PageHeader + ConvocatoriaSelector + StatCards)
-  ├── features/DashboardSearch.jsx  (SearchInput + results dropdown)
-  └── features/TeacherList.jsx      (h3 heading + TeacherCard map)
+┌─────────────────────────────────────────────────────────────────┐
+│  PAGES (src/pages/)                                              │
+│  LoginPage  AttendancePage  DashboardPage  Saved  Convocatoria  │
+│  [SEC affects LoginPage auth flow]                               │
+│  [TEST: LoginPage.test, ConvocatoriaPage.test, SavedPage.test]  │
+├─────────────────────────────────────────────────────────────────┤
+│  FEATURE COMPONENTS (src/components/features/)                  │
+│  TeacherCard  GroupTabs  StudentRow  StudentDetailPopup          │
+│  AlertList  PageHeader  ConvocatoriaSelector                    │
+│  [A11Y-01: TeacherCard + GroupSection keyboard + ARIA]          │
+│  [A11Y-02: AlertList item role, StudentRow role]                │
+│  [DOCS: all 7 features need JSDoc audit]                         │
+├─────────────────────────────────────────────────────────────────┤
+│  UI COMPONENTS (src/components/ui/)                              │
+│  Button  StatCard  Avatar  Badge  Modal  ProgressBar             │
+│  ToggleSwitch  SearchInput  ErrorBanner  UpdateBanner            │
+│  [A11Y-02: StatCard onClick, ProgressBar aria-valuenow]         │
+│  [DOCS: all 10 ui/ need JSDoc audit]                             │
+│  [TEST: highest ROI — pure components, easy to test]            │
+├─────────────────────────────────────────────────────────────────┤
+│  HOOKS (src/hooks/)                                              │
+│  useDashboard  useConvocatorias  useStudents                     │
+│  useFocusTrap  useDebounce                                       │
+│  [TEST: hook logic is isolated and high-value to cover]         │
+├─────────────────────────────────────────────────────────────────┤
+│  SERVICES + CONFIG (src/services/  src/config/)                  │
+│  api.js  api-config.js  users.js  teachers.js                   │
+│  [SEC: api.js needs token header injection after login]         │
+├─────────────────────────────────────────────────────────────────┤
+│  BACKEND (apps-script/Codigo.js)                                 │
+│  doGet / doPost — no auth today, open to any caller             │
+│  [SEC: add token validation in doGet + doPost entry points]     │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-Popups (`StudentDetailPopup`, `AlertList`) stay in `DashboardPage.jsx` because they are already in `features/` and their open/close state is trivially two booleans that do not need extraction.
 
 ---
 
-## Component Boundaries
+## A11Y-01: Keyboard Navigation in TeacherCard
 
-### useDashboard.js (new hook)
+### Current State
 
-**Responsibility:** Everything that is not JSX in the current DashboardPage.
+`TeacherCard` and its internal `GroupSection` sub-component use `<div onClick={...}>` for expand/collapse interactions. These are keyboard-inaccessible: no `tabIndex`, no `role`, no `onKeyDown`, no aria-expanded signal.
 
-| What it owns | Currently at |
-|---|---|
-| `teachers`, `loading`, `error` state | DashboardPage lines 28-34 |
-| `loadConvData` async function | lines 37-43 |
-| useEffect for initial load | lines 46-79 |
-| `handleConvChange` handler | lines 82-95 |
-| `totalStudents` useMemo | lines 97-100 |
-| `globalAttendance` useMemo | lines 102-112 |
-| `allStudents` useMemo | lines 114-126 |
-| `alertStudents` useMemo | lines 128 |
-| `searchQuery`, `searchResults` | lines 130-133 |
-| `selectedStudent`, `expandedTeacher` | lines 31-33 |
-| `showAlertPopup` | line 34 |
+The `ChevronIcon` SVG has no accessible label. Student rows inside `GroupSection` are also plain `<div>` elements with click handlers.
 
-**Returns** a flat object (no nesting):
-```js
-{
-  // convocatoria state (delegated to useConvocatorias)
-  convocatorias, convocatoria, handleConvChange,
-  // data
-  teachers, loading, error, reload,
-  // derived
-  totalStudents, globalAttendance, alertStudents,
-  // search
-  searchQuery, setSearchQuery, searchResults,
-  // UI toggles
-  expandedTeacher, setExpandedTeacher,
-  selectedStudent, setSelectedStudent,
-  showAlertPopup, setShowAlertPopup,
+`ToggleSwitch` (used in `StudentRow`) is already correctly implemented with `role="switch"`, `aria-checked`, and `focus-visible` styles. That is the reference pattern to follow.
+
+### Integration Point: TeacherCard
+
+**What needs to change:**
+- The teacher header `<div onClick={onToggle}>` becomes a `<button>` (or keeps the div with `role="button"`, `tabIndex={0}`, `onKeyDown`)
+- Add `aria-expanded={isExpanded}` on the trigger element
+- Add `aria-controls` pointing to the expanded panel id
+- `ChevronIcon` SVG: add `aria-hidden="true"` (decorative icon inside a labeled button)
+
+**Pattern to use — button approach (preferred over div+role):**
+
+```jsx
+// TeacherCard teacher header trigger
+<button
+  type="button"
+  onClick={onToggle}
+  aria-expanded={isExpanded}
+  aria-controls={`teacher-panel-${teacher.id}`}
+  className="... focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-burgundy"
+>
+  ...
+  <ChevronIcon rotated={isExpanded} aria-hidden />
+</button>
+
+// Expanded panel
+<div id={`teacher-panel-${teacher.id}`} role="region" aria-label={teacher.name}>
+  ...
+</div>
+```
+
+**Same pattern for `GroupSection` expand trigger.**
+
+**Student rows in GroupSection:** Change `<div onClick={...}>` to `<button type="button">` or add `role="button"` + `tabIndex={0}` + `onKeyDown` for Enter/Space.
+
+**Line count impact:** TeacherCard is 143 lines. After adding ARIA + keyboard, likely 155-165 lines. Under the 250-line limit — no split needed.
+
+**Files to modify:**
+- `src/components/features/TeacherCard.jsx` — modify TeacherCard, GroupSection, student div rows
+
+---
+
+## A11Y-02: ARIA Attributes on Key Components
+
+### Audit Results
+
+| Component | Missing ARIA | Priority |
+|-----------|-------------|----------|
+| `TeacherCard` (header div) | `role`, `aria-expanded`, `aria-controls` | HIGH — no keyboard access |
+| `GroupSection` (header div) | `role`, `aria-expanded`, `aria-controls` | HIGH — same |
+| Student row divs (in GroupSection) | `role="button"` or native button | HIGH |
+| `AlertList` student items (divs) | `role="button"` or native button | HIGH |
+| `StatCard` (when onClick present) | `role="button"`, `tabIndex`, keyboard | MEDIUM |
+| `ProgressBar` | `role="progressbar"`, `aria-valuenow`, `aria-valuemin`, `aria-valuemax` | MEDIUM |
+| `SearchInput` wrapper | `role="search"` on container | LOW |
+| `AttendancePage` "Marcar todo" button | `aria-label` with context | LOW |
+| `GroupTabs` tab buttons | `role="tablist"` + `role="tab"` + `aria-selected` | MEDIUM |
+
+### Already Correct
+
+- `Modal`: `role="dialog"`, `aria-modal="true"`, `aria-label` — done in Phase 03
+- `ToggleSwitch`: `role="switch"`, `aria-checked` — already correct
+- `Button`: native `<button>`, `disabled` — already correct
+- `PageHeader` logout button: `aria-label="Cerrar sesion"` — already correct
+- `SearchInput` clear button: `aria-label="Limpiar busqueda"` — already correct
+
+### Integration Point: AlertList Student Items
+
+`AlertList` renders student items as `<div onClick>`. Each item needs to be a `<button type="button">` or at minimum `role="button"` + `tabIndex={0}` + `onKeyDown`. The component is 43 lines — a direct change, no split needed.
+
+**Files to modify:**
+- `src/components/features/AlertList.jsx` — student item divs
+- `src/components/ui/ProgressBar.jsx` — add progressbar ARIA
+- `src/components/ui/StatCard.jsx` — conditional role/tabIndex when onClick is provided
+- `src/components/features/GroupTabs.jsx` — add tablist/tab roles and aria-selected
+
+---
+
+## DOCS-01: JSDoc in 11 Missing Components
+
+### Current JSDoc Coverage
+
+Components already documented (JSDoc header present):
+
+| Component | Status |
+|-----------|--------|
+| `TeacherCard` | DONE |
+| `StudentDetailPopup` | DONE |
+| `AlertList` | DONE |
+| `PageHeader` | DONE |
+| `ConvocatoriaSelector` | DONE |
+| `StudentRow` | DONE |
+| `GroupTabs` | DONE |
+| `Modal` | DONE |
+| `Button` | DONE |
+| `StatCard` | DONE |
+| `Avatar` | DONE |
+| `ToggleSwitch` | DONE |
+| `SearchInput` | DONE |
+| `ProgressBar` | DONE |
+| `Badge` | NOT VERIFIED — check |
+| `ProtectedRoute` | DONE |
+| `ErrorBoundary` | NOT VERIFIED — check |
+| `MobileContainer` | NOT VERIFIED — check |
+| `ErrorBanner` | NOT VERIFIED — check |
+| `UpdateBanner` | NOT VERIFIED — check |
+| `LoadingSpinner` | NOT VERIFIED — check |
+| `DashboardSkeleton` | NOT VERIFIED — check |
+| `useDashboard` | DONE |
+| `useFocusTrap` | DONE |
+| `useConvocatorias` | NOT VERIFIED — check |
+| `useStudents` | NOT VERIFIED — check |
+| `useDebounce` | NOT VERIFIED — check |
+| `api.js` (service) | DONE — module JSDoc + function JSDoc |
+| `buildTeachersHierarchy` | NOT VERIFIED — check |
+
+**Components most likely lacking JSDoc (the 11 mentioned in PROJECT.md):** The unverified entries above — primarily the smaller ui/ components and newer hooks. Each needs a JSDoc header following the existing pattern:
+
+```javascript
+/**
+ * [One-line description].
+ * @param {object} props
+ * @param {Type} props.propName - Description
+ * @returns {JSX.Element}
+ */
+```
+
+**Architecture rule:** JSDoc goes at the top of the file, immediately before the function definition. No separate docs/ files for component-level documentation. The JSDoc comment IS the documentation.
+
+**Files where JSDoc is likely missing (verify before adding):**
+- `src/components/ui/Badge.jsx`
+- `src/components/ui/ProgressBar.jsx` (might have partial)
+- `src/components/ui/ErrorBanner.jsx`
+- `src/components/ui/UpdateBanner.jsx`
+- `src/components/ui/LoadingSpinner.jsx`
+- `src/components/features/DashboardSkeleton.jsx`
+- `src/components/ErrorBoundary.jsx`
+- `src/components/MobileContainer.jsx`
+- `src/hooks/useConvocatorias.js`
+- `src/hooks/useStudents.js`
+- `src/hooks/useDebounce.js`
+- `src/utils/buildTeachersHierarchy.js`
+
+No new files required. All changes are in-place additions to existing files.
+
+---
+
+## SEC-01 to SEC-06: Server-side Auth in Apps Script
+
+### Current Auth Architecture
+
+```
+LoginPage
+    |
+    ├─ Client-side credential check (USERS array in users.js)
+    |   └─ Passwords stored in plaintext in src/config/users.js
+    |
+    ├─ sessionStorage.setItem('user', JSON.stringify(found))
+    |
+    └─ Navigate to /attendance or /dashboard
+
+ProtectedRoute
+    └─ sessionStorage.getItem('user') → role check only
+
+api.js (apiGet / apiPost)
+    └─ Fetches VITE_API_URL with no auth header
+    └─ Apps Script Web App: access = "Anyone" — no auth check
+```
+
+**Security gap:** Any caller who discovers the Apps Script URL can read all data (getConvocatorias, getProfesores, getAlumnos, getResumen) and write attendance records (guardarAsistencia) without any credentials.
+
+### Target Auth Architecture (SEC)
+
+```
+LoginPage
+    |
+    ├─ Client-side credential check (same USERS array)
+    |
+    ├─ On success: derive a shared-secret HMAC token
+    |   └─ token = HMAC-SHA256(username + timestamp, SHARED_SECRET)
+    |   └─ Or simpler: a static per-user token stored in users.js
+    |
+    ├─ sessionStorage.setItem('user', JSON.stringify({...user, token}))
+    |
+    └─ Navigate to route
+
+api.js (apiGet / apiPost)
+    └─ Read token from sessionStorage
+    └─ Attach as query param: ?token=xxx (GET) or body field (POST)
+    └─ Apps Script validates token before processing any action
+```
+
+### Apps Script Token Validation Pattern
+
+The simplest safe approach for an internal 8-user app: static token whitelist in Script Properties (not in code):
+
+```javascript
+// In Codigo.js — doGet and doPost entry points
+
+function validateToken(token) {
+  const validTokens = PropertiesService.getScriptProperties()
+    .getProperty('VALID_TOKENS');
+  if (!validTokens) return false;
+  const tokens = JSON.parse(validTokens);
+  return tokens.includes(token);
+}
+
+function doGet(e) {
+  if (!validateToken(e.parameter.token)) {
+    return jsonError('No autorizado', 401);
+  }
+  // ... existing switch
+}
+
+function doPost(e) {
+  const body = JSON.parse(e.postData.contents);
+  if (!validateToken(body.token)) {
+    return jsonError('No autorizado', 401);
+  }
+  // ... existing switch
 }
 ```
 
-**Communicates with:** `useConvocatorias` (delegates convocatoria list management), `getProfesores`, `getResumen` (direct API calls), `buildTeachersHierarchy` (pure util), `TEACHERS_DATA` (mock fallback).
+**VALID_TOKENS** is a JSON array stored in Script Properties (not in code), set via Apps Script UI. Each user has a unique token. Adding/revoking access requires only updating the Script Property.
 
-**Does NOT communicate with:** any JSX component directly.
+### Integration Points: api.js Changes
 
----
+`apiGet` and `apiPost` need to inject the token transparently. The token comes from sessionStorage:
 
-### DashboardHeader.jsx (new sub-component in features/)
-
-**Responsibility:** The dark burgundy header section of the Dashboard.
-
-**Receives as props:**
-```jsx
-<DashboardHeader
-  convocatorias={convocatorias}
-  convocatoria={convocatoria}
-  onConvChange={handleConvChange}
-  totalStudents={totalStudents}
-  globalAttendance={globalAttendance}
-  alertCount={alertStudents.length}
-  onAlertClick={() => setShowAlertPopup(true)}
-  onLogout={...}
-/>
-```
-
-**Contains:** `PageHeader`, `Badge`, `ConvocatoriaSelector`, three `StatCard` instances.
-
-**Does NOT own:** state, data fetching, event side effects. Pure renderer.
-
-**Line count estimate:** ~55 lines.
-
----
-
-### DashboardSearch.jsx (new sub-component in features/)
-
-**Responsibility:** The search bar + results dropdown.
-
-**Receives as props:**
-```jsx
-<DashboardSearch
-  searchQuery={searchQuery}
-  onChange={setSearchQuery}
-  onClear={() => setSearchQuery('')}
-  searchResults={searchResults}
-  onStudentSelect={(student) => { setSelectedStudent(student); setSearchQuery('') }}
-/>
-```
-
-**Contains:** `SearchInput`, conditional results list with click handlers.
-
-**Does NOT own:** state, filtering logic (receives pre-filtered `searchResults` from hook).
-
-**Line count estimate:** ~45 lines.
-
----
-
-### TeacherList.jsx (new sub-component in features/)
-
-**Responsibility:** Section heading + teacher card list.
-
-**Receives as props:**
-```jsx
-<TeacherList
-  teachers={teachers}
-  expandedTeacher={expandedTeacher}
-  onToggle={(id) => setExpandedTeacher(...)}
-  onStudentClick={setSelectedStudent}
-/>
-```
-
-**Contains:** `h3` heading, `teachers.map(...)` with `TeacherCard`.
-
-**Does NOT own:** state, data.
-
-**Line count estimate:** ~25 lines.
-
----
-
-### DashboardPage.jsx (refactored orchestrator)
-
-After extraction, the page becomes:
-
-```jsx
-export default function DashboardPage() {
-  const dash = useDashboard()
-
-  if (dash.loading) return <DashboardSkeleton />
-  if (dash.error) return <DashboardError error={dash.error} onRetry={dash.reload} />
-
-  return (
-    <>
-      <div className="...">
-        <DashboardHeader ... />
-        <DashboardSearch ... />
-        <TeacherList ... />
-      </div>
-      <StudentDetailPopup ... />
-      {dash.showAlertPopup && <AlertList ... />}
-    </>
-  )
-}
-```
-
-**Line count estimate:** ~65 lines. Well under the 250-line limit.
-
-**Note on DashboardSkeleton and DashboardError:** These are currently inline JSX blocks (lines 136-177). They should become named functions or small components inside the same `DashboardPage.jsx` file, or split to `features/DashboardSkeleton.jsx` if reuse is anticipated. For now, keeping them co-located in `DashboardPage.jsx` is fine since they are purely presentational and small (~40 lines each).
-
----
-
-## Data Flow
-
-```
-Google Apps Script API
-        |
-        v
-  services/api.js  (getProfesores, getResumen — parallel Promise.all)
-        |
-        v
-  useDashboard.js  (owns all state, memos, handlers)
-        |
-        v
-  DashboardPage.jsx  (reads hook return, distributes to children via props)
-       /|\
-      / | \
-     /  |  \
-DashboardHeader  DashboardSearch  TeacherList
-(pure render)    (pure render)    (pure render)
-```
-
-Data flows **downward only** via props. No context needed — the hook is called once at the page level and props are drilled one level. At this scale (3 sub-components, 1 level of depth) prop drilling is the right choice. Context would add complexity with no benefit.
-
-The `useConvocatorias` hook remains independent and is composed inside `useDashboard`. This preserves its reuse in `LoginPage` (which also fetches convocatorias post-login).
-
----
-
-## Code Splitting Architecture
-
-### React.lazy Integration with react-router-dom v7
-
-The current `App.jsx` imports all 5 pages statically, producing a single 271KB bundle. The fix is three lines per route.
-
-**Pattern (verified: Robin Wieruch, Mykola Aleksandrov 2025):**
-
-```jsx
-// App.jsx — after refactor
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import MobileContainer from './components/MobileContainer'
-import ProtectedRoute from './components/ProtectedRoute'
-import LoginPage from './pages/LoginPage'  // NOT lazy — first render path
-
-const ConvocatoriaPage = lazy(() => import('./pages/ConvocatoriaPage'))
-const AttendancePage   = lazy(() => import('./pages/AttendancePage'))
-const SavedPage        = lazy(() => import('./pages/SavedPage'))
-const DashboardPage    = lazy(() => import('./pages/DashboardPage'))
-
-const PageFallback = <div className="min-h-dvh min-h-screen bg-off-white" />
-
-function App() {
-  return (
-    <BrowserRouter>
-      <MobileContainer>
-        <Suspense fallback={PageFallback}>
-          <Routes>
-            <Route path="/" element={<LoginPage />} />
-            <Route path="/convocatorias" element={
-              <ProtectedRoute allowedRole="teacher"><ConvocatoriaPage /></ProtectedRoute>
-            } />
-            <Route path="/attendance" element={
-              <ProtectedRoute allowedRole="teacher"><AttendancePage /></ProtectedRoute>
-            } />
-            <Route path="/saved" element={
-              <ProtectedRoute allowedRole="teacher"><SavedPage /></ProtectedRoute>
-            } />
-            <Route path="/dashboard" element={
-              <ProtectedRoute allowedRole="ceo"><DashboardPage /></ProtectedRoute>
-            } />
-          </Routes>
-        </Suspense>
-      </MobileContainer>
-    </BrowserRouter>
-  )
-}
-```
-
-**Why `LoginPage` is NOT lazy:** It is the first page every user hits. Lazy-loading it adds a waterfall request with zero benefit. The app shell loads, the service worker precaches, and LoginPage renders — all synchronous. Making it lazy would cause a visible flash on first load.
-
-**Single Suspense boundary vs per-route:** One boundary at the `Routes` level is sufficient for a 5-page SPA. Per-route boundaries add boilerplate with no real benefit since transitions are instant after the first load (PWA precaches everything).
-
-**Fallback UI:** Use a solid-color div matching `bg-off-white` instead of a spinner. This prevents layout shift and feels like an instant transition on subsequent visits (chunks are already precached by the service worker).
-
----
-
-### Vite manualChunks for This SPA
-
-**Verified configuration (Mykola Aleksandrov 2025, soledadpenades.com 2025):**
-
-```js
-// vite.config.js — build section addition
-build: {
-  rollupOptions: {
-    output: {
-      manualChunks(id) {
-        if (!id.includes('node_modules')) return  // app code → route chunks via lazy()
-        if (id.includes('react-dom') || id.includes('react/'))
-          return 'vendor-react'
-        if (id.includes('react-router'))
-          return 'vendor-router'
-        return 'vendor'  // vite-plugin-pwa, workbox, etc.
-      }
-    }
+```javascript
+function getAuthToken() {
+  try {
+    const raw = sessionStorage.getItem('user')
+    if (!raw) return null
+    return JSON.parse(raw).token || null
+  } catch {
+    return null
   }
 }
+
+async function apiGet(action, params = {}) {
+  if (!isApiEnabled()) return null
+  const token = getAuthToken()
+
+  const url = new URL(API_URL)
+  url.searchParams.set('action', action)
+  if (token) url.searchParams.set('token', token)
+  // ... rest unchanged
+}
+
+async function apiPost(action, body = {}) {
+  if (!isApiEnabled()) return null
+  const token = getAuthToken()
+
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, token, ...body })
+  })
+  // ... rest unchanged
+}
 ```
 
-**Why this chunk structure for NovAttend:**
+### LoginPage Changes
 
-| Chunk | Contents | Why separate |
-|---|---|---|
-| `vendor-react` | react, react-dom | Never changes between deploys. Largest single dependency. Cache hit rate is near 100% after first load. |
-| `vendor-router` | react-router-dom | Changes on react-router upgrades only, independent of React version bumps. |
-| `vendor` | vite-plugin-pwa, workbox-* | Groups remaining node_modules. These rarely change. |
-| `index` (main) | App.jsx, MobileContainer, ProtectedRoute, LoginPage | The minimum needed to paint the first screen. |
-| Route chunks | ConvocatoriaPage, AttendancePage, SavedPage, DashboardPage + their features/ imports | Each teacher flow loads only its own chunk. CEO dashboard (~30KB after split) loads only when a CEO logs in. |
+After successful credential check, `LoginPage` writes the user's token to sessionStorage:
 
-**Expected bundle result after splitting:**
-- `vendor-react`: ~140KB (React 19 + ReactDOM) — cached long-term
-- `vendor-router`: ~25KB — cached long-term
-- `index`: ~30KB (down from 271KB) — changes with UI updates
-- Route chunks: ~15-25KB each
+```javascript
+// users.js gains a token field per user
+{ username: "samuel", password: "samuel2026", token: "tk-samuel-xxxx", name: "Samuel", role: "teacher" }
 
-Teachers never download the Dashboard chunk. CEOs never download AttendancePage/ConvocatoriaPage chunks.
-
----
-
-### Service Worker Caching with Split Chunks
-
-**Key finding (vite-pwa-org official docs, HIGH confidence):** When `globPatterns` includes `**/*.{js,css,html}`, the service worker **automatically precaches all generated chunks**, including lazy-loaded ones. No additional configuration needed.
-
-The workbox precache manifest is regenerated on every `npm run build`. Each chunk gets a content hash. When only `DashboardPage` changes, only its chunk has a new hash — the `vendor-react` chunk cache entry remains valid and is not re-downloaded.
-
-**Current vite.config.js `workbox.globPatterns`:**
-```js
-globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}']
+// LoginPage: no logic change needed — JSON.stringify(found) already
+// captures the token field if present in the USERS array
+sessionStorage.setItem('user', JSON.stringify(found))
 ```
-This already covers `.js` files, so all split chunks will be precached automatically. No change required to the workbox configuration when adding code splitting.
 
-**One concern:** The current `navigateFallback: '/offline.html'` points to a file that may not exist (listed as an Ola 1 fix in PROJECT.md). This must be corrected to `'/index.html'` before adding lazy loading, or offline navigation will silently fail when a user tries to navigate to `/dashboard` while offline.
+**Alternatively** (higher security): derive the token from username + a client-side salt, and validate server-side against the same derivation. But for 8 internal users, static tokens in Script Properties is the right tradeoff.
 
----
+### Data Flow After SEC Changes
 
-## File Organization (features/ vs ui/ vs hooks/)
+```
+Login success
+    ↓
+sessionStorage: { username, name, role, token: "tk-samuel-xxx" }
+    ↓
+Any API call via api.js
+    ├─ apiGet: ?action=getAlumnos&token=tk-samuel-xxx&...
+    └─ apiPost: body { action: "guardarAsistencia", token: "tk-samuel-xxx", ...data }
+    ↓
+Apps Script doGet/doPost
+    ├─ validateToken(token) → check against Script Properties
+    ├─ PASS: continue to action handler
+    └─ FAIL: return jsonError('No autorizado', 401)
+    ↓
+api.js receives 200 with { status: 'error', code: 401 } or a proper 401
+    └─ throws Error('No autorizado') → caught by hook/page error state
+```
 
-**Rule applied to this project:**
+**ProtectedRoute** does not need changes — it guards routes by role, not by API auth.
 
-| Directory | What belongs there | Decision criteria |
-|---|---|---|
-| `src/hooks/` | State + side effects + derived data with NO JSX | Would this be unit-testable without rendering? Yes → hooks/ |
-| `src/components/features/` | Components with domain knowledge or business rules in JSX | Does it know what "teacher" or "convocatoria" means? → features/ |
-| `src/components/ui/` | Components that could exist in any app (StatCard, Button, Badge) | Could it ship in a design system? → ui/ |
-| `src/pages/` | Route entry points — thin orchestrators | Does it map to a URL? → pages/ |
+**Files to modify:**
+- `src/config/users.js` — add `token` field per user
+- `src/services/api.js` — inject token in apiGet and apiPost
+- `apps-script/Codigo.js` — add validateToken + call in doGet + doPost
 
-**Applied to the Dashboard refactor:**
-
-- `useDashboard.js` → `src/hooks/` (pure logic, no JSX, unit-testable in isolation)
-- `DashboardHeader.jsx` → `src/components/features/` (knows what a "convocatoria" is, contains domain-specific badge/labels)
-- `DashboardSearch.jsx` → `src/components/features/` (knows about "alumnos", renders teacher + group metadata)
-- `TeacherList.jsx` → `src/components/features/` (domain-specific list, renders teacher hierarchy)
-- `DashboardPage.jsx` → `src/pages/` (stays, now thin orchestrator)
-
-**What does NOT move:**
-- `TeacherCard.jsx` — already in features/, already at 143 lines, well-structured
-- `StudentDetailPopup.jsx` — already in features/
-- `AlertList.jsx` — already in features/
-- `useConvocatorias.js` — already in hooks/, already extracted correctly
-
----
-
-## Build Order for Implementation
-
-Dependencies between components determine the correct implementation sequence. Building in wrong order causes import errors or requires refactoring twice.
-
-### Phase A — Extract useDashboard hook (Ola 3, Step 1)
-**Build first.** The hook has no JSX dependencies. It can be written and tested before any sub-component exists. DashboardPage temporarily uses the hook while keeping its own JSX intact — this validates the hook's interface before committing to sub-components.
-
-**Depends on:** useConvocatorias (already exists), services/api.js (already exists), buildTeachersHierarchy (already exists)
-**Output:** `src/hooks/useDashboard.js`
-
-### Phase B — Extract sub-components (Ola 3, Step 2)
-Build after useDashboard exists so prop interfaces are known.
-
-Order within Phase B is flexible (independent):
-1. `TeacherList.jsx` — simplest, just a list render
-2. `DashboardSearch.jsx` — contains conditional rendering of search results
-3. `DashboardHeader.jsx` — most complex, composes 5 existing components
-
-**Depends on:** useDashboard (for prop types), existing ui/ and features/ components
-
-### Phase C — Refactor DashboardPage.jsx (Ola 3, Step 3)
-Replace inline logic and inline sections with hook + sub-components.
-
-**Depends on:** useDashboard, DashboardHeader, DashboardSearch, TeacherList
-
-### Phase D — Code splitting in App.jsx (Ola 2, separate from Ola 3)
-**Independent of Phase A-C.** Can be done before or after Dashboard refactor. The lazy() conversion does not care about DashboardPage's internal structure.
-
-**Depends on:** react (lazy, Suspense), react-router-dom (already installed)
-
-### Phase E — manualChunks in vite.config.js (Ola 2)
-**Depends on:** Phase D (React.lazy must exist for chunk splitting to matter). Without lazy routes, manualChunks only separates vendor code — still useful, but the route chunk benefit requires lazy loading.
-
-**Order:** D then E, or both in the same commit since they are in different files.
+**New files:** None. Token storage uses the existing Script Properties mechanism.
 
 ---
 
-## Anti-Patterns to Avoid
+## TEST-01 to TEST-03: Expanding to 60% Coverage
 
-### Anti-Pattern 1: Splitting too many times
-**What:** Creating `DashboardLoadingState.jsx` and `DashboardErrorState.jsx` as separate files.
-**Why bad:** The loading and error states are ~15 lines each. Separate files add navigation overhead with zero reuse benefit. Keep them as named functions inside `DashboardPage.jsx` (allowed by the 250-line rule since the file ends up ~120 lines total).
+### Current Test State
 
-### Anti-Pattern 2: Splitting at the wrong boundary
-**What:** Moving `searchQuery` state into `DashboardSearch.jsx` to make it "self-contained."
-**Why bad:** `searchQuery` feeds `searchResults` which is a `useMemo` that also depends on `allStudents` (which comes from the API response). Splitting state ownership across the hook and a sub-component creates two-way data flow that React's unidirectional model is designed to prevent.
-**Rule:** State lives at the lowest common ancestor. `searchQuery` affects both `DashboardSearch` and the results list. Both are children of `DashboardPage`. Therefore `searchQuery` belongs in `useDashboard`, passed down as props.
+- **89 tests, 16 suites** across these files:
+  - `Button.test.jsx`, `Badge.test.jsx`, `StatCard.test.jsx` — ui components
+  - `ProtectedRoute.test.jsx`, `LoginPage.test.jsx` — auth layer
+  - `StudentRow.test.jsx` — feature component
+  - `api.test.jsx` — service layer
+  - `ErrorBanner.test.jsx`, `UpdateBanner.test.jsx`, `LoadingSpinner.test.jsx` — ui feedback
+  - `SavedPage.test.jsx`, `NotFoundPage.test.jsx` — pages
+  - `ConvocatoriaPage.test.jsx` — page
+  - `Modal.test.jsx`, `useDashboard.test.jsx`, `useFocusTrap.test.jsx` — critical components
 
-### Anti-Pattern 3: Lazy-loading LoginPage
-**What:** Adding `const LoginPage = lazy(() => import('./pages/LoginPage'))` for consistency.
-**Why bad:** LoginPage is the cold-start entry point. Lazy-loading it means the first render requires a dynamic import resolution — adding latency at the moment when users are most impatient. It also breaks PWA first-load painting since the app shell would render an empty Suspense fallback before showing the login form.
+### Gap Analysis: What Is Not Tested
 
-### Anti-Pattern 4: Per-route Suspense wrappers
-**What:** Wrapping each `<Route element>` in its own `<Suspense>`.
-**Why bad:** Creates 4 redundant Suspense boundaries. For a PWA that precaches all chunks, the loading state is shown for <100ms on first load and never again. The added complexity is not worth it.
+| Component/Module | Est. Lines | Test Exists | Priority |
+|-----------------|-----------|-------------|----------|
+| `TeacherCard` | 143 | NO | HIGH — complex expand/collapse + A11Y changes |
+| `GroupTabs` | 29 | NO | HIGH — will gain ARIA in A11Y-02 |
+| `AlertList` | 43 | NO | HIGH — A11Y changes + Modal composition |
+| `StudentDetailPopup` | 152 | NO | MEDIUM — API integration, Modal composition |
+| `ConvocatoriaSelector` | 37 | NO | LOW — simple dropdown |
+| `DashboardSkeleton` | ~40 | NO | LOW — pure render |
+| `PageHeader` | 67 | NO | MEDIUM — logout handler, aria-label |
+| `Avatar` | 43 | NO | LOW — pure render |
+| `ProgressBar` | ~30 | NO | MEDIUM — will gain ARIA in A11Y-02 |
+| `useStudents` | ~150 | NO | HIGH — core attendance logic |
+| `useConvocatorias` | ~80 | NO | MEDIUM — fetch + state |
+| `buildTeachersHierarchy` | ~60 | NO | HIGH — pure function, easy to test |
+| `AttendancePage` | 182 | PARTIAL | MEDIUM — main teacher flow |
+| `DashboardPage` | 127 | NO | LOW — thin orchestrator, hook tested |
 
-### Anti-Pattern 5: Aggressive manualChunks fragmentation
-**What:** Creating a separate chunk for every library (tailwindcss runtime, vite-plugin-pwa, etc.)
-**Why bad:** HTTP/2 multiplexing reduces the cost of multiple small requests, but the service worker precache overhead increases with more chunk entries. For a 5-page SPA, 3-4 chunks (`vendor-react`, `vendor-router`, `vendor`, `index`) plus route chunks is the sweet spot.
+### High-ROI Test Targets (to reach 60%)
+
+**Tier 1 — New test files that add most coverage:**
+
+1. `src/tests/TeacherCard.test.jsx`
+   - Tests: render teacher name, toggle expand on click, toggle expand on Enter/Space (A11Y), aria-expanded state, group section expand, student click fires onStudentClick
+   - Dependencies: mock `teacher` object with groups and students
+
+2. `src/tests/buildTeachersHierarchy.test.js`
+   - Tests: pure function with various flat API inputs, handles empty arrays, handles mismatched IDs
+   - Dependencies: none (pure function)
+
+3. `src/tests/GroupTabs.test.jsx`
+   - Tests: renders all groups, selected group has aria-selected=true, onChange fires with correct group number
+   - Dependencies: none
+
+4. `src/tests/AlertList.test.jsx`
+   - Tests: renders student names, click fires onStudentClick, keyboard triggers onStudentClick, onClose wired
+   - Dependencies: mock students array
+
+5. `src/tests/useStudents.test.jsx`
+   - Tests: initial state, toggleStudent flips presence, toggleAll sets all present/absent, presentCount/absentCount computed correctly
+   - Dependencies: mock convocatoria + useStudents exports (MOCK_GROUPS used when API disabled)
+
+**Tier 2 — Additions to existing tests:**
+
+6. `src/tests/api.test.jsx` — add tests for token injection once SEC is implemented
+7. `src/tests/LoginPage.test.jsx` — add test that token field is written to sessionStorage
+8. `src/tests/ProgressBar.test.jsx` — add ARIA attribute assertions
+
+### Test Architecture Pattern
+
+All existing tests follow this structure — new tests must match:
+
+```javascript
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import ComponentName from '../components/[layer]/ComponentName'
+
+describe('ComponentName', () => {
+  const defaultProps = { /* ... */ }
+
+  it('renderiza [algo visible]', () => {
+    render(<ComponentName {...defaultProps} />)
+    expect(screen.getByText('...')).toBeInTheDocument()
+  })
+})
+```
+
+For hooks, use `renderHook` from `@testing-library/react`. For pages needing Router context, wrap with `MemoryRouter`.
 
 ---
 
-## Scalability Considerations
+## Recommended Project Structure (After Hardening)
 
-This SPA serves 7 teachers and 1 CEO — scale is not a concern. Architecture decisions here are driven by **maintainability** and **constraint compliance** (250-line rule), not performance headroom.
+No new directories needed. All changes are modifications to or additions within existing folders:
 
-| Concern | Current (271KB monolith) | After refactor |
-|---|---|---|
-| First load JS for teacher | 271KB parsed + executed | ~195KB (vendor cached) + ~25KB index + route chunk on demand |
-| Dashboard load for CEO | Same as above | Deferred until `/dashboard` route — ~25KB extra chunk |
-| Adding a new page | Opens DashboardPage.jsx to understand | Reads useDashboard.js (logic) OR features/ (UI) independently |
-| Writing unit tests | Must render DashboardPage to test calculations | `useDashboard` testable with `renderHook` — no DOM needed |
+```
+src/
+├── components/
+│   ├── features/
+│   │   ├── TeacherCard.jsx         [MODIFY — A11Y-01 keyboard + ARIA]
+│   │   ├── GroupTabs.jsx           [MODIFY — A11Y-02 tablist/tab ARIA]
+│   │   ├── AlertList.jsx           [MODIFY — A11Y-02 button role]
+│   │   ├── StudentDetailPopup.jsx  [no A11Y changes needed]
+│   │   ├── PageHeader.jsx          [no changes needed]
+│   │   ├── ConvocatoriaSelector.jsx [DOCS only if JSDoc missing]
+│   │   └── DashboardSkeleton.jsx   [DOCS if JSDoc missing]
+│   ├── ui/
+│   │   ├── ProgressBar.jsx         [MODIFY — A11Y-02 progressbar ARIA]
+│   │   ├── StatCard.jsx            [MODIFY — A11Y-02 conditional role]
+│   │   ├── Badge.jsx               [DOCS if JSDoc missing]
+│   │   ├── ErrorBanner.jsx         [DOCS if JSDoc missing]
+│   │   ├── UpdateBanner.jsx        [DOCS if JSDoc missing]
+│   │   ├── LoadingSpinner.jsx      [DOCS if JSDoc missing]
+│   │   └── Modal.jsx               [no changes — already A11Y compliant]
+│   ├── ErrorBoundary.jsx           [DOCS if JSDoc missing]
+│   └── MobileContainer.jsx         [DOCS if JSDoc missing]
+├── hooks/
+│   ├── useConvocatorias.js         [DOCS if JSDoc missing]
+│   ├── useStudents.js              [DOCS if JSDoc missing]
+│   └── useDebounce.js              [DOCS if JSDoc missing]
+├── services/
+│   └── api.js                      [MODIFY — SEC token injection]
+├── config/
+│   └── users.js                    [MODIFY — SEC add token fields]
+├── utils/
+│   └── buildTeachersHierarchy.js   [DOCS if JSDoc missing]
+└── tests/
+    ├── TeacherCard.test.jsx         [NEW — A11Y + logic coverage]
+    ├── GroupTabs.test.jsx           [NEW — A11Y + tab behavior]
+    ├── AlertList.test.jsx           [NEW — A11Y + student click]
+    ├── buildTeachersHierarchy.test.js [NEW — pure function]
+    └── useStudents.test.jsx         [NEW — hook logic]
+
+apps-script/
+└── Codigo.js                        [MODIFY — SEC validateToken]
+```
+
+---
+
+## Build Order: Why This Sequence
+
+The hardening work has a dependency constraint: SEC changes affect api.js, which affects the tests for api.js and LoginPage.
+
+```
+DOCS-01 (JSDoc additions)
+    ↓  (independent — safe to do first, zero behavior change)
+
+A11Y-01 (TeacherCard keyboard)
+    ↓  (independent of SEC, but A11Y tests come after)
+
+A11Y-02 (ARIA attributes)
+    ↓  (independent of SEC, clears ARIA debt before tests verify it)
+
+TEST: TeacherCard + GroupTabs + AlertList + buildTeachersHierarchy
+    ↓  (tests written AFTER A11Y changes — verifies the new contracts)
+
+SEC-01 to SEC-06 (Apps Script auth)
+    ↓  (changes api.js + users.js + Codigo.js together)
+
+TEST: api.test additions + LoginPage.test token assertions
+    ↓  (tests for SEC written AFTER SEC is implemented — prevents red tests mid-sec)
+
+TEST: useStudents + remaining coverage push to 60%
+```
+
+**Rationale:**
+- DOCS first: zero risk, zero behavior change, unblocks everything
+- A11Y before their tests: test contracts must reflect the final ARIA structure
+- SEC last before its tests: api.js changes would break existing api.test.jsx if written before SEC validates cleanly
+- useStudents tests last: most complex, depends on stable api.js
+
+---
+
+## Architectural Patterns
+
+### Pattern 1: Accessible Interactive Div → Button Conversion
+
+**What:** Replace `<div onClick>` with `<button type="button">` for any element that has a click handler and is the primary interaction point.
+**When to use:** Every time. Native button elements get keyboard focus, Enter/Space handling, role, and cursor for free. Divs require manual `role`, `tabIndex`, `onKeyDown` to match — more code, more risk of missing something.
+**Trade-offs:** Converting divs to buttons may affect layout if the parent expects a div. Use `className="w-full text-left bg-transparent border-0 p-0"` to reset button defaults while keeping existing visual structure.
+
+### Pattern 2: aria-expanded + aria-controls for Disclosure Widgets
+
+**What:** Any element that shows/hides content on click must signal its state to AT (screen readers, switch access).
+**When to use:** TeacherCard teacher header, GroupSection group header — both are disclosure widgets per ARIA Authoring Practices Guide.
+**Implementation:**
+```jsx
+// Trigger
+<button
+  aria-expanded={isExpanded}
+  aria-controls="panel-id"
+>
+
+// Panel
+<div id="panel-id">
+```
+The `aria-controls` id must be unique per instance. Use `teacher.id` or `group.id` as suffix.
+
+### Pattern 3: Token Injection at the Service Boundary
+
+**What:** Auth tokens are read from sessionStorage once per request inside api.js, not threaded through as function parameters.
+**When to use:** When auth state lives in sessionStorage and all API calls go through a single service module.
+**Trade-offs:** Couples api.js to sessionStorage. Acceptable here because this pattern is already used (ProtectedRoute reads sessionStorage directly). Alternative would be a React Context for auth state — overkill for 8 users.
+
+### Pattern 4: Script Properties for Secrets in Apps Script
+
+**What:** Sensitive values (token whitelist, config) go in `PropertiesService.getScriptProperties()`, never in script code.
+**When to use:** Always for Apps Script secrets. Script code is visible to any editor of the script. Script Properties are editor-visible but not exposed in URL or response.
+**Trade-offs:** Requires manual setup in the Apps Script UI after each clean deploy. Document the setup step explicitly.
+
+---
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Adding aria-* to a div When a button Would Work
+
+**What people do:** `<div role="button" tabIndex={0} onKeyDown={...} onClick={...}>` — four attributes to simulate what a native button provides for free.
+**Why it's wrong:** Misses edge cases (Enter vs Space behavior differs between role=button and native button in some AT), adds maintenance burden, violates progressive enhancement.
+**Do this instead:** `<button type="button" className="...reset styles...">` — single element, full keyboard behavior, correct semantics.
+
+### Anti-Pattern 2: Putting Auth Tokens in URL Parameters Long-term
+
+**What people do:** `?token=xyz` in GET requests — simple to implement.
+**Why it's wrong:** Tokens appear in server logs, browser history, Referer headers, and can be shoulder-surfed. For a production-grade app this would be unacceptable.
+**Context for NovAttend:** For an internal 8-user PWA with no sensitive personal data beyond attendance percentages, this is an acceptable short-term tradeoff. The Apps Script Web App URL is already a shared secret. Flag this as MEDIUM risk, not critical.
+**Do this instead (future):** Move token to a POST body or custom header. Apps Script does support reading request headers in newer runtimes.
+
+### Anti-Pattern 3: Testing A11Y Changes Before They Are Implemented
+
+**What people do:** Write `expect(button).toHaveAttribute('aria-expanded', 'false')` tests before adding aria-expanded to the component, then add the ARIA alongside the test.
+**Why it's problematic:** With TDD this is intentional (RED-GREEN). But in this codebase, the A11Y changes are architectural modifications, not TDD additions. Writing tests first creates red tests in the suite that block `npm test` and cause confusion.
+**Do this instead:** Complete A11Y modifications first (GREEN), then write tests that verify the new contracts. This matches how the existing test suite was built.
+
+---
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Google Apps Script Web App | REST over HTTPS, JSON response | After SEC: add token param. CORS is handled by Apps Script (`Access-Control-Allow-Origin: *`). |
+| Google Fonts | PWA CacheFirst (Workbox) | No changes needed. |
+| Vercel | Static hosting, no SSR | No changes needed. |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `LoginPage` → `sessionStorage` | Direct write via `sessionStorage.setItem` | After SEC: token field added to stored user object |
+| `ProtectedRoute` → `sessionStorage` | Direct read for role check | No changes — role check is separate from API auth |
+| `api.js` → `sessionStorage` | NEW after SEC: read token per request | Coupling is acceptable for this scale |
+| `TeacherCard` → `DashboardPage` | Props: teacher object, isExpanded, onToggle, onStudentClick | After A11Y: no prop interface change, only internal DOM structure |
+| `Modal` → `useFocusTrap` | Hook returns containerRef, attaches keydown listener | Already complete. AlertList and StudentDetailPopup consume Modal without changes |
+| `useDashboard` → `useDashboard.test.jsx` | renderHook contract test (23 keys) | After any useDashboard changes, contract test will catch interface drift |
 
 ---
 
 ## Sources
 
-- React documentation — Custom Hooks: https://react.dev/learn/reusing-logic-with-custom-hooks (HIGH confidence)
-- Robin Wieruch — React Router v7 Lazy Loading: https://www.robinwieruch.de/react-router-lazy-loading/ (HIGH confidence, current)
-- Mykola Aleksandrov — React.lazy + Suspense + Vite manualChunks (2025): http://www.mykolaaleksandrov.dev/posts/2025/10/react-lazy-suspense-vite-manualchunks/ (MEDIUM confidence, unverified author but current year, consistent with official Vite docs)
-- Soledad Penades — manualChunks for dependency caching (2025): https://soledadpenades.com/posts/2025/use-manual-chunks-with-vite-to-facilitate-dependency-caching/ (MEDIUM confidence, current year)
-- vite-plugin-pwa official docs — Service Worker Precache: https://vite-pwa-org.netlify.app/guide/service-worker-precache (HIGH confidence, official)
-- patterns.dev — Container/Presentational Pattern: https://www.patterns.dev/react/presentational-container-pattern/ (HIGH confidence)
-- Vite official docs — Building for Production: https://v3.vitejs.dev/guide/build (HIGH confidence)
+- WCAG 2.1 — Keyboard Accessible (2.1.1): https://www.w3.org/WAI/WCAG21/Understanding/keyboard.html
+- ARIA Authoring Practices Guide — Disclosure pattern: https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/
+- ARIA Authoring Practices Guide — Tabs pattern: https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+- Google Apps Script — PropertiesService: https://developers.google.com/apps-script/reference/properties
+- Live codebase audit (2026-03-31) — HIGH confidence, verified against actual file contents
+
+---
+*Architecture research for: NovAttend v1.1 Hardening (A11Y, DOCS, SEC, TEST)*
+*Researched: 2026-03-31*
