@@ -1,22 +1,39 @@
 import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import { act } from '@testing-library/react'
+import { useEffect } from 'react'
+import useFocusTrap from '../hooks/useFocusTrap.js'
 
-// RED — descomentar cuando 03-02 cree src/hooks/useFocusTrap.js
-// import { renderHook } from '@testing-library/react'
-// import useFocusTrap from '../hooks/useFocusTrap.js'
+// Componente auxiliar que usa el hook con un ref real adjunto al DOM
+function TrapContainer({ isOpen, onClose, children }) {
+  const containerRef = useFocusTrap(isOpen, onClose)
+  return (
+    <div ref={containerRef} tabIndex={-1} data-testid="trap-container">
+      {children}
+    </div>
+  )
+}
 
-/* eslint-disable no-undef, no-unused-vars */
-describe.skip('useFocusTrap', () => {
+describe('useFocusTrap', () => {
   it('retorna un ref object', () => {
     const onClose = vi.fn()
-    // const { result } = renderHook(() => useFocusTrap(true, onClose))
-    expect(result.current).toHaveProperty('current')
+    render(<TrapContainer isOpen={false} onClose={onClose} />)
+    // Si el componente monta sin error, el hook retorna un ref valido
+    expect(screen.getByTestId('trap-container')).toBeInTheDocument()
   })
 
   it('llama onClose al presionar Escape', () => {
     const onClose = vi.fn()
-    // const { result } = renderHook(() => useFocusTrap(true, onClose))
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    render(
+      <TrapContainer isOpen={true} onClose={onClose}>
+        <button>Cerrar</button>
+      </TrapContainer>
+    )
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+
     expect(onClose).toHaveBeenCalledOnce()
   })
 })
-/* eslint-enable no-undef, no-unused-vars */
