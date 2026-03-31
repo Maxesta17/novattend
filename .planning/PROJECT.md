@@ -41,10 +41,10 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - [ ] manualChunks en Vite (vendor split)
 - [ ] Paralelizar llamadas API en Dashboard (getConvocatorias + getProfesores)
 
-**Ola 3 — Arquitectura:**
-- [ ] DashboardPage refactorizado a <250 lineas (extraer hooks + subcomponentes)
+**Ola 3 — Arquitectura:** (Validated in Phase 3: Arquitectura y Accesibilidad)
+- [x] DashboardPage refactorizado a <250 lineas (extraer hooks — useDashboard.js)
 - [x] Ruta 404/NotFound agregada (moved to Phase 1)
-- [ ] Focus trap + Escape en Modal
+- [x] Focus trap + Escape en Modal (useFocusTrap.js + ARIA role/aria-modal/aria-label)
 - [ ] Soporte de teclado en TeacherCard expandible
 - [ ] JSDoc en 11 componentes faltantes
 
@@ -62,8 +62,8 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - **Score objetivo post Olas 1-3:** ~8.0/10
 - **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
 - **Bundle actual:** 271 KB monolitico (sin code-splitting)
-- **DashboardPage:** 272 lineas (viola limite de 250 de CLAUDE.md)
-- **Tests actuales:** 70 tests, 11 suites (post Phase 1)
+- **DashboardPage:** 127 lineas (refactorizado en Phase 3, logica en useDashboard.js)
+- **Tests actuales:** 89 tests, 16 suites (post Phase 3)
 - **Deployment:** Vercel (frontend) + Google Apps Script (backend)
 
 ## Constraints
@@ -101,4 +101,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after Phase 1 completion*
+*Last updated: 2026-03-31 after Phase 3 completion*
