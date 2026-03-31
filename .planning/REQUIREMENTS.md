@@ -23,10 +23,10 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 
 ### Rendimiento
 
-- [ ] **PERF-01**: 4 rutas post-login usan React.lazy() + Suspense (code-splitting por ruta)
+- [x] **PERF-01**: 4 rutas post-login usan React.lazy() + Suspense (code-splitting por ruta)
 - [x] **PERF-02**: StudentRow, TeacherCard y StatCard envueltos en React.memo con useCallback en handlers
 - [x] **PERF-03**: searchQuery en DashboardPage usa debounce (300ms) para evitar re-renders por keystroke
-- [ ] **PERF-04**: Vite config tiene manualChunks separando vendor-react y vendor-router
+- [x] **PERF-04**: Vite config tiene manualChunks separando vendor-react y vendor-router
 - [x] **PERF-05**: Dashboard paraleliza getConvocatorias + getProfesores con Promise.all
 
 ### Arquitectura
@@ -92,10 +92,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ERR-02 | Phase 1 | Complete |
 | ERR-03 | Phase 1 | Complete |
 | ERR-04 | Phase 1 | Complete |
-| PERF-01 | Phase 2 | Pending |
+| PERF-01 | Phase 2 | Complete |
 | PERF-02 | Phase 2 | Complete |
 | PERF-03 | Phase 2 | Complete |
-| PERF-04 | Phase 2 | Pending |
+| PERF-04 | Phase 2 | Complete |
 | PERF-05 | Phase 2 | Complete |
 | ARCH-01 | Phase 3 | Pending |
 | ARCH-02 | Phase 3 | Pending |

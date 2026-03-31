@@ -47,7 +47,7 @@ Plans:
 **UI hint**: yes
 Plans:
 - [x] 02-01-PLAN.md — PWA-04: registerType prompt + UpdateBanner + useRegisterSW en main.jsx
-- [ ] 02-02-PLAN.md — Code-splitting: React.lazy + Suspense + LoadingSpinner + manualChunks vendor
+- [x] 02-02-PLAN.md — Code-splitting: React.lazy + Suspense + LoadingSpinner + manualChunks vendor
 - [x] 02-03-PLAN.md — Optimizacion: React.memo + debounce busqueda + useCallback handlers
 
 ### Phase 3: Arquitectura y Accesibilidad
