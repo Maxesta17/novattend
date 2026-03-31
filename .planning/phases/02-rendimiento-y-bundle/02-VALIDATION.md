@@ -38,14 +38,12 @@ created: 2026-03-31
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 02-01-01 | 01 | 1 | PWA-04 | unit | `npm test -- --testPathPattern UpdateBanner` | No — W0 | ⬜ pending |
-| 02-01-02 | 01 | 1 | PWA-04 | unit | `npm test -- --testPathPattern UpdateBanner` | No — W0 | ⬜ pending |
-| 02-02-01 | 02 | 2 | PERF-01 | unit | `npm test -- --testPathPattern LoadingSpinner` | No — W0 | ⬜ pending |
-| 02-02-02 | 02 | 2 | PERF-01 | smoke | `npm run build` | ✅ | ⬜ pending |
-| 02-03-01 | 03 | 2 | PERF-02 | unit | `npm test` | ✅ | ⬜ pending |
-| 02-04-01 | 04 | 2 | PERF-03 | manual | Prueba visual en devtools | — | ⬜ pending |
-| 02-05-01 | 05 | 2 | PERF-04 | smoke | `npm run build` | ✅ | ⬜ pending |
-| 02-06-01 | 06 | 2 | PERF-05 | unit | `npm test` | ✅ | ⬜ pending |
+| 02-01-T1 | 01 | 1 | PWA-04 | unit | `npm test -- --testPathPattern UpdateBanner` | No — W0 | ⬜ pending |
+| 02-01-T2 | 01 | 1 | PWA-04 | smoke | `npm run build && npm run lint` | ✅ | ⬜ pending |
+| 02-02-T1 | 02 | 2 | PERF-01 | unit | `npm test -- --testPathPattern LoadingSpinner` | No — W0 | ⬜ pending |
+| 02-02-T2 | 02 | 2 | PERF-01, PERF-04 | smoke | `npm run build && ls dist/assets/ \| grep vendor` | ✅ | ⬜ pending |
+| 02-03-T1 | 03 | 1 | PERF-02 | unit | `npm test && npm run lint` | ✅ | ⬜ pending |
+| 02-03-T2 | 03 | 1 | PERF-03, PERF-05 | unit+manual | `npm test && npm run lint` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
