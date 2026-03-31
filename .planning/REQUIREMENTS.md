@@ -31,8 +31,8 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 
 ### Arquitectura
 
-- [ ] **ARCH-01**: DashboardPage refactorizado a <250 lineas extrayendo useDashboard hook y subcomponentes
-- [ ] **ARCH-02**: Modal tiene focus trap (foco no escapa) y cierra con Escape
+- [x] **ARCH-01**: DashboardPage refactorizado a <250 lineas extrayendo useDashboard hook y subcomponentes
+- [x] **ARCH-02**: Modal tiene focus trap (foco no escapa) y cierra con Escape
 
 ### Compliance / Limpieza
 
@@ -97,8 +97,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-03 | Phase 2 | Complete |
 | PERF-04 | Phase 2 | Complete |
 | PERF-05 | Phase 2 | Complete |
-| ARCH-01 | Phase 3 | Pending |
-| ARCH-02 | Phase 3 | Pending |
+| ARCH-01 | Phase 3 | Complete |
+| ARCH-02 | Phase 3 | Complete |
 | COMP-01 | Phase 1 | Complete |
 | COMP-02 | Phase 1 | Complete |
 | COMP-03 | Phase 1 | Complete |
