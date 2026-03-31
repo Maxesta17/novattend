@@ -49,7 +49,7 @@ Declared values (must be multiples of 4):
 | 3xl | 64px | Espaciado a nivel de pagina |
 
 Exceptions:
-- Touch target minimo del boton "Actualizar" en el SW banner: 44px de altura (py-[11px] con texto 14px). Requerimiento de accesibilidad movil.
+- Touch target minimo del boton "Actualizar" en el SW banner: 44px de altura via `py-2 min-h-[44px]`. Requerimiento de accesibilidad movil. 44px es multiplo de 4.
 - El spinner de carga se renderiza en un contenedor centrado de 64x64px (icono de 32px + margen visual).
 
 **Fuente:** Escala 8-point ya aplicada en la app. Excepcion touch target derivada de mobile-first max-width 430px.
@@ -60,14 +60,13 @@ Exceptions:
 
 | Role | Size | Weight | Line Height | Font | Uso |
 |------|------|--------|-------------|------|-----|
-| Body | 14px (text-sm) | 400 (font-normal) | 1.5 | font-montserrat | Texto del SW banner "Nueva version disponible" |
-| Label | 12px (text-xs) | 700 (font-bold) | 1.4 | font-montserrat | Boton "Actualizar" en SW banner |
-| Heading | 16px (text-base) | 600 (font-semibold) | 1.4 | font-montserrat | Texto "Cargando..." bajo el spinner |
-| Display | 14px (text-sm) | 400 (font-normal) | 1.5 | font-montserrat | Mensaje secundario en spinner fallback (opcional) |
+| Body | 14px (text-sm) | 400 (font-normal) | 1.5 | font-montserrat | Texto del SW banner "Nueva version disponible"; mensaje secundario en spinner fallback |
+| Emphasis | 12px (text-xs) | 600 (font-semibold) | 1.4 | font-montserrat | Boton "Actualizar" en SW banner; texto "Cargando..." bajo el spinner |
 
-Nota: font-cinzel se reserva para headings de pagina (PageHeader). Los dos componentes nuevos
-de esta fase (SW banner + LoadingSpinner) usan exclusivamente font-montserrat, coherente con
-ErrorBanner.jsx (patron de referencia).
+Nota: El peso de enfasis unificado es 600 (font-semibold), aplicado tanto al CTA del banner
+como al label del spinner. Se elimina 700 (font-bold) para mantener exactamente 2 pesos
+declarados en esta fase. font-cinzel se reserva para headings de pagina (PageHeader); los dos
+componentes nuevos usan exclusivamente font-montserrat, coherente con ErrorBanner.jsx.
 
 **Fuente:** Patron de ErrorBanner.jsx (text-xs font-montserrat) extrapolado a SW banner.
 Decisiones D-06 de CONTEXT.md para el spinner.
@@ -115,7 +114,7 @@ de "error" (error-soft/rojo) — patron inverso a ErrorBanner.jsx.
 | Layout | `flex items-center justify-between gap-3` |
 | Visibilidad | Siempre visible cuando `needRefresh === true`. Sin boton de cierre (D-03). |
 | Texto | "Nueva version disponible" — `text-text-dark text-sm font-montserrat` |
-| Boton "Actualizar" | `bg-burgundy text-white text-xs font-bold font-montserrat rounded-lg px-4 py-[11px] shrink-0` |
+| Boton "Actualizar" | `bg-burgundy text-white text-xs font-semibold font-montserrat rounded-lg px-4 py-2 min-h-[44px] shrink-0` |
 | Hover boton | `hover:bg-burgundy-light transition-colors duration-200` |
 | Role ARIA | `role="status"` en el contenedor (no es error, es informativo) |
 | aria-live | `aria-live="polite"` — no interrumpe lector de pantalla mid-task |
@@ -134,7 +133,7 @@ Renderiza null cuando `needRefresh === false`. No tiene estado interno.
 | Icono SVG | Circulo de 32x32px con arco animado — `animate-spin` de Tailwind |
 | Color circulo base | `stroke-burgundy/30` (circulo completo, opacidad baja) |
 | Color arco animado | `stroke-gold` (arco de 75%, strokeLinecap: round) |
-| Texto "Cargando..." | `text-white/80 text-sm font-montserrat font-normal` |
+| Texto "Cargando..." | `text-white/80 text-xs font-montserrat font-semibold` |
 | Duracion animacion | 0.8s — definida via `animation: spin 0.8s linear infinite` en Tailwind |
 
 **Nota sobre animacion:** Tailwind `animate-spin` usa `spin` keyframe ya incluido en Tailwind core
