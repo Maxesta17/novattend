@@ -12,7 +12,7 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 - [x] **PWA-01**: navigateFallback cambiado de /offline.html a /index.html para que la SPA funcione offline
 - [x] **PWA-02**: Regex de runtime caching captura script.googleusercontent.com ademas de script.google.com
 - [x] **PWA-03**: Manifest PWA tiene start_url, scope, y lang="es" correctos
-- [ ] **PWA-04**: Service worker usa registerType prompt (no autoUpdate) para evitar ChunkLoadError mid-session con code-splitting
+- [x] **PWA-04**: Service worker usa registerType prompt (no autoUpdate) para evitar ChunkLoadError mid-session con code-splitting
 
 ### Error Handling / UX
 
@@ -87,7 +87,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PWA-01 | Phase 1 | Complete |
 | PWA-02 | Phase 1 | Complete |
 | PWA-03 | Phase 1 | Complete |
-| PWA-04 | Phase 2 | Pending |
+| PWA-04 | Phase 2 | Complete |
 | ERR-01 | Phase 1 | Complete |
 | ERR-02 | Phase 1 | Complete |
 | ERR-03 | Phase 1 | Complete |
