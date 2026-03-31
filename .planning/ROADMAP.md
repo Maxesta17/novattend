@@ -57,8 +57,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. DashboardPage.jsx tiene menos de 250 lineas y toda la logica vive en useDashboard.js — el archivo es legible sin scroll
   2. Al abrir un modal, el foco queda atrapado dentro — Tab no escapa al fondo y Escape cierra el modal
-  3. El refactor de DashboardPage no rompe ningun test existente — los 19 tests pasan en verde tras la Fase 3
-**Plans**: TBD
+  3. El refactor de DashboardPage no rompe ningun test existente — los 79 tests pasan en verde tras la Fase 3
+**Plans:** 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — Extraer useDashboard hook — DashboardPage a puro JSX orquestador (<250 lineas)
+- [ ] 03-02-PLAN.md — Focus trap + ARIA en Modal — useFocusTrap hook + ariaLabel en consumidores
 
 ## Progress
 
@@ -69,4 +72,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Estabilidad Critica | 3/3 | Complete   | 2026-03-30 |
 | 2. Rendimiento y Bundle | 3/3 | Complete | 2026-03-31 |
-| 3. Arquitectura y Accesibilidad | 0/? | Not started | - |
+| 3. Arquitectura y Accesibilidad | 0/2 | In progress | - |
