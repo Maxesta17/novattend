@@ -1,12 +1,24 @@
-# NovAttend — Mejoras Post-Auditoria (Olas 1-3)
+# NovAttend — Sistema de Control de Asistencia
 
 ## What This Is
 
-Ciclo de mejoras para NovAttend basado en una auditoria completa de codigo, rendimiento, PWA, seguridad y calidad. Este milestone cubre las Olas 1-3: fixes criticos, optimizacion de rendimiento y refactorizacion de arquitectura. La app es un sistema de control de asistencia para LingNova Academy, usada por 7 profesores y 1 CEO.
+Sistema de control de asistencia para LingNova Academy. PWA mobile-first usada por 7 profesores y 1 CEO. Shipped v1.0 con estabilidad critica, rendimiento optimizado y arquitectura accesible.
 
 ## Core Value
 
 La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y la funcionalidad offline que la PWA promete debe funcionar de verdad.
+
+## Current State
+
+**v1.0 shipped (2026-03-31)** — Mejoras Post-Auditoria (Olas 1-3) completas.
+
+- **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
+- **Bundle:** Code-split por ruta (62KB gzip main, vendors separados)
+- **Tests:** 89 tests, 16 suites (Vitest + Testing Library)
+- **DashboardPage:** 127 lineas (refactorizado, logica en useDashboard.js hook)
+- **Modal:** Accesible — focus trap, Escape, ARIA role/aria-modal/aria-label
+- **PWA:** Offline funcional, SW prompt mode, UpdateBanner
+- **Deployment:** Vercel (frontend) + Google Apps Script (backend)
 
 ## Requirements
 
@@ -19,52 +31,30 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - ✓ Selector de convocatorias multiples — existing
 - ✓ Backend Google Apps Script con endpoints REST — existing
 - ✓ Guardias de ruta por rol — existing
+- ✓ PWA offline funcional (navigateFallback + regex cache) — v1.0
+- ✓ Error handling visible (ErrorBanner + api.js res.ok) — v1.0
+- ✓ SavedPage present===0 bug fix — v1.0
+- ✓ Pagina 404 branded — v1.0
+- ✓ Compliance Tailwind (tokens, lang="es", npm audit) — v1.0
+- ✓ Code-splitting React.lazy + Suspense (4 rutas) — v1.0
+- ✓ React.memo + debounce + useCallback optimizations — v1.0
+- ✓ SW registerType prompt + UpdateBanner — v1.0
+- ✓ DashboardPage refactorizado a <250 lineas (useDashboard hook) — v1.0
+- ✓ Modal accesible con focus trap + Escape + ARIA — v1.0
 
-### Active
+### Active (Next Milestone)
 
-**Ola 1 — Fixes criticos:** (Validated in Phase 1: Estabilidad Critica)
-- [x] navigateFallback corregido a /index.html (PWA offline funcional)
-- [x] Bug SavedPage present===0 corregido
-- [x] api.js verifica res.ok antes de parsear JSON
-- [x] Feedback de error visible al guardar/cargar asistencia (ErrorBanner)
-- [x] Regex de cache API matchea script.googleusercontent.com
-- [x] Hex hardcodeados reemplazados por tokens Tailwind (token disabled)
-- [x] html lang="es" + metadata PWA completa
-- [x] Vulnerabilidades npm resueltas (npm audit fix)
-- [x] Pagina 404 branded con ruta catch-all
-- [x] apps-script/ ignorado en ESLint config
-
-**Ola 2 — Rendimiento:**
-- [ ] Code-splitting con React.lazy() + Suspense en rutas post-login
-- [ ] React.memo en StudentRow, TeacherCard, StatCard
-- [ ] Debounce en searchQuery del Dashboard
-- [ ] manualChunks en Vite (vendor split)
-- [ ] Paralelizar llamadas API en Dashboard (getConvocatorias + getProfesores)
-
-**Ola 3 — Arquitectura:** (Validated in Phase 3: Arquitectura y Accesibilidad)
-- [x] DashboardPage refactorizado a <250 lineas (extraer hooks — useDashboard.js)
-- [x] Ruta 404/NotFound agregada (moved to Phase 1)
-- [x] Focus trap + Escape en Modal (useFocusTrap.js + ARIA role/aria-modal/aria-label)
-- [ ] Soporte de teclado en TeacherCard expandible
-- [ ] JSDoc en 11 componentes faltantes
+- [ ] Soporte de teclado en TeacherCard expandible (A11Y-01)
+- [ ] Atributos ARIA en componentes clave (A11Y-02)
+- [ ] JSDoc en 11 componentes faltantes (DOCS-01)
+- [ ] Autenticacion server-side en Apps Script (SEC-01..SEC-06)
+- [ ] Subir cobertura de tests a 60% (TEST-01..TEST-03)
 
 ### Out of Scope
 
-- Autenticacion server-side (Ola 4, ~15h) — requiere cambios en Apps Script backend, demasiado complejo para este milestone
-- Subir cobertura de tests a 60% (Ola 5, ~8h) — incremental, se hara en milestone dedicado
-- Migracion a TypeScript — no solicitada, la app funciona en JSX
-- Rediseno visual — el UI score ya es 9.0/10, no necesita cambios
-
-## Context
-
-- **Auditoria completa:** 6 informes en `docs/auditoria/` (errores, dependencias, rendimiento, PWA, seguridad, calidad)
-- **Score actual:** 7.3/10 global. Areas mas bajas: seguridad (4.5), accesibilidad (5.0), rendimiento (6.5)
-- **Score objetivo post Olas 1-3:** ~8.0/10
-- **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
-- **Bundle actual:** 271 KB monolitico (sin code-splitting)
-- **DashboardPage:** 127 lineas (refactorizado en Phase 3, logica en useDashboard.js)
-- **Tests actuales:** 89 tests, 16 suites (post Phase 3)
-- **Deployment:** Vercel (frontend) + Google Apps Script (backend)
+- Migracion a TypeScript — no solicitada, app funciona en JSX
+- Rediseno visual — UI score 9.0/10, no necesita cambios
+- Background Sync (IndexedDB queue) — complejidad alta, 8 usuarios internos no lo justifican
 
 ## Constraints
 
@@ -72,33 +62,21 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - **Atomicidad:** Max 250 lineas por archivo (regla CLAUDE.md)
 - **Estilos:** Cero inline styles, solo Tailwind tokens
 - **Idioma:** UI/comentarios en espanol, codigo en ingles
-- **Backend:** Google Apps Script — no se toca en este milestone (Ola 4)
 - **Mobile-first:** Max-width 430px, no romper layout existente
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Olas 1-3 primero, 4-5 despues | 80% de mejoras funcionales con ~19h vs 42h totales | — Pending |
-| No tocar backend Apps Script | Seguridad requiere cambios complejos en Code.gs, se difiere | — Pending |
-| Priorizar estabilidad + rendimiento | Bugs silenciosos y carga lenta son lo que mas impacta a usuarios | — Pending |
+| Olas 1-3 primero, 4-5 despues | 80% de mejoras funcionales con ~19h vs 42h totales | ✓ Good — shipped v1.0 en 2 dias |
+| No tocar backend Apps Script | Seguridad requiere cambios complejos en Code.gs, se difiere | ✓ Good — scope controlado |
+| Priorizar estabilidad + rendimiento | Bugs silenciosos y carga lenta son lo que mas impacta a usuarios | ✓ Good — 0 bugs criticos, bundle split |
+| Hook extraction vs subcomponents | DashboardPage solo necesita hook, no subcomponentes JSX | ✓ Good — 127 lineas sin fragmentar JSX |
+| Custom focus trap vs libreria | Zero dependencias externas, hook reutilizable de 81 lineas | ✓ Good — sin bloat |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd:transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd:complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
-
 ---
-*Last updated: 2026-03-31 after Phase 3 completion*
+*Last updated: 2026-03-31 after v1.0 milestone*
