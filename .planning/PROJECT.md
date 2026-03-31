@@ -8,6 +8,17 @@ Sistema de control de asistencia para LingNova Academy. PWA mobile-first usada p
 
 La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y la funcionalidad offline que la PWA promete debe funcionar de verdad.
 
+## Current Milestone: v1.1 Hardening (Olas 4-5)
+
+**Goal:** Cerrar toda la deuda tecnica identificada en la auditoria — accesibilidad, documentacion, seguridad backend y cobertura de tests.
+
+**Target features:**
+- Soporte de teclado en TeacherCard expandible (A11Y)
+- Atributos ARIA en componentes clave (A11Y)
+- JSDoc en 11 componentes faltantes (DOCS)
+- Autenticacion server-side en Apps Script (SEC)
+- Subir cobertura de tests a 60% (TEST)
+
 ## Current State
 
 **v1.0 shipped (2026-03-31)** — Mejoras Post-Auditoria (Olas 1-3) completas.
@@ -42,7 +53,7 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - ✓ DashboardPage refactorizado a <250 lineas (useDashboard hook) — v1.0
 - ✓ Modal accesible con focus trap + Escape + ARIA — v1.0
 
-### Active (Next Milestone)
+### Active
 
 - [ ] Soporte de teclado en TeacherCard expandible (A11Y-01)
 - [ ] Atributos ARIA en componentes clave (A11Y-02)
@@ -79,4 +90,4 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-03-31 after v1.0 milestone*
+*Last updated: 2026-03-31 after v1.1 milestone start*
