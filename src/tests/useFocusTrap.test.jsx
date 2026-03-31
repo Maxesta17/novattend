@@ -1,7 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { act } from '@testing-library/react'
-import { useEffect } from 'react'
+import { render, screen, act } from '@testing-library/react'
 import useFocusTrap from '../hooks/useFocusTrap.js'
 
 // Componente auxiliar que usa el hook con un ref real adjunto al DOM

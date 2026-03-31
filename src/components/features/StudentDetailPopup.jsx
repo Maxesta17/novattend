@@ -80,7 +80,7 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
   const monthlyStatus = getAttendanceColor(student.monthly)
 
   return (
-    <Modal isOpen onClose={onClose}>
+    <Modal isOpen onClose={onClose} ariaLabel="Detalle de asistencia del alumno">
       {/* Cabecera con avatar */}
       <div className="flex flex-col items-center mb-5">
         <Avatar

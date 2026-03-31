@@ -9,7 +9,7 @@ import Modal from '../ui/Modal.jsx'
  */
 export default function AlertList({ students, onStudentClick, onClose }) {
   return (
-    <Modal isOpen onClose={onClose} className="max-h-[70vh] overflow-auto">
+    <Modal isOpen onClose={onClose} className="max-h-[70vh] overflow-auto" ariaLabel="Lista de alumnos en alerta">
       <h2 className="font-cinzel text-lg font-bold text-text-dark m-0 mb-1">
         Alumnos en Alerta
       </h2>
