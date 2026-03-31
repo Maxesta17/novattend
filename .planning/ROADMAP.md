@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Estabilidad Critica** - Corregir bugs de PWA, API y UX que hacen la app no-confiable (completed 2026-03-30)
 - [x] **Phase 2: Rendimiento y Bundle** - Code-splitting, memoizacion, debounce y paralelizacion de API (completed 2026-03-31)
-- [ ] **Phase 3: Arquitectura y Accesibilidad** - Refactor DashboardPage + Modal accesible con focus trap
+- [x] **Phase 3: Arquitectura y Accesibilidad** - Refactor DashboardPage + Modal accesible con focus trap (completed 2026-03-31)
 
 ## Phase Details
 
@@ -58,11 +58,11 @@ Plans:
   1. DashboardPage.jsx tiene menos de 250 lineas y toda la logica vive en useDashboard.js — el archivo es legible sin scroll
   2. Al abrir un modal, el foco queda atrapado dentro — Tab no escapa al fondo y Escape cierra el modal
   3. El refactor de DashboardPage no rompe ningun test existente — los 79 tests pasan en verde tras la Fase 3
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 03-00-PLAN.md — Wave 0: test stubs para useDashboard, useFocusTrap, y Modal ARIA
-- [ ] 03-01-PLAN.md — Extraer useDashboard hook — DashboardPage a puro JSX orquestador (<250 lineas)
-- [ ] 03-02-PLAN.md — Focus trap + ARIA en Modal — useFocusTrap hook + ariaLabel en consumidores
+- [x] 03-01-PLAN.md — Extraer useDashboard hook — DashboardPage a puro JSX orquestador (<250 lineas)
+- [x] 03-02-PLAN.md — Focus trap + ARIA en Modal — useFocusTrap hook + ariaLabel en consumidores
 
 ## Progress
 
@@ -73,4 +73,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Estabilidad Critica | 3/3 | Complete   | 2026-03-30 |
 | 2. Rendimiento y Bundle | 3/3 | Complete | 2026-03-31 |
-| 3. Arquitectura y Accesibilidad | 1/3 | In Progress|  |
+| 3. Arquitectura y Accesibilidad | 3/3 | Complete   | 2026-03-31 |
