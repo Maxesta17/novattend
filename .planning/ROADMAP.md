@@ -43,8 +43,12 @@ Plans:
   2. Cuando un Service Worker nuevo esta disponible mid-session, el profesor ve un prompt de actualizacion — no pierde el estado de asistencia que tiene en pantalla
   3. El Dashboard carga y muestra datos completos en menos tiempo que antes — getConvocatorias y getProfesores se ejecutan en paralelo
   4. Escribir en el campo de busqueda del Dashboard no causa lag visible — el debounce absorbe los keystrokes rapidos
-**Plans**: TBD
+**Plans:** 3 plans
 **UI hint**: yes
+Plans:
+- [ ] 02-01-PLAN.md — PWA-04: registerType prompt + UpdateBanner + useRegisterSW en main.jsx
+- [ ] 02-02-PLAN.md — Code-splitting: React.lazy + Suspense + LoadingSpinner + manualChunks vendor
+- [ ] 02-03-PLAN.md — Optimizacion: React.memo + debounce busqueda + useCallback handlers
 
 ### Phase 3: Arquitectura y Accesibilidad
 **Goal**: DashboardPage cumple el limite de 250 lineas de CLAUDE.md y el Modal es operable sin raton (focus trap + Escape)
@@ -64,5 +68,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Estabilidad Critica | 3/3 | Complete   | 2026-03-30 |
-| 2. Rendimiento y Bundle | 0/? | Not started | - |
+| 2. Rendimiento y Bundle | 0/3 | Planned | - |
 | 3. Arquitectura y Accesibilidad | 0/? | Not started | - |
