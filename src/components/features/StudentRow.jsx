@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import Avatar from '../ui/Avatar.jsx'
 import ToggleSwitch from '../ui/ToggleSwitch.jsx'
 
@@ -11,7 +12,7 @@ import ToggleSwitch from '../ui/ToggleSwitch.jsx'
  * @param {number} [props.delay=0] - Delay de animacion en segundos
  * @param {React.ReactNode} [props.stats] - Contenido extra (stats para dashboard)
  */
-export default function StudentRow({
+export default memo(function StudentRow({
   name,
   initials,
   isPresent,
@@ -56,4 +57,4 @@ export default function StudentRow({
       <ToggleSwitch checked={isPresent} onChange={onToggle} />
     </div>
   )
-}
+})

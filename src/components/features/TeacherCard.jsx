@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import Avatar from '../ui/Avatar.jsx'
 import Badge from '../ui/Badge.jsx'
 import { getAttendanceScheme } from '../../config/teachers.js'
@@ -11,7 +11,7 @@ import { getAttendanceScheme } from '../../config/teachers.js'
  * @param {function} props.onToggle - Handler al expandir/colapsar
  * @param {function} props.onStudentClick - Handler al pulsar un alumno
  */
-export default function TeacherCard({ teacher, isExpanded, onToggle, onStudentClick }) {
+export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStudentClick }) {
   const [expandedGroups, setExpandedGroups] = useState({})
   const teacherStudents = teacher.groups.flatMap(g => g.students)
   const teacherAttendance = teacherStudents.length > 0
@@ -67,7 +67,7 @@ export default function TeacherCard({ teacher, isExpanded, onToggle, onStudentCl
       )}
     </div>
   )
-}
+})
 
 function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onStudentClick }) {
   const groupAttendance = group.students.length > 0

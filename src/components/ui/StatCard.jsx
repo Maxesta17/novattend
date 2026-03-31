@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 /**
  * Tarjeta de estadistica con icono, valor y etiqueta.
  * @param {object} props
@@ -9,7 +11,7 @@
  * @param {string} [props.className] - Clases adicionales
  * @param {function} [props.onClick] - Handler de click opcional
  */
-export default function StatCard({
+export default memo(function StatCard({
   icon,
   value,
   label,
@@ -57,4 +59,4 @@ export default function StatCard({
       <div className={labelClasses}>{label}</div>
     </div>
   )
-}
+})
