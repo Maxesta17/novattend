@@ -86,7 +86,7 @@ export default function DashboardPage() {
         }
       })
     return () => { cancelled = true }
-  }, [convsLoading, convsError, convocatoria]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [convsLoading, convsError, convocatoria])
 
   // Cambio de convocatoria desde el selector
   const handleConvChange = async (conv) => {
