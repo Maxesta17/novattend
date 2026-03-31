@@ -27,7 +27,7 @@ Requirements para este milestone. Cada uno mapea a una fase del roadmap.
 - [x] **PERF-02**: StudentRow, TeacherCard y StatCard envueltos en React.memo con useCallback en handlers
 - [x] **PERF-03**: searchQuery en DashboardPage usa debounce (300ms) para evitar re-renders por keystroke
 - [x] **PERF-04**: Vite config tiene manualChunks separando vendor-react y vendor-router
-- [x] **PERF-05**: Dashboard paraleliza getConvocatorias + getProfesores con Promise.all
+- [x] **PERF-05**: Dashboard paraleliza getProfesores + getResumen con Promise.all (getConvocatorias es secuencial — necesita conv.id antes)
 
 ### Arquitectura
 

@@ -1,8 +1,8 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-03-05
-- **Hito:** Fase 14 — Auditoria baseline-ui + correcciones de diseno en 18 archivos
+- **Fecha:** 2026-03-31
+- **Hito:** Milestone Post-Auditoria Phase 2 — Rendimiento y Bundle (code-splitting, memo, debounce, PWA prompt)
 
 ## Resumen de Cambios (Fases 1-11)
 
@@ -183,9 +183,77 @@ Se ejecuto una auditoria completa de UI contra reglas opinionadas de calidad. Se
 - 7 profesores activos x 4 grupos = 28 hojas por convocatoria
 - Profesores: Samuel, Maria Wolf, Nadine, Marta Battistella, Elisabeth Shick, Myriam Marcia, Sonja
 
+### Sesion 2026-03-30 — Limpieza spreadsheet + clasp + fixes criticos
+
+#### clasp configurado
+- `npm install -g @google/clasp` + `clasp login` (manuruiz826@gmail.com)
+- Scripts clonados en `apps-script/` (Codigo.js, Gestion convocatorias.js, appsscript.json)
+- Apps Script API habilitada en settings de Google
+- Flujo: editar local → `clasp push` → nuevo deploy desde UI de Apps Script
+
+#### Limpieza del spreadsheet (via MCP google-sheets)
+- 999 filas fantasma eliminadas de ASISTENCIA (checkboxes FALSE que confundian getLastRow)
+- 29 hojas huerfanas de MAR26 eliminadas (convocatoria de prueba)
+- Fila vacia en CONVOCATORIAS eliminada, conv-abr26 movida a fila 2
+- Filas vacias con checkboxes en PROFESORES eliminadas
+- Separador [ ABR26 ] actualizado con fechas correctas
+
+#### Fixes en Codigo.js (subidos via clasp push, deploy v5)
+- **setupSheets**: checkboxes reducidos de 999 a 50 filas; ASISTENCIA.presente ya no recibe checkboxes masivos
+- **handleGuardarAsistencia**: reescrito de borrado fila-a-fila a filtrado+reescritura batch (una sola operacion setValues)
+
+#### Fix en AttendancePage.jsx
+- Estado `saveError` + mensaje visual rojo si el guardado de asistencia falla
+
+#### 5 mejoras de robustez en Gestion convocatorias.js (clasp push OK)
+
+1. **Bug critico — preservar datos en sincronizarHoja y sincronizarAlumnos**
+   - Ambas funciones ahora preservan email (col F), telefono (col G) y activo (col H) de alumnos existentes al reconstruir ALUMNOS
+   - Antes: hardcodeaba `'', '', true` — borraba datos y reactivaba alumnos desactivados
+
+2. **LockService + try/catch**
+   - `sincronizarHoja`: protegida con `LockService.getScriptLock().waitLock(10000)` + `try/finally` para `releaseLock`
+   - 9 funciones de menu envueltas en `try/catch` con `ui.alert('Error: ' + err.message)`
+
+3. **Nueva funcion: reactivarProfesor()**
+   - Simetrica a `desactivarProfesor`: lista profesores con `activo !== true`, Aurora elige, marca `activo=true`
+   - Log con accion `REACTIVAR_PROFESOR`
+   - Agregada al menu despues de "Desactivar profesor"
+
+4. **Batch setValue en quitarProfesorDeConvocatoria**
+   - Reemplazado loop de N llamadas `setValue(false)` por lectura+modificacion en memoria + un solo `setValues()` en columna H
+
+5. **Helper crearHojaGrupo(ss, hojaNombre, colorHex, nombreProfesor, grupo, posicion)**
+   - Logica duplicada de crear hoja de grupo (merge, colores, anchos, proteccion, freeze) extraida a funcion reutilizable
+   - Reemplazada en `crearConvocatoria` y `agregarProfesorAConvocatoria`
+
+#### Transferencia de historial para alumnos movidos (clasp push OK)
+
+Cuando Aurora mueve un alumno entre hojas de grupo (copiar/pegar nombre), el historial de asistencia se preserva:
+
+1. **sincronizarHoja y sincronizarAlumnos mejorados**
+   - Cuando un nombre no se encuentra en el grupo actual, busca en ALUMNOS si ya existe en la misma convocatoria (cualquier profesor/grupo)
+   - Si existe → reutiliza su `alumno_id` en vez de crear uno nuevo
+   - Ocurre automaticamente en cada onEdit
+
+2. **Nueva funcion: transferirHistorial()**
+   - Lee ALUMNOS (ubicacion actual de cada alumno) y ASISTENCIA
+   - Detecta registros de asistencia cuyo profesor/grupo no coincide con la ubicacion actual
+   - Los corrige en batch (un solo setValues)
+   - Recalcula estadisticas de todos los grupos
+   - Menu: "Transferir historial de alumnos movidos"
+
+**Flujo Aurora (3 pasos):**
+1. Copiar/pegar nombres entre hojas como siempre
+2. Borrar los nombres de las hojas viejas
+3. Menu → "Transferir historial de alumnos movidos"
+
+## Estado
+- **Rama:** main
+- **Archivos modificados:** `apps-script/Gestion convocatorias.js`
+- **clasp push:** OK (3 archivos)
+- **Deploy pendiente:** nuevo deploy desde UI de Apps Script
+
 ## Siguiente Paso
-1. Copiar Code.gs y gestionConvocatorias.gs actualizados al editor de Apps Script
-2. Hacer nuevo deploy de Web App en Apps Script (Deploy > New deployment)
-3. Hacer deploy a Vercel con los cambios (`vercel --prod`)
-4. Validacion end-to-end: pasar lista con samuel, verificar que columnas B/C/D se actualizan en la hoja de grupo
-5. Onboarding: Aurora rellena alumnos (tutorial-aurora.md), profesores instalan PWA
+1. Nuevo deploy desde UI de Apps Script (nueva version web app)
+2. Hacer commit de los cambios locales

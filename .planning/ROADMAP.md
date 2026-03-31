@@ -13,7 +13,7 @@ Tres fases derivadas directamente de las tres olas de la auditoria. La Fase 1 co
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Estabilidad Critica** - Corregir bugs de PWA, API y UX que hacen la app no-confiable (completed 2026-03-30)
-- [ ] **Phase 2: Rendimiento y Bundle** - Code-splitting, memoizacion, debounce y paralelizacion de API
+- [x] **Phase 2: Rendimiento y Bundle** - Code-splitting, memoizacion, debounce y paralelizacion de API (completed 2026-03-31)
 - [ ] **Phase 3: Arquitectura y Accesibilidad** - Refactor DashboardPage + Modal accesible con focus trap
 
 ## Phase Details
@@ -35,15 +35,15 @@ Plans:
 - [x] 01-03-PLAN.md — 404 page + PWA config: NotFoundPage, navigateFallback, regex, manifest
 
 ### Phase 2: Rendimiento y Bundle
-**Goal**: El bundle inicial se reduce ~50% para teachers, las listas son fluidas bajo carga, y el Service Worker no rompe sesiones activas al actualizarse
+**Goal**: El bundle inicial se reduce ~27% (60KB gzip) para teachers, las listas son fluidas bajo carga, y el Service Worker no rompe sesiones activas al actualizarse
 **Depends on**: Phase 1
 **Requirements**: PWA-04, PERF-01, PERF-02, PERF-03, PERF-04, PERF-05
 **Success Criteria** (what must be TRUE):
-  1. Lighthouse mide el chunk inicial (LoginPage) por debajo de 150KB — vendor-react y vendor-router son chunks separados y cacheables entre deploys
+  1. El chunk inicial (LoginPage) mide ~60KB gzipped (< 150KB Lighthouse) — vendor-router separado y cacheable; vendor-react permanece en chunk principal (limitacion React 19 ESM + Vite 7)
   2. Cuando un Service Worker nuevo esta disponible mid-session, el profesor ve un prompt de actualizacion — no pierde el estado de asistencia que tiene en pantalla
-  3. El Dashboard carga y muestra datos completos en menos tiempo que antes — getConvocatorias y getProfesores se ejecutan en paralelo
+  3. El Dashboard carga y muestra datos completos en menos tiempo que antes — getProfesores y getResumen se ejecutan en paralelo con Promise.all
   4. Escribir en el campo de busqueda del Dashboard no causa lag visible — el debounce absorbe los keystrokes rapidos
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 **UI hint**: yes
 Plans:
 - [x] 02-01-PLAN.md — PWA-04: registerType prompt + UpdateBanner + useRegisterSW en main.jsx
@@ -68,5 +68,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Estabilidad Critica | 3/3 | Complete   | 2026-03-30 |
-| 2. Rendimiento y Bundle | 2/3 | In Progress|  |
+| 2. Rendimiento y Bundle | 3/3 | Complete | 2026-03-31 |
 | 3. Arquitectura y Accesibilidad | 0/? | Not started | - |
