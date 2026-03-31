@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useDebounce from '../hooks/useDebounce.js'
 import { TEACHERS_DATA } from '../config/teachers.js'
 import { isApiEnabled } from '../config/api.js'
 import { getProfesores, getResumen } from '../services/api.js'
@@ -12,6 +13,7 @@ import StatCard from '../components/ui/StatCard.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import SearchInput from '../components/ui/SearchInput.jsx'
 import ConvocatoriaSelector from '../components/features/ConvocatoriaSelector.jsx'
+import DashboardSkeleton from '../components/features/DashboardSkeleton.jsx'
 import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
 
 export default function DashboardPage() {
@@ -32,6 +34,14 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showAlertPopup, setShowAlertPopup] = useState(false)
+  const debouncedSearch = useDebounce(searchQuery, 300)
+
+  // Handlers estabilizados con useCallback para componentes memorizados
+  const handleAlertClick = useCallback(() => setShowAlertPopup(true), [])
+  const handleAlertClose = useCallback(() => setShowAlertPopup(false), [])
+  const handleStudentClose = useCallback(() => setSelectedStudent(null), [])
+  const handleClear = useCallback(() => setSearchQuery(''), [])
+  const handleTeacherToggle = useCallback((id) => setExpandedTeacher(prev => prev === id ? null : id), [])
 
   // Carga datos de una convocatoria concreta
   const loadConvData = async (conv) => {
@@ -128,53 +138,18 @@ export default function DashboardPage() {
   const alertStudents = useMemo(() => allStudents.filter(s => s.weekly <= 80), [allStudents])
 
   const searchResults = useMemo(() => {
-    if (searchQuery.length < 2) return []
-    return allStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  }, [searchQuery, allStudents])
+    if (debouncedSearch.length < 2) return []
+    return allStudents.filter(s => s.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+  }, [debouncedSearch, allStudents])
 
-  if (loading) {
-    return (
-      <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-off-white box-border">
-        <div className="bg-burgundy-dark rounded-b-3xl px-4 pt-4 pb-3 animate-pulse">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="size-[42px] rounded-xl bg-white/10" />
-            <div className="space-y-2">
-              <div className="h-4 w-24 bg-white/10 rounded" />
-              <div className="h-3 w-32 bg-white/10 rounded" />
-            </div>
-          </div>
-          <div className="flex gap-1.5 mb-3">
-            <div className="flex-1 h-16 rounded-xl bg-white/[0.06]" />
-            <div className="flex-1 h-16 rounded-xl bg-white/[0.06]" />
-            <div className="flex-1 h-16 rounded-xl bg-white/[0.06]" />
-          </div>
-        </div>
-        <div className="px-4 pt-4 space-y-3">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="bg-white border border-border rounded-xl p-3 flex items-center gap-3 animate-pulse">
-              <div className="size-[38px] rounded-[9px] bg-border-light" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3.5 bg-border-light rounded w-1/2" />
-                <div className="h-3 bg-border-light rounded w-1/3" />
-              </div>
-              <div className="h-5 w-10 bg-border-light rounded" />
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <DashboardSkeleton />
 
-  if (error) {
-    return (
-      <div className="min-h-dvh min-h-screen flex flex-col items-center justify-center gap-3 bg-off-white px-6">
-        <p className="font-montserrat text-sm text-error text-center text-pretty">{error}</p>
-        <button onClick={reload} className="font-montserrat text-sm text-burgundy underline">
-          Reintentar
-        </button>
-      </div>
-    )
-  }
+  if (error) return (
+    <div className="min-h-dvh min-h-screen flex flex-col items-center justify-center gap-3 bg-off-white px-6">
+      <p className="font-montserrat text-sm text-error text-center text-pretty">{error}</p>
+      <button onClick={reload} className="font-montserrat text-sm text-burgundy underline">Reintentar</button>
+    </div>
+  )
 
   const subtitle = convocatoria?.nombre || 'LingNova Academy'
 
@@ -201,7 +176,7 @@ export default function DashboardPage() {
               label="Alerta"
               color="gold"
               variant="dark"
-              onClick={() => setShowAlertPopup(true)}
+              onClick={handleAlertClick}
               className="hover:bg-gold/15"
             />
           </div>
@@ -212,7 +187,7 @@ export default function DashboardPage() {
           <SearchInput
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onClear={() => setSearchQuery('')}
+            onClear={handleClear}
             placeholder="Buscar alumno..."
           />
 
@@ -246,7 +221,7 @@ export default function DashboardPage() {
               key={teacher.id}
               teacher={teacher}
               isExpanded={expandedTeacher === teacher.id}
-              onToggle={() => setExpandedTeacher(expandedTeacher === teacher.id ? null : teacher.id)}
+              onToggle={() => handleTeacherToggle(teacher.id)}
               onStudentClick={setSelectedStudent}
             />
           ))}
@@ -257,14 +232,14 @@ export default function DashboardPage() {
       <StudentDetailPopup
         student={selectedStudent}
         convocatoriaId={convocatoria?.id}
-        onClose={() => setSelectedStudent(null)}
+        onClose={handleStudentClose}
       />
 
       {showAlertPopup && (
         <AlertList
           students={alertStudents}
           onStudentClick={(s) => { setSelectedStudent(s); setShowAlertPopup(false) }}
-          onClose={() => setShowAlertPopup(false)}
+          onClose={handleAlertClose}
         />
       )}
     </>
