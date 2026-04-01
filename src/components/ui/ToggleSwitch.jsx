@@ -20,7 +20,6 @@ export default function ToggleSwitch({
         checked
           ? 'bg-burgundy shadow-sm'
           : 'bg-disabled',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-burgundy',
         className,
       ].filter(Boolean).join(' ')}
       onClick={onChange}
