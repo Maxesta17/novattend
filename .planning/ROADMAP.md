@@ -38,9 +38,9 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   3. Todos los elementos interactivos muestran un focus-visible ring visible al navegar con teclado
   4. `npm run lint` pasa sin errores con eslint-plugin-jsdoc y eslint-plugin-jsx-a11y activados
   5. Cada componente, hook, page y util tiene cabecera JSDoc con @param documentados
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
-- [ ] 04-01-PLAN.md — Infraestructura: focus ring global, ESLint plugins (jsx-a11y + jsdoc), JSDoc en 4 pages
+- [x] 04-01-PLAN.md — Infraestructura: focus ring global, ESLint plugins (jsx-a11y + jsdoc), JSDoc en 4 pages
 - [ ] 04-02-PLAN.md — ARIA mecanico: ProgressBar, StatCard, AlertList, SearchInput, SVGs decorativos
 - [ ] 04-03-PLAN.md — A11Y complejo: WAI-ARIA Tabs en GroupTabs + keyboard en TeacherCard
 **UI hint**: yes
@@ -75,6 +75,6 @@ Plans:
 | 1. Estabilidad Critica | v1.0 | 3/3 | Complete | 2026-03-30 |
 | 2. Rendimiento y Bundle | v1.0 | 3/3 | Complete | 2026-03-31 |
 | 3. Arquitectura y Accesibilidad | v1.0 | 3/3 | Complete | 2026-03-31 |
-| 4. Documentacion y Accesibilidad | v1.1 | 0/3 | In progress | - |
+| 4. Documentacion y Accesibilidad | v1.1 | 1/3 | In Progress|  |
 | 5. Cobertura de Tests | v1.1 | 0/? | Not started | - |
 | 6. Seguridad Backend | v1.1 | 0/? | Not started | - |
