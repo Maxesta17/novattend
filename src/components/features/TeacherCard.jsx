@@ -23,11 +23,25 @@ export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStud
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))
   }
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onToggle()
+    } else if (e.key === 'Escape' && isExpanded) {
+      e.preventDefault()
+      onToggle()
+    }
+  }
+
   return (
     <div className="mb-3">
       {/* Card profesor */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
         onClick={onToggle}
+        onKeyDown={handleKeyDown}
         className="bg-white border-[1.5px] border-border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all duration-300 hover:bg-cream"
       >
         <Avatar
@@ -77,6 +91,7 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
 
   return (
     <div className="mb-2">
+      {/* D-02: contenido expandido es informativo, no interactivo por teclado — solo el header TeacherCard es navegable */}
       <div
         onClick={onToggle}
         className="flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] cursor-pointer bg-white border border-border-light transition-all duration-200 hover:bg-cream"
@@ -98,6 +113,7 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
           {group.students.map(student => {
             const s = getAttendanceScheme(student.monthly)
             const initials = student.name.split(' ').map(n => n[0]).join('')
+            // D-02: contenido expandido es informativo, no interactivo por teclado
             return (
               <div
                 key={student.id}
@@ -129,6 +145,7 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
 function ChevronIcon({ rotated, size = 16 }) {
   return (
     <svg
+      aria-hidden="true"
       className={`transition-transform duration-300 ${rotated ? 'rotate-180' : ''}`}
       width={size}
       height={size}
