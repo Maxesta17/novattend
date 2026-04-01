@@ -51,6 +51,7 @@ export default function Button({
     >
       {loading ? (
         <svg
+          aria-hidden="true"
           className="animate-spin"
           width="16"
           height="16"

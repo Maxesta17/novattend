@@ -28,7 +28,7 @@ export default function PageHeader({
         <div className="flex items-center gap-3">
           <img
             src="/logova1.png"
-            alt="logo"
+            alt="NovAttend"
             className="size-[42px] rounded-xl object-cover shadow-md"
           />
           <div>
@@ -50,7 +50,7 @@ export default function PageHeader({
               className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center transition-colors duration-200 hover:bg-white/20"
               aria-label="Cerrar sesion"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/70">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/70">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />

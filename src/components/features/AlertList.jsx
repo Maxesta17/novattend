@@ -18,11 +18,11 @@ export default function AlertList({ students, onStudentClick, onClose }) {
       </p>
 
       {students.map(student => (
-        <div
+        <button
           key={student.id}
           onClick={() => onStudentClick(student)}
           className={[
-            'bg-white border border-border rounded-[10px] p-3 mb-2 cursor-pointer',
+            'w-full text-left bg-white border border-border rounded-[10px] p-3 mb-2 cursor-pointer',
             'transition-all duration-200',
             'hover:bg-error-soft',
           ].join(' ')}
@@ -36,7 +36,7 @@ export default function AlertList({ students, onStudentClick, onClose }) {
           <span className="inline-block bg-error text-white px-2 py-0.5 rounded font-cinzel text-[10px] font-semibold">
             {student.weekly}% semanal
           </span>
-        </div>
+        </button>
       ))}
     </Modal>
   )

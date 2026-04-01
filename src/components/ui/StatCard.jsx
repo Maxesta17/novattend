@@ -50,8 +50,21 @@ export default memo(function StatCard({
     isDark ? 'text-white/60' : scheme.text,
   ].join(' ')
 
+  const handleKeyDown = onClick ? (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick()
+    }
+  } : undefined
+
   return (
-    <div className={containerClasses} onClick={onClick}>
+    <div
+      className={containerClasses}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       <div className={valueClasses}>
         {icon && <span className="mr-1">{icon}</span>}
         {value}

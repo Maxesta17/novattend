@@ -6,6 +6,7 @@
  * @param {function} [props.onClear] - Handler al limpiar (boton X)
  * @param {string} [props.placeholder='Buscar...'] - Placeholder
  * @param {string} [props.className] - Clases adicionales
+ * @param {string} [props.ariaLabel='Buscar alumno'] - Etiqueta accesible del input
  */
 export default function SearchInput({
   value,
@@ -13,10 +14,12 @@ export default function SearchInput({
   onClear,
   placeholder = 'Buscar...',
   className = '',
+  ariaLabel = 'Buscar alumno',
 }) {
   return (
     <div className={`relative flex items-center ${className}`}>
       <svg
+        aria-hidden="true"
         className="absolute left-2.5 text-text-muted pointer-events-none"
         width="16"
         height="16"
@@ -34,6 +37,7 @@ export default function SearchInput({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        aria-label={ariaLabel}
         className="w-full pl-9 pr-9 py-2.5 border-[1.5px] border-border rounded-[14px] bg-white font-montserrat text-[13px] outline-none focus:border-gold/40 transition-colors"
       />
 

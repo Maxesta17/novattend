@@ -29,6 +29,10 @@ export default function ProgressBar({
 
   return (
     <div
+      role="progressbar"
+      aria-valuenow={Math.min(100, Math.max(0, value))}
+      aria-valuemin={0}
+      aria-valuemax={100}
       className={`${heights[size] || heights.sm} bg-border-light rounded-full overflow-hidden ${className}`}
     >
       <div
