@@ -126,7 +126,11 @@ export default function AttendancePage() {
         </div>
       )}
 
-      <div className="flex-1 pb-[110px] overflow-auto">
+      <div
+        role="tabpanel"
+        aria-labelledby={`tab-grupo-${selectedGroup}`}
+        className="flex-1 pb-[110px] overflow-auto"
+      >
         <div className="px-4">
           <div className="flex items-center justify-between mb-3.5">
             <h3 className="font-cinzel text-[15px] font-semibold text-text-dark m-0 text-balance">
