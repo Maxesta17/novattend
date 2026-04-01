@@ -3,6 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import StatCard from '../components/ui/StatCard.jsx'
 import Button from '../components/ui/Button.jsx'
 
+/**
+ * Pagina de confirmacion post-guardado de asistencia.
+ * Muestra resumen de presentes/ausentes y boton de retorno.
+ * @returns {JSX.Element}
+ */
 export default function SavedPage() {
   const navigate = useNavigate()
   const location = useLocation()

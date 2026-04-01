@@ -12,6 +12,11 @@ import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
 import ErrorBanner from '../components/ui/ErrorBanner.jsx'
 
+/**
+ * Pagina de marcado de asistencia para profesores.
+ * Carga alumnos del grupo seleccionado, permite marcar presentes/ausentes y guardar.
+ * @returns {JSX.Element}
+ */
 export default function AttendancePage() {
   const navigate = useNavigate()
   const location = useLocation()

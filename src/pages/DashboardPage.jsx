@@ -10,6 +10,11 @@ import SearchInput from '../components/ui/SearchInput.jsx'
 import ConvocatoriaSelector from '../components/features/ConvocatoriaSelector.jsx'
 import DashboardSkeleton from '../components/features/DashboardSkeleton.jsx'
 
+/**
+ * Dashboard analitico para el CEO.
+ * Muestra estadisticas globales, listado de profesores y busqueda de alumnos.
+ * @returns {JSX.Element}
+ */
 export default function DashboardPage() {
   const navigate = useNavigate()
   const {

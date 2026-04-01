@@ -5,6 +5,10 @@ import { isApiEnabled } from '../config/api'
 import { getConvocatorias } from '../services/api'
 import Button from '../components/ui/Button.jsx'
 
+/**
+ * Pagina de autenticacion. Valida credenciales y redirige segun rol.
+ * @returns {JSX.Element}
+ */
 export default function LoginPage() {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
