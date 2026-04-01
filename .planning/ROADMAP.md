@@ -43,7 +43,7 @@ Plans:
 - [x] 04-01-PLAN.md — Infraestructura: focus ring global, ESLint plugins (jsx-a11y + jsdoc), JSDoc en 4 pages
 - [x] 04-02-PLAN.md — ARIA mecanico: ProgressBar, StatCard, AlertList, SearchInput, SVGs decorativos
 - [x] 04-03-PLAN.md — A11Y complejo: WAI-ARIA Tabs en GroupTabs + keyboard en TeacherCard
-- [ ] 04-04-PLAN.md — Gap closure: 9 errores jsx-a11y restantes (StudentRow, Modal, DashboardPage, ConvocatoriaSelector)
+- [x] 04-04-PLAN.md — Gap closure: 9 errores jsx-a11y restantes (StudentRow, Modal, DashboardPage, ConvocatoriaSelector)
 **UI hint**: yes
 
 ### Phase 5: Cobertura de Tests
