@@ -22,7 +22,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Cerrar toda la deuda tecnica identificada en la auditoria — accesibilidad WCAG 2.1, documentacion JSDoc, autenticacion server-side en Apps Script, y cobertura de tests al 60%.
 
-- [ ] **Phase 4: Documentacion y Accesibilidad** - JSDoc en todos los archivos + WCAG 2.1 Nivel A en componentes interactivos
+- [x] **Phase 4: Documentacion y Accesibilidad** - JSDoc en todos los archivos + WCAG 2.1 Nivel A en componentes interactivos (completed 2026-04-01)
 - [ ] **Phase 5: Cobertura de Tests** - Infraestructura de cobertura V8 + tests contra contratos A11Y estables al 60%
 - [ ] **Phase 6: Seguridad Backend** - Shared secret auth en Apps Script + inyeccion de token en api.js
 
@@ -38,11 +38,11 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   3. Todos los elementos interactivos muestran un focus-visible ring visible al navegar con teclado
   4. `npm run lint` pasa sin errores con eslint-plugin-jsdoc y eslint-plugin-jsx-a11y activados
   5. Cada componente, hook, page y util tiene cabecera JSDoc con @param documentados
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 04-01-PLAN.md — Infraestructura: focus ring global, ESLint plugins (jsx-a11y + jsdoc), JSDoc en 4 pages
-- [ ] 04-02-PLAN.md — ARIA mecanico: ProgressBar, StatCard, AlertList, SearchInput, SVGs decorativos
-- [ ] 04-03-PLAN.md — A11Y complejo: WAI-ARIA Tabs en GroupTabs + keyboard en TeacherCard
+- [x] 04-02-PLAN.md — ARIA mecanico: ProgressBar, StatCard, AlertList, SearchInput, SVGs decorativos
+- [x] 04-03-PLAN.md — A11Y complejo: WAI-ARIA Tabs en GroupTabs + keyboard en TeacherCard
 **UI hint**: yes
 
 ### Phase 5: Cobertura de Tests
@@ -75,6 +75,6 @@ Plans:
 | 1. Estabilidad Critica | v1.0 | 3/3 | Complete | 2026-03-30 |
 | 2. Rendimiento y Bundle | v1.0 | 3/3 | Complete | 2026-03-31 |
 | 3. Arquitectura y Accesibilidad | v1.0 | 3/3 | Complete | 2026-03-31 |
-| 4. Documentacion y Accesibilidad | v1.1 | 1/3 | In Progress|  |
+| 4. Documentacion y Accesibilidad | v1.1 | 3/3 | Complete   | 2026-04-01 |
 | 5. Cobertura de Tests | v1.1 | 0/? | Not started | - |
 | 6. Seguridad Backend | v1.1 | 0/? | Not started | - |

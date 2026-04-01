@@ -10,9 +10,9 @@ Requirements para milestone v1.1 Hardening (Olas 4-5). Cada uno mapea a fases de
 ### Accesibilidad
 
 - [ ] **A11Y-01**: Usuario puede operar TeacherCard expandible con teclado (Tab, Enter/Space, Escape)
-- [ ] **A11Y-02**: Componentes interactivos tienen roles ARIA correctos (GroupTabs tablist, AlertList buttons, ProgressBar progressbar, StatCard button condicional)
+- [x] **A11Y-02**: Componentes interactivos tienen roles ARIA correctos (GroupTabs tablist, AlertList buttons, ProgressBar progressbar, StatCard button condicional)
 - [x] **A11Y-03**: Elementos interactivos muestran focus-visible ring al navegar con teclado
-- [ ] **A11Y-04**: SVGs decorativos tienen aria-hidden y SearchInput tiene aria-label descriptivo
+- [x] **A11Y-04**: SVGs decorativos tienen aria-hidden y SearchInput tiene aria-label descriptivo
 
 ### Documentacion
 
@@ -65,9 +65,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | A11Y-01 | Phase 4 | Pending |
-| A11Y-02 | Phase 4 | Pending |
+| A11Y-02 | Phase 4 | Complete |
 | A11Y-03 | Phase 4 | Complete |
-| A11Y-04 | Phase 4 | Pending |
+| A11Y-04 | Phase 4 | Complete |
 | DOCS-01 | Phase 4 | Complete |
 | DOCS-02 | Phase 4 | Complete |
 | TEST-01 | Phase 5 | Pending |
