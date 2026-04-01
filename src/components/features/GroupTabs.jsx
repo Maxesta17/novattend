@@ -31,6 +31,7 @@ export default function GroupTabs({ groups, selected, onChange }) {
   }, [groups, selected, onChange])
 
   return (
+    // eslint-disable-next-line jsx-a11y/interactive-supports-focus -- WAI-ARIA Tabs: tablist delega foco a los tabs hijos, no debe ser focusable
     <div role="tablist" aria-label="Grupos" onKeyDown={handleKeyDown} className="flex gap-1.5">
       {groups.map(g => (
         <button

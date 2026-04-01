@@ -91,7 +91,7 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
 
   return (
     <div className="mb-2">
-      {/* D-02: contenido expandido es informativo, no interactivo por teclado — solo el header TeacherCard es navegable */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- D-02: contenido expandido es informativo, no interactivo por teclado */}
       <div
         onClick={onToggle}
         className="flex items-center gap-2.5 py-2.5 px-3 rounded-[10px] cursor-pointer bg-white border border-border-light transition-all duration-200 hover:bg-cream"
@@ -113,8 +113,8 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
           {group.students.map(student => {
             const s = getAttendanceScheme(student.monthly)
             const initials = student.name.split(' ').map(n => n[0]).join('')
-            // D-02: contenido expandido es informativo, no interactivo por teclado
             return (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- D-02: contenido expandido es informativo, no interactivo por teclado
               <div
                 key={student.id}
                 onClick={() => onStudentClick({ ...student, teacher: teacherName, teacherId, group: group.number })}
