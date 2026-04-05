@@ -200,6 +200,7 @@ describe('api.js', () => {
 
   it('apiGet incluye api_key como query param cuando API_KEY tiene valor', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
     })
 
@@ -211,6 +212,7 @@ describe('api.js', () => {
 
   it('apiPost incluye api_key en el body JSON cuando API_KEY tiene valor', async () => {
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
     })
 
@@ -224,6 +226,7 @@ describe('api.js', () => {
   it('apiGet usa guard condicional para api_key (if API_KEY)', async () => {
     // Verificamos que el query param se agrega cuando hay key
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
     })
 
@@ -239,6 +242,7 @@ describe('api.js', () => {
   it('apiPost usa spread condicional para api_key', async () => {
     // Verificamos que api_key va junto con action y datos del body
     global.fetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
     })
 
