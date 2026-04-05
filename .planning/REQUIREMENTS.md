@@ -31,10 +31,10 @@ Requirements para milestone v1.1 Hardening (Olas 4-5). Cada uno mapea a fases de
 ### Tests
 
 - [x] **TEST-01**: @vitest/coverage-v8 instalado con thresholds de 60% enforzados en vite.config.js
-- [ ] **TEST-02**: AttendancePage y DashboardPage tienen tests unitarios
+- [x] **TEST-02**: AttendancePage y DashboardPage tienen tests unitarios
 - [x] **TEST-03**: TeacherCard y GroupTabs tienen tests con aserciones ARIA (aserciones manuales con Testing Library -- sin jest-axe per D-02)
 - [x] **TEST-04**: useStudents y buildTeachersHierarchy tienen tests unitarios
-- [ ] **TEST-05**: Cobertura total alcanza >= 60% verificada por threshold
+- [x] **TEST-05**: Cobertura total alcanza >= 60% verificada por threshold
 
 ## v2 Requirements
 
@@ -71,10 +71,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | DOCS-01 | Phase 4 | Complete |
 | DOCS-02 | Phase 4 | Complete |
 | TEST-01 | Phase 5 | Complete |
-| TEST-02 | Phase 5 | Pending |
+| TEST-02 | Phase 5 | Complete |
 | TEST-03 | Phase 5 | Complete |
 | TEST-04 | Phase 5 | Complete |
-| TEST-05 | Phase 5 | Pending |
+| TEST-05 | Phase 5 | Complete |
 | SEC-01 | Phase 6 | Pending |
 | SEC-02 | Phase 6 | Pending |
 | SEC-03 | Phase 6 | Pending |

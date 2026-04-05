@@ -60,7 +60,7 @@ Plans:
 Plans:
 - [x] 05-01-PLAN.md — Infraestructura cobertura V8 + tests unitarios buildTeachersHierarchy y useStudents
 - [x] 05-02-PLAN.md — Tests ARIA de GroupTabs y TeacherCard (contratos Phase 4)
-- [ ] 05-03-PLAN.md — Tests de integracion AttendancePage y DashboardPage + verificacion cobertura >= 60%
+- [x] 05-03-PLAN.md — Tests de integracion AttendancePage y DashboardPage + verificacion cobertura >= 60%
 
 ### Phase 6: Seguridad Backend
 **Goal**: El endpoint de Google Apps Script rechaza cualquier request sin token valido, con el shared secret almacenado fuera del codigo fuente y el token inyectado transparentemente por api.js
