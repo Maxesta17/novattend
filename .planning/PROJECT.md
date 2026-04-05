@@ -21,13 +21,14 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 
 ## Current State
 
-**v1.0 shipped (2026-03-31)** — Mejoras Post-Auditoria (Olas 1-3) completas.
+**Phase 04 complete (2026-04-05)** — Documentacion y accesibilidad cerradas.
 
 - **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
 - **Bundle:** Code-split por ruta (62KB gzip main, vendors separados)
 - **Tests:** 89 tests, 16 suites (Vitest + Testing Library)
-- **DashboardPage:** 127 lineas (refactorizado, logica en useDashboard.js hook)
-- **Modal:** Accesible — focus trap, Escape, ARIA role/aria-modal/aria-label
+- **Lint:** 0 errores, 0 warnings (jsx-a11y + jsdoc plugins activos)
+- **A11Y:** Focus-visible global, WAI-ARIA Tabs, keyboard nav en TeacherCard, HTML semantico
+- **JSDoc:** Todos los componentes, hooks y pages documentados
 - **PWA:** Offline funcional, SW prompt mode, UpdateBanner
 - **Deployment:** Vercel (frontend) + Google Apps Script (backend)
 
@@ -52,12 +53,13 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 - ✓ SW registerType prompt + UpdateBanner — v1.0
 - ✓ DashboardPage refactorizado a <250 lineas (useDashboard hook) — v1.0
 - ✓ Modal accesible con focus trap + Escape + ARIA — v1.0
+- ✓ Soporte de teclado en TeacherCard expandible — Validated in Phase 04
+- ✓ Atributos ARIA en componentes clave (tabs, buttons, dialogs) — Validated in Phase 04
+- ✓ JSDoc en todos los componentes, hooks y pages — Validated in Phase 04
+- ✓ Focus-visible ring global + HTML semantico (0 errores jsx-a11y) — Validated in Phase 04
 
 ### Active
 
-- [ ] Soporte de teclado en TeacherCard expandible (A11Y-01)
-- [ ] Atributos ARIA en componentes clave (A11Y-02)
-- [ ] JSDoc en 11 componentes faltantes (DOCS-01)
 - [ ] Autenticacion server-side en Apps Script (SEC-01..SEC-06)
 - [ ] Subir cobertura de tests a 60% (TEST-01..TEST-03)
 
@@ -90,4 +92,4 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-03-31 after v1.1 milestone start*
+*Last updated: 2026-04-05 after Phase 04 completion*
