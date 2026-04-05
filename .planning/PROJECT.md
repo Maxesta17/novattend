@@ -21,7 +21,7 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 
 ## Current State
 
-**Phase 05 complete (2026-04-05)** — Cobertura de tests al 60%+ con thresholds enforzados.
+**Phase 06 complete (2026-04-05)** — Autenticacion server-side con shared secret en Apps Script + inyeccion de API key en frontend.
 
 - **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
 - **Bundle:** Code-split por ruta (62KB gzip main, vendors separados)
@@ -61,7 +61,7 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 
 ### Active
 
-- [ ] Autenticacion server-side en Apps Script (SEC-01..SEC-06)
+- ✓ Autenticacion server-side en Apps Script (SEC-01..SEC-06) — Validated in Phase 06
 - ✓ Subir cobertura de tests a 60% (TEST-01..TEST-05) — Validated in Phase 05
 
 ### Out of Scope
@@ -93,4 +93,4 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-05 after Phase 05 completion*
+*Last updated: 2026-04-05 after Phase 06 completion*
