@@ -23,22 +23,26 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <div
-      className="animate-fade-in fixed inset-0 bg-black/60 flex items-center justify-center z-40 p-5"
-      onClick={onClose}
-    >
+    <>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- Overlay: cierre por click fuera; equivalencia teclado (Escape) cubierta por useFocusTrap */}
       <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={ariaLabel}
-        tabIndex={-1}
-        className={`animate-pop-up bg-white rounded-[20px] p-6 w-full shadow-2xl ${className}`}
-        style={{ maxWidth }}
-        onClick={e => e.stopPropagation()}
+        className="animate-fade-in fixed inset-0 bg-black/60 flex items-center justify-center z-40 p-5"
+        onClick={onClose}
       >
-        {children}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Dialog: stopPropagation no es interactividad; role="dialog" es no-interactivo con teclado via useFocusTrap */}
+        <div
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={ariaLabel}
+          tabIndex={-1}
+          className={`animate-pop-up bg-white rounded-[20px] p-6 w-full shadow-2xl ${className}`}
+          style={{ maxWidth }}
+          onClick={e => e.stopPropagation()}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

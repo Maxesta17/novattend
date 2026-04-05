@@ -11,10 +11,11 @@ export default function ConvocatoriaSelector({ convocatorias, selectedId, onChan
 
   return (
     <div className="px-5 pb-4 -mt-1">
-      <label className="font-montserrat text-[11px] text-white/50 block mb-1.5">
+      <label htmlFor="conv-selector" className="font-montserrat text-[11px] text-white/50 block mb-1.5">
         Convocatoria
       </label>
       <select
+        id="conv-selector"
         value={selectedId || ''}
         onChange={(e) => {
           const conv = convocatorias.find(c => c.id === e.target.value)

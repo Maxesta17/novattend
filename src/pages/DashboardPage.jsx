@@ -79,10 +79,11 @@ export default function DashboardPage() {
           {searchResults.length > 0 && (
             <div className="mt-3">
               {searchResults.map(student => (
-                <div
+                <button
                   key={student.id}
+                  type="button"
                   onClick={() => { setSelectedStudent(student); setSearchQuery('') }}
-                  className="bg-white border border-border rounded-[10px] py-2.5 px-3 mb-1.5 cursor-pointer transition-all duration-200 hover:bg-burgundy-soft"
+                  className="bg-white border border-border rounded-[10px] py-2.5 px-3 mb-1.5 text-left w-full transition-all duration-200 hover:bg-burgundy-soft"
                 >
                   <div className="font-montserrat text-[13px] font-medium text-text-dark">
                     {student.name}
@@ -90,7 +91,7 @@ export default function DashboardPage() {
                   <div className="font-montserrat text-[11px] text-text-muted mt-0.5">
                     {student.teacher} · Grupo {student.group}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

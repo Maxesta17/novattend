@@ -21,9 +21,10 @@ export default memo(function StudentRow({
   stats,
 }) {
   return (
-    <div
+    <button
+      type="button"
       className={[
-        'animate-slide-up flex items-center gap-3 p-3 mb-2 rounded-xl cursor-pointer',
+        'animate-slide-up flex items-center gap-3 p-3 mb-2 rounded-xl text-left w-full',
         'transition-all duration-300 border-[1.5px]',
         isPresent
           ? 'bg-burgundy-soft border-burgundy/20'
@@ -55,6 +56,6 @@ export default memo(function StudentRow({
 
       {/* Toggle */}
       <ToggleSwitch checked={isPresent} onChange={onToggle} />
-    </div>
+    </button>
   )
 })
