@@ -1,3 +1,11 @@
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import useConvocatorias from './useConvocatorias.js'
+import useDebounce from './useDebounce.js'
+import { TEACHERS_DATA } from '../config/teachers.js'
+import { isApiEnabled } from '../config/api'
+import { getProfesores, getResumen } from '../services/api'
+import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
+
 /**
  * Hook custom que encapsula toda la logica de datos, estado y handlers del Dashboard CEO.
  *
@@ -29,14 +37,6 @@
  *   searchResults: Array,
  * }}
  */
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import useConvocatorias from './useConvocatorias.js'
-import useDebounce from './useDebounce.js'
-import { TEACHERS_DATA } from '../config/teachers.js'
-import { isApiEnabled } from '../config/api'
-import { getProfesores, getResumen } from '../services/api'
-import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
-
 export default function useDashboard() {
   const {
     convocatorias,

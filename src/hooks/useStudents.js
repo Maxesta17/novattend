@@ -1,3 +1,22 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { isApiEnabled } from '../config/api'
+import { getAlumnos } from '../services/api'
+
+const GROUPS = ['G1', 'G2', 'G3', 'G4']
+
+// Datos mock para modo sin API
+const MOCK_GROUPS = {
+  G1: ['Laura Garcia', 'Carlos Ruiz', 'Maria Lopez', 'Pedro Sanchez', 'Ana Martin', 'David Fernandez', 'Elena Torres', 'Jorge Navarro', 'Lucia Romero', 'Pablo Jimenez', 'Sofia Alvarez', 'Hugo Moreno'],
+  G2: ['Valentina Cruz', 'Mateo Herrera', 'Isabella Diaz', 'Sebastian Ortiz', 'Camila Reyes', 'Nicolas Vargas', 'Martina Castro', 'Emiliano Ramos', 'Renata Flores', 'Tomas Mendoza', 'Antonella Pena', 'Alejandro Silva'],
+  G3: ['Bianca Wolff', 'Finn Becker', 'Clara Schmidt', 'Leon Muller', 'Emma Fischer', 'Paul Weber', 'Mia Richter', 'Luca Klein', 'Hannah Braun', 'Ben Hoffmann', 'Sophie Lange', 'Max Werner'],
+  G4: ['Amelie Dubois', 'Louis Martin', 'Chloe Bernard', 'Hugo Petit', 'Lea Moreau', 'Theo Laurent', 'Manon Simon', 'Jules Michel', 'Zoe Leroy', 'Arthur Roux', 'Ines Fournier', 'Gabriel Bonnet'],
+}
+
+/** Mapea datos crudos de la API al formato del componente */
+function mapAlumnos(alumnos) {
+  return (alumnos || []).map(a => ({ id: a.id, name: a.nombre, present: false }))
+}
+
 /**
  * Hook custom para gestionar la carga y estado de alumnos por grupo.
  *
@@ -19,25 +38,6 @@
  *   attendancePercent: number
  * }}
  */
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { isApiEnabled } from '../config/api'
-import { getAlumnos } from '../services/api'
-
-const GROUPS = ['G1', 'G2', 'G3', 'G4']
-
-// Datos mock para modo sin API
-const MOCK_GROUPS = {
-  G1: ['Laura Garcia', 'Carlos Ruiz', 'Maria Lopez', 'Pedro Sanchez', 'Ana Martin', 'David Fernandez', 'Elena Torres', 'Jorge Navarro', 'Lucia Romero', 'Pablo Jimenez', 'Sofia Alvarez', 'Hugo Moreno'],
-  G2: ['Valentina Cruz', 'Mateo Herrera', 'Isabella Diaz', 'Sebastian Ortiz', 'Camila Reyes', 'Nicolas Vargas', 'Martina Castro', 'Emiliano Ramos', 'Renata Flores', 'Tomas Mendoza', 'Antonella Pena', 'Alejandro Silva'],
-  G3: ['Bianca Wolff', 'Finn Becker', 'Clara Schmidt', 'Leon Muller', 'Emma Fischer', 'Paul Weber', 'Mia Richter', 'Luca Klein', 'Hannah Braun', 'Ben Hoffmann', 'Sophie Lange', 'Max Werner'],
-  G4: ['Amelie Dubois', 'Louis Martin', 'Chloe Bernard', 'Hugo Petit', 'Lea Moreau', 'Theo Laurent', 'Manon Simon', 'Jules Michel', 'Zoe Leroy', 'Arthur Roux', 'Ines Fournier', 'Gabriel Bonnet'],
-}
-
-/** Mapea datos crudos de la API al formato del componente */
-function mapAlumnos(alumnos) {
-  return (alumnos || []).map(a => ({ id: a.id, name: a.nombre, present: false }))
-}
-
 export default function useStudents(convocatoria, profesorId) {
   const [selectedGroup, setSelectedGroup] = useState(GROUPS[0])
   const [students, setStudents] = useState([])

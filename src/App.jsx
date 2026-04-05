@@ -13,6 +13,7 @@ const AttendancePage = lazy(() => import('./pages/AttendancePage'))
 const SavedPage = lazy(() => import('./pages/SavedPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 
+/** Componente raiz — configura rutas, lazy loading y guardias de rol */
 function App() {
   return (
     <BrowserRouter>

@@ -5,6 +5,17 @@ import ProgressBar from '../ui/ProgressBar.jsx'
 import { isApiEnabled } from '../../config/api'
 import { getAsistenciaAlumno } from '../../services/api'
 
+const formatDate = (dateStr) => {
+  const [y, m, d] = dateStr.split('-')
+  return `${d}/${m}/${y}`
+}
+
+const getAttendanceColor = (pct) => {
+  if (pct >= 80) return { color: 'text-success', bg: 'bg-success-soft', bar: 'bg-success', border: 'border-success', status: 'Asistencia regular' }
+  if (pct >= 60) return { color: 'text-warning', bg: 'bg-warning-soft', bar: 'bg-warning', border: 'border-warning', status: 'Requiere atencion' }
+  return { color: 'text-error', bg: 'bg-error-soft', bar: 'bg-error', border: 'border-error', status: 'Alerta — contactar alumno' }
+}
+
 /**
  * Popup con detalle de asistencia de un alumno.
  * @param {object} props
@@ -19,18 +30,6 @@ import { getAsistenciaAlumno } from '../../services/api'
  * @param {string} [props.convocatoriaId] - ID de convocatoria para cargar faltas via API
  * @param {function} props.onClose - Handler al cerrar
  */
-
-const formatDate = (dateStr) => {
-  const [y, m, d] = dateStr.split('-')
-  return `${d}/${m}/${y}`
-}
-
-const getAttendanceColor = (pct) => {
-  if (pct >= 80) return { color: 'text-success', bg: 'bg-success-soft', bar: 'bg-success', border: 'border-success', status: 'Asistencia regular' }
-  if (pct >= 60) return { color: 'text-warning', bg: 'bg-warning-soft', bar: 'bg-warning', border: 'border-warning', status: 'Requiere atencion' }
-  return { color: 'text-error', bg: 'bg-error-soft', bar: 'bg-error', border: 'border-error', status: 'Alerta — contactar alumno' }
-}
-
 export default function StudentDetailPopup({ student, convocatoriaId, onClose }) {
   const [apiAbsences, setApiAbsences] = useState([])
   const [loadingAbsences, setLoadingAbsences] = useState(false)
