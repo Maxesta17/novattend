@@ -21,12 +21,12 @@ Requirements para milestone v1.1 Hardening (Olas 4-5). Cada uno mapea a fases de
 
 ### Seguridad
 
-- [ ] **SEC-01**: Apps Script valida shared secret en doGet/doPost antes de acceder a datos
-- [ ] **SEC-02**: API key almacenada en Script Properties (no hardcodeada en codigo)
+- [x] **SEC-01**: Apps Script valida shared secret en doGet/doPost antes de acceder a datos
+- [x] **SEC-02**: API key almacenada en Script Properties (no hardcodeada en codigo)
 - [ ] **SEC-03**: Frontend inyecta token en cada request via api.js (query param GET, body POST)
-- [ ] **SEC-04**: Requests sin token valido reciben respuesta de error 401-equivalente
+- [x] **SEC-04**: Requests sin token valido reciben respuesta de error 401-equivalente
 - [ ] **SEC-05**: Variable VITE_API_KEY configurada en .env y Vercel
-- [ ] **SEC-06**: Requests rechazados se loguean en Apps Script (console.warn)
+- [x] **SEC-06**: Requests rechazados se loguean en Apps Script (console.warn)
 
 ### Tests
 
@@ -75,12 +75,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | TEST-03 | Phase 5 | Complete |
 | TEST-04 | Phase 5 | Complete |
 | TEST-05 | Phase 5 | Complete |
-| SEC-01 | Phase 6 | Pending |
-| SEC-02 | Phase 6 | Pending |
+| SEC-01 | Phase 6 | Complete |
+| SEC-02 | Phase 6 | Complete |
 | SEC-03 | Phase 6 | Pending |
-| SEC-04 | Phase 6 | Pending |
+| SEC-04 | Phase 6 | Complete |
 | SEC-05 | Phase 6 | Pending |
-| SEC-06 | Phase 6 | Pending |
+| SEC-06 | Phase 6 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 17 total

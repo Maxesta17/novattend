@@ -73,8 +73,8 @@ Plans:
   4. Los requests rechazados generan una entrada de console.warn en Apps Script con timestamp
 **Plans:** 2 plans
 Plans:
-- [ ] 06-01-PLAN.md — Backend: validateApiKey en Codigo.js + setApiKey/checkApiKey helpers + doc de deploy
-- [ ] 06-02-PLAN.md — Frontend: API_KEY en config/api.js + inyeccion en services/api.js + tests SEC-03
+- [x] 06-01-PLAN.md — Backend: validateApiKey en Codigo.js + setApiKey/checkApiKey helpers + doc de deploy
+- [x] 06-02-PLAN.md — Frontend: API_KEY en config/api.js + inyeccion en services/api.js + tests SEC-03
 
 ## Progress
 
