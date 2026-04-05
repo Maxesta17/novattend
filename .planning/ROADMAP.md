@@ -56,7 +56,11 @@ Plans:
   3. AttendancePage y DashboardPage tienen tests que verifican sus flujos criticos de negocio
   4. TeacherCard y GroupTabs tienen tests con aserciones ARIA que confirman el trabajo de Phase 4
   5. useStudents y buildTeachersHierarchy tienen tests unitarios que protegen su logica
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 05-01-PLAN.md — Infraestructura cobertura V8 + tests unitarios buildTeachersHierarchy y useStudents
+- [ ] 05-02-PLAN.md — Tests ARIA de GroupTabs y TeacherCard (contratos Phase 4)
+- [ ] 05-03-PLAN.md — Tests de integracion AttendancePage y DashboardPage + verificacion cobertura >= 60%
 
 ### Phase 6: Seguridad Backend
 **Goal**: El endpoint de Google Apps Script rechaza cualquier request sin token valido, con el shared secret almacenado fuera del codigo fuente y el token inyectado transparentemente por api.js
@@ -77,5 +81,5 @@ Plans:
 | 2. Rendimiento y Bundle | v1.0 | 3/3 | Complete | 2026-03-31 |
 | 3. Arquitectura y Accesibilidad | v1.0 | 3/3 | Complete | 2026-03-31 |
 | 4. Documentacion y Accesibilidad | v1.1 | 3/4 | Gap closure | - |
-| 5. Cobertura de Tests | v1.1 | 0/? | Not started | - |
+| 5. Cobertura de Tests | v1.1 | 0/3 | Planned | - |
 | 6. Seguridad Backend | v1.1 | 0/? | Not started | - |
