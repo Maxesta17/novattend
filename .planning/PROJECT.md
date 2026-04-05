@@ -21,11 +21,12 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 
 ## Current State
 
-**Phase 04 complete (2026-04-05)** — Documentacion y accesibilidad cerradas.
+**Phase 05 complete (2026-04-05)** — Cobertura de tests al 60%+ con thresholds enforzados.
 
 - **Stack:** React 19 + Vite 7 + Tailwind 3 + vite-plugin-pwa + Google Apps Script
 - **Bundle:** Code-split por ruta (62KB gzip main, vendors separados)
-- **Tests:** 89 tests, 16 suites (Vitest + Testing Library)
+- **Tests:** 131 tests, 22 suites (Vitest + Testing Library + @vitest/coverage-v8)
+- **Cobertura:** Statements 64%, Branches 62%, Functions 62%, Lines 67% — thresholds 60% enforzados
 - **Lint:** 0 errores, 0 warnings (jsx-a11y + jsdoc plugins activos)
 - **A11Y:** Focus-visible global, WAI-ARIA Tabs, keyboard nav en TeacherCard, HTML semantico
 - **JSDoc:** Todos los componentes, hooks y pages documentados
@@ -61,7 +62,7 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 ### Active
 
 - [ ] Autenticacion server-side en Apps Script (SEC-01..SEC-06)
-- [ ] Subir cobertura de tests a 60% (TEST-01..TEST-03)
+- ✓ Subir cobertura de tests a 60% (TEST-01..TEST-05) — Validated in Phase 05
 
 ### Out of Scope
 
@@ -92,4 +93,4 @@ La app debe ser estable y rapida: cero errores silenciosos, carga optimizada, y 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-05 after Phase 04 completion*
+*Last updated: 2026-04-05 after Phase 05 completion*
