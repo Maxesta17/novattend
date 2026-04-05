@@ -7,7 +7,7 @@
  * @module services/api
  */
 
-import { API_URL, isApiEnabled } from '../config/api'
+import { API_URL, API_KEY, isApiEnabled } from '../config/api'
 
 // ============================================================
 // Fetch base
@@ -18,6 +18,7 @@ async function apiGet(action, params = {}) {
 
   const url = new URL(API_URL)
   url.searchParams.set('action', action)
+  if (API_KEY) url.searchParams.set('api_key', API_KEY)
   Object.entries(params).forEach(([key, val]) => {
     if (val !== undefined && val !== null && val !== '') {
       url.searchParams.set(key, val)
@@ -42,7 +43,11 @@ async function apiPost(action, body = {}) {
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...body })
+    body: JSON.stringify({
+      action,
+      ...(API_KEY ? { api_key: API_KEY } : {}),
+      ...body
+    })
   })
   if (!res.ok) {
     throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
