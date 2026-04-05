@@ -71,7 +71,10 @@ Plans:
   2. La app funciona normalmente para profesores y CEO — el token se inyecta sin cambios en la UX
   3. El API key no aparece en el codigo fuente de Apps Script ni en el bundle de produccion del frontend (solo en Script Properties y variables de entorno de Vercel)
   4. Los requests rechazados generan una entrada de console.warn en Apps Script con timestamp
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Backend: validateApiKey en Codigo.js + setApiKey/checkApiKey helpers + doc de deploy
+- [ ] 06-02-PLAN.md — Frontend: API_KEY en config/api.js + inyeccion en services/api.js + tests SEC-03
 
 ## Progress
 
@@ -82,4 +85,4 @@ Plans:
 | 3. Arquitectura y Accesibilidad | v1.0 | 3/3 | Complete | 2026-03-31 |
 | 4. Documentacion y Accesibilidad | v1.1 | 3/4 | Gap closure | - |
 | 5. Cobertura de Tests | v1.1 | 2/3 | In Progress|  |
-| 6. Seguridad Backend | v1.1 | 0/? | Not started | - |
+| 6. Seguridad Backend | v1.1 | 0/2 | Not started | - |
