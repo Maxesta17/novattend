@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Mejoras Post-Auditoria (Olas 1-3)** — Phases 1-3 (shipped 2026-03-31)
-- 🚧 **v1.1 Hardening (Olas 4-5)** — Phases 4-6 (in progress)
+- ✅ **v1.1 Hardening (Olas 4-5)** — Phases 4-6 (shipped 2026-04-05)
 
 ## Phases
 
@@ -18,7 +18,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
-### 🚧 v1.1 Hardening (Olas 4-5) (In Progress)
+### ✅ v1.1 Hardening (Olas 4-5) (Shipped 2026-04-05)
 
 **Milestone Goal:** Cerrar toda la deuda tecnica identificada en la auditoria — accesibilidad WCAG 2.1, documentacion JSDoc, autenticacion server-side en Apps Script, y cobertura de tests al 60%.
 
@@ -83,6 +83,6 @@ Plans:
 | 1. Estabilidad Critica | v1.0 | 3/3 | Complete | 2026-03-30 |
 | 2. Rendimiento y Bundle | v1.0 | 3/3 | Complete | 2026-03-31 |
 | 3. Arquitectura y Accesibilidad | v1.0 | 3/3 | Complete | 2026-03-31 |
-| 4. Documentacion y Accesibilidad | v1.1 | 3/4 | Gap closure | - |
-| 5. Cobertura de Tests | v1.1 | 2/3 | In Progress|  |
-| 6. Seguridad Backend | v1.1 | 0/2 | Not started | - |
+| 4. Documentacion y Accesibilidad | v1.1 | 4/4 | Complete | 2026-04-01 |
+| 5. Cobertura de Tests | v1.1 | 3/3 | Complete | 2026-04-03 |
+| 6. Seguridad Backend | v1.1 | 2/2 | Complete | 2026-04-05 |

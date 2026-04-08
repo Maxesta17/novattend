@@ -101,3 +101,11 @@ None - no external service configuration required.
 ---
 *Phase: 03-arquitectura-y-accesibilidad*
 *Completed: 2026-03-31*
+
+## Self-Check: PASSED
+
+- FOUND: src/tests/useDashboard.test.jsx
+- FOUND: src/tests/useFocusTrap.test.jsx
+- FOUND: src/tests/Modal.test.jsx
+- FOUND: .planning/phases/03-arquitectura-y-accesibilidad/03-00-SUMMARY.md
+- FOUND: commit 84ca7e1
