@@ -35,3 +35,13 @@ dist-ssr
 *.png
 *.jpg
 .vercel
+
+# Cache de herramientas
+.vite/
+coverage/
+
+# Configuracion local de servidores MCP (especifica de cada maquina)
+.mcp.json
+
+# Workspaces de VS Code (rutas absolutas locales)
+*.code-workspace
