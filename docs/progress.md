@@ -1,8 +1,16 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-03-31
-- **Hito:** Milestone Post-Auditoria Phase 2 — Rendimiento y Bundle (code-splitting, memo, debounce, PWA prompt)
+- **Fecha:** 2026-04-08
+- **Hito:** Hotfix iOS Safari — POST a Apps Script fallaba con "Load failed" por preflight CORS
+
+### Hotfix 2026-04-08 — POST CORS preflight (iOS Safari)
+- **Sintoma reportado:** Profesor Sven (iPhone SE 2016 + iPad) no podia guardar asistencia. Login y carga de alumnos OK, pero al pulsar "Guardar asistencia" -> "Load failed". Reproducible en ambos dispositivos Apple.
+- **Causa raiz:** `apiPost` en [src/services/api.js](src/services/api.js) enviaba `Content-Type: application/json`, lo que dispara un preflight CORS OPTIONS. Google Apps Script Web Apps no responden bien al OPTIONS, y iOS Safari (sobre todo versiones viejas) aborta con "Load failed". Chrome desktop es mas permisivo y por eso pasaba inadvertido.
+- **Fix:** Cambiado el header a `Content-Type: text/plain;charset=utf-8`, que convierte el POST en "simple request" y evita el preflight. Una sola linea modificada.
+- **Backend:** Sin cambios. Apps Script `doPost` lee `e.postData.contents` con `JSON.parse`, ignorando el Content-Type entrante.
+- **Estado:** lint OK (0 errors). Pendiente: redeploy Vercel + verificacion con Sven en su iPhone/iPad.
+- **Deuda relacionada (no abordada):** lentitud general de Apps Script en redes moviles. Posibles mejoras futuras: AbortController con timeout explicito, optimistic UI al guardar, o cache mas agresivo en el servicio.
 
 ## Resumen de Cambios (Fases 1-11)
 

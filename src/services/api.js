@@ -40,9 +40,13 @@ async function apiGet(action, params = {}) {
 async function apiPost(action, body = {}) {
   if (!isApiEnabled()) return null
 
+  // Nota: usamos text/plain en lugar de application/json a proposito.
+  // Apps Script lee el body desde e.postData.contents independientemente del
+  // Content-Type, y text/plain evita el preflight CORS OPTIONS que iOS Safari
+  // (sobre todo versiones viejas) no tolera bien con Apps Script Web Apps.
   const res = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({
       action,
       ...(API_KEY ? { api_key: API_KEY } : {}),
