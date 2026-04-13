@@ -8,5 +8,6 @@ export const USERS = [
   { username: "sonja", password: "sonja2026", name: "Sonja", role: "teacher", groups: ["G1","G2","G3","G4"] },
   { username: "sven", password: "sven2026", name: "Sven", role: "teacher", groups: ["G1","G2","G3","G4"] },
   { username: "stephanie", password: "stephanie2026", name: "Stephanie", role: "teacher", groups: ["G1","G2","G3","G4"] },
+  { username: "christian", password: "christian2026", name: "Christian", role: "teacher", groups: ["G1","G2","G3","G4"] },
   { username: "admin", password: "lingnova2026", name: "CEO", role: "ceo", groups: [] },
 ]
