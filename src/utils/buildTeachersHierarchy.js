@@ -16,9 +16,20 @@ export default function buildTeachersHierarchy(profesores, resumen) {
         .map(r => ({
           id: r.alumno_id,
           name: r.nombre,
+          // Campos viejos (compatibilidad temporal)
           weekly: r.semanal ?? 0,
           biweekly: r.quincenal ?? 0,
           monthly: r.mensual ?? 0,
+          // Campos nuevos (faltas absolutas + tendencia)
+          faltasSemana: r.faltas_semana_actual ?? 0,
+          clasesSemana: r.clases_semana_actual ?? 0,
+          faltasMes: r.faltas_mes ?? 0,
+          clasesMes: r.clases_mes ?? 0,
+          faltasTotal: r.faltas_total ?? 0,
+          clasesTotal: r.clases_total ?? 0,
+          rachaFaltas: r.racha_faltas ?? 0,
+          ultimas8: r.ultimas_8 ?? [],
+          historicoSemanas: r.historico_semanas ?? [],
         })),
     }))
     return {

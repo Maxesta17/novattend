@@ -9,10 +9,10 @@ describe('useDashboard', () => {
       'convocatorias', 'convocatoria', 'reload',
       'teachers', 'loading', 'error',
       'expandedTeacher', 'searchQuery', 'setSearchQuery',
-      'selectedStudent', 'setSelectedStudent', 'showAlertPopup',
-      'handleAlertClick', 'handleAlertClose', 'handleStudentClose',
+      'selectedStudent', 'setSelectedStudent', 'handleStudentClose',
       'handleClear', 'handleTeacherToggle', 'handleConvChange',
-      'totalStudents', 'globalAttendance', 'alertStudents', 'searchResults',
+      'totalStudents', 'globalAttendance',
+      'alertStudents', 'streakStudents', 'searchResults',
     ]
     expectedKeys.forEach(key => {
       expect(result.current).toHaveProperty(key)

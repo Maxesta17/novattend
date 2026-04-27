@@ -14,9 +14,7 @@ import { getAttendanceScheme } from '../../config/teachers.js'
 export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStudentClick }) {
   const [expandedGroups, setExpandedGroups] = useState({})
   const teacherStudents = teacher.groups.flatMap(g => g.students)
-  const teacherAttendance = teacherStudents.length > 0
-    ? Math.round(teacherStudents.reduce((acc, s) => acc + s.monthly, 0) / teacherStudents.length)
-    : 0
+  const teacherAttendance = aggregateAttendance(teacherStudents)
   const scheme = getAttendanceScheme(teacherAttendance)
 
   const toggleGroup = (groupId) => {
@@ -84,9 +82,7 @@ export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStud
 })
 
 function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onStudentClick }) {
-  const groupAttendance = group.students.length > 0
-    ? Math.round(group.students.reduce((acc, s) => acc + s.monthly, 0) / group.students.length)
-    : 0
+  const groupAttendance = aggregateAttendance(group.students)
   const scheme = getAttendanceScheme(groupAttendance)
 
   return (
@@ -111,8 +107,12 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
       {isExpanded && (
         <div className="pl-3 mt-1.5 border-l-2 border-border-light">
           {group.students.map(student => {
-            const s = getAttendanceScheme(student.monthly)
+            const studentAttendance = singleAttendance(student)
+            const s = getAttendanceScheme(studentAttendance)
             const initials = student.name.split(' ').map(n => n[0]).join('')
+            const fSem = student.faltasSemana ?? 0
+            const fMes = student.faltasMes ?? 0
+            const fTotal = student.faltasTotal ?? 0
             return (
               // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- D-02: contenido expandido es informativo, no interactivo por teclado
               <div
@@ -124,14 +124,14 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
                 <div className="flex-1 min-w-0">
                   <div className="font-montserrat text-xs font-medium text-text-dark truncate">{student.name}</div>
                   <div className="font-montserrat text-[9px] text-text-muted tabular-nums">
-                    S:{student.weekly}% Q:{student.biweekly}% M:{student.monthly}%
-                    {student.absences?.length > 0 && (
-                      <span className="text-error"> · Ult. falta: {student.absences[0]?.split('-').reverse().join('/')}</span>
+                    Sem:{fSem} · Mes:{fMes} · Total:{fTotal} faltas
+                    {student.rachaFaltas >= 2 && (
+                      <span className="text-error"> · Racha {student.rachaFaltas}</span>
                     )}
                   </div>
                 </div>
                 <Badge variant="status" color={s.bg} textColor={s.text} className="text-[10px]">
-                  {student.monthly}%
+                  {studentAttendance}%
                 </Badge>
               </div>
             )
@@ -140,6 +140,35 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
       )}
     </div>
   )
+}
+
+// % asistencia de un alumno: presentes / clases totales (con fallback a monthly viejo)
+function singleAttendance(student) {
+  if (typeof student.clasesTotal === 'number' && student.clasesTotal > 0) {
+    const presentes = student.clasesTotal - (student.faltasTotal ?? 0)
+    return Math.round((presentes / student.clasesTotal) * 100)
+  }
+  return student.monthly ?? 0
+}
+
+// % asistencia agregado de una lista de alumnos: suma faltas/clases (no media de medias)
+function aggregateAttendance(students) {
+  if (students.length === 0) return 0
+  let totalClases = 0
+  let totalFaltas = 0
+  let hasNew = false
+  students.forEach(s => {
+    if (typeof s.clasesTotal === 'number') {
+      totalClases += s.clasesTotal
+      totalFaltas += s.faltasTotal ?? 0
+      if (s.clasesTotal > 0) hasNew = true
+    }
+  })
+  if (hasNew && totalClases > 0) {
+    return Math.round(((totalClases - totalFaltas) / totalClases) * 100)
+  }
+  // Fallback a monthly viejo (mocks que aun no tienen campos nuevos)
+  return Math.round(students.reduce((acc, s) => acc + (s.monthly ?? 0), 0) / students.length)
 }
 
 function ChevronIcon({ rotated, size = 16 }) {

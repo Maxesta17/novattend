@@ -331,8 +331,9 @@ function handleGetAsistencia(e) {
 }
 
 /**
- * Calcula y devuelve resumen de asistencia con porcentajes por periodo.
- * Periodos: semanal (7 dias), quincenal (15 dias), mensual (30 dias).
+ * Calcula y devuelve resumen de asistencia.
+ * Devuelve metricas absolutas (faltas) orientadas a deteccion de patrones,
+ * mas campos viejos (semanal/quincenal/mensual en %) por compatibilidad.
  */
 function handleGetResumen(e) {
   const convocatoriaId = e.parameter.convocatoria_id;
@@ -349,6 +350,18 @@ function handleGetResumen(e) {
   });
 
   return jsonResponse(data);
+}
+
+/**
+ * Devuelve la fecha del lunes (00:00) de la semana ISO a la que pertenece d.
+ * Lunes-jueves son los dias de clase; semana = lunes a domingo natural.
+ */
+function mondayOf_(d) {
+  const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = dt.getDay(); // 0=dom, 1=lun, ..., 6=sab
+  const diff = (day === 0 ? -6 : 1 - day);
+  dt.setDate(dt.getDate() + diff);
+  return dt;
 }
 
 /**
@@ -372,10 +385,22 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
   const fmt = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
   const hoyStr = fmt(hoy);
 
+  // Ventanas viejas (compatibilidad con frontend actual)
   const hace7 = new Date(hoy);  hace7.setDate(hoy.getDate() - 7);
   const hace15 = new Date(hoy); hace15.setDate(hoy.getDate() - 15);
   const hace30 = new Date(hoy); hace30.setDate(hoy.getDate() - 30);
   const hace7Str = fmt(hace7), hace15Str = fmt(hace15), hace30Str = fmt(hace30);
+
+  // Ventana semana en curso (lunes a domingo de hoy)
+  const lunesActual = mondayOf_(hoy);
+  const domingoActual = new Date(lunesActual);
+  domingoActual.setDate(lunesActual.getDate() + 6);
+  const lunesActualStr = fmt(lunesActual);
+  const domingoActualStr = fmt(domingoActual);
+
+  // Mes natural en curso
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const inicioMesStr = fmt(inicioMes);
 
   const porAlumno = {};
   registros.forEach(r => {
@@ -384,7 +409,10 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
         total: 0, presentes: 0,
         sem_total: 0, sem_presentes: 0,
         quin_total: 0, quin_presentes: 0,
-        mens_total: 0, mens_presentes: 0
+        mens_total: 0, mens_presentes: 0,
+        sem_actual_total: 0, sem_actual_faltas: 0,
+        mes_total: 0, mes_faltas: 0,
+        registros: []
       };
     }
     const stats = porAlumno[r.alumno_id];
@@ -393,6 +421,7 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
 
     stats.total++;
     if (presente) stats.presentes++;
+    stats.registros.push({ fecha: fecha, presente: presente });
 
     if (fecha >= hace7Str && fecha <= hoyStr) {
       stats.sem_total++;
@@ -406,6 +435,14 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       stats.mens_total++;
       if (presente) stats.mens_presentes++;
     }
+    if (fecha >= lunesActualStr && fecha <= domingoActualStr) {
+      stats.sem_actual_total++;
+      if (!presente) stats.sem_actual_faltas++;
+    }
+    if (fecha >= inicioMesStr && fecha <= hoyStr) {
+      stats.mes_total++;
+      if (!presente) stats.mes_faltas++;
+    }
   });
 
   const pct = (presentes, total) => total > 0 ? Math.round((presentes / total) * 100) : 0;
@@ -415,19 +452,65 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       total: 0, presentes: 0,
       sem_total: 0, sem_presentes: 0,
       quin_total: 0, quin_presentes: 0,
-      mens_total: 0, mens_presentes: 0
+      mens_total: 0, mens_presentes: 0,
+      sem_actual_total: 0, sem_actual_faltas: 0,
+      mes_total: 0, mes_faltas: 0,
+      registros: []
     };
+
+    // Ordenar registros del alumno por fecha ascendente (mas antiguo primero)
+    const regsOrdenados = s.registros.slice().sort(function(x, y) {
+      return x.fecha < y.fecha ? -1 : (x.fecha > y.fecha ? 1 : 0);
+    });
+
+    // Ultimas 8 clases (mas reciente al final, como histograma)
+    const ultimas_8 = regsOrdenados.slice(-8);
+
+    // Racha de faltas: cuantas clases consecutivas mas recientes son falta
+    let racha = 0;
+    for (let i = regsOrdenados.length - 1; i >= 0; i--) {
+      if (regsOrdenados[i].presente === false) racha++;
+      else break;
+    }
+
+    // Historico semanal: agrupar por semana lun-dom, ultimas 8 semanas
+    const porSemana = {};
+    regsOrdenados.forEach(function(r) {
+      const partes = r.fecha.split('-');
+      const dt = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+      const lun = mondayOf_(dt);
+      const lunStr = fmt(lun);
+      if (!porSemana[lunStr]) {
+        porSemana[lunStr] = { semana_inicio: lunStr, clases: 0, faltas: 0 };
+      }
+      porSemana[lunStr].clases++;
+      if (!r.presente) porSemana[lunStr].faltas++;
+    });
+    const semanasArr = Object.keys(porSemana)
+      .sort()
+      .map(function(k) { return porSemana[k]; });
+    const historico_semanas = semanasArr.slice(-8);
 
     return {
       alumno_id: a.id,
       nombre: a.nombre,
       profesor_id: a.profesor_id,
       grupo: a.grupo,
+      // Campos viejos (compatibilidad)
       semanal: pct(s.sem_presentes, s.sem_total),
       quincenal: pct(s.quin_presentes, s.quin_total),
       mensual: pct(s.mens_presentes, s.mens_total),
       clases_total: s.total,
-      clases_presentes: s.presentes
+      clases_presentes: s.presentes,
+      // Campos nuevos (faltas absolutas + tendencia)
+      faltas_semana_actual: s.sem_actual_faltas,
+      clases_semana_actual: s.sem_actual_total,
+      faltas_mes: s.mes_faltas,
+      clases_mes: s.mes_total,
+      faltas_total: s.total - s.presentes,
+      racha_faltas: racha,
+      ultimas_8: ultimas_8,
+      historico_semanas: historico_semanas
     };
   });
 }

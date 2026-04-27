@@ -45,9 +45,6 @@ const MOCK_STATE = {
   setSearchQuery: vi.fn(),
   selectedStudent: null,
   setSelectedStudent: vi.fn(),
-  showAlertPopup: false,
-  handleAlertClick: vi.fn(),
-  handleAlertClose: vi.fn(),
   handleStudentClose: vi.fn(),
   handleClear: vi.fn(),
   handleTeacherToggle: vi.fn(),
@@ -55,6 +52,7 @@ const MOCK_STATE = {
   totalStudents: 48,
   globalAttendance: 83,
   alertStudents: [],
+  streakStudents: [],
   searchResults: [],
 }
 

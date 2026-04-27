@@ -1,8 +1,19 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-04-08
-- **Hito:** Hotfix iOS Safari — POST a Apps Script fallaba con "Load failed" por preflight CORS
+- **Fecha:** 2026-04-27
+- **Hito:** Dashboard CEO orientado a alertas — faltas absolutas (semana lun-jue) sustituyen porcentajes rolling
+
+### 2026-04-27 — Faltas absolutas + Alertas semana en curso
+- **Por que:** los porcentajes semanal/quincenal/mensual del popup eran ruido (ventanas solapadas sobre 3-4 clases, "0%" engañoso cuando no hay clases, no detectaban "alumno empieza a faltar"). El CEO necesita ver de un vistazo "quien faltó 2+ veces esta semana".
+- **Fase A — Backend (`apps-script/Código.js`):** `computeResumen` extendido para devolver, ademas de los % viejos, `faltas_semana_actual`, `clases_semana_actual`, `faltas_mes`, `clases_mes`, `faltas_total`, `racha_faltas`, `ultimas_8` y `historico_semanas` (ultimas 8 semanas lun-dom). Helper `mondayOf_` para semanas naturales. `clasp push` ejecutado.
+- **Fase B — Vista Alertas semana (DashboardPage + WeekAlerts.jsx):** componente nuevo arriba del listado de profesores con dos secciones: "2+ faltas esta semana" (rojo) y "Racha activa, 2+ faltas seguidas" (naranja). Sustituye el modal `AlertList` viejo (borrado). `useDashboard` recalcula `alertStudents` (faltas semana >= 2) y nuevo `streakStudents` (racha >= 2). `globalAttendance` ahora se calcula sobre faltas/clases reales de la convocatoria.
+- **Fase C — Popup alumno (StudentDetailPopup.jsx):** rediseñado. Reemplaza los 3 porcentajes por filas de "faltas / clases" para semana, mes y convocatoria; mini-historial de las ultimas 8 clases con fecha+color (verde/rojo); historico semanal lun-dom de las ultimas 8 semanas; bloque de dias faltados conservado.
+- **Fase D — Limpieza:** `AlertList.jsx` borrado, `TeacherCard.jsx` muestra ahora "Sem:N · Mes:N · Total:N faltas" + badge con % real (helpers `singleAttendance` y `aggregateAttendance` con fallback a `monthly` para mocks). Tests actualizados (`useDashboard.test.jsx`, `DashboardPage.test.jsx`, `api.test.jsx` alineado con `text/plain`).
+- **Estado:** lint 0 errores, 135/135 tests OK, build 1.21s. Campos viejos `weekly/biweekly/monthly` se mantienen en backend y mocks por compatibilidad temporal — Fase E pendiente para retirar cuando todo el frontend este migrado y validado en produccion.
+- **Pendiente operativo:** redeploy Apps Script (Implementar > Nueva version) + redeploy Vercel + insistir a profesores para que marquen lunes-jueves a diario; sin registros consistentes la alerta de "2 faltas/semana" no dispara.
+
+### 2026-04-08 — Hotfix iOS Safari — POST a Apps Script fallaba con "Load failed" por preflight CORS
 
 ### Hotfix 2026-04-08 — POST CORS preflight (iOS Safari)
 - **Sintoma reportado:** Profesor Sven (iPhone SE 2016 + iPad) no podia guardar asistencia. Login y carga de alumnos OK, pero al pulsar "Guardar asistencia" -> "Load failed". Reproducible en ambos dispositivos Apple.

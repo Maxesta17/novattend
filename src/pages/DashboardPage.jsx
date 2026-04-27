@@ -3,7 +3,7 @@ import useDashboard from '../hooks/useDashboard.js'
 import PageHeader from '../components/features/PageHeader.jsx'
 import TeacherCard from '../components/features/TeacherCard.jsx'
 import StudentDetailPopup from '../components/features/StudentDetailPopup.jsx'
-import AlertList from '../components/features/AlertList.jsx'
+import WeekAlerts from '../components/features/WeekAlerts.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import SearchInput from '../components/ui/SearchInput.jsx'
@@ -21,10 +21,10 @@ export default function DashboardPage() {
     convocatorias, convocatoria, reload,
     teachers, loading, error,
     expandedTeacher, searchQuery, setSearchQuery,
-    selectedStudent, setSelectedStudent, showAlertPopup,
-    handleAlertClick, handleAlertClose, handleStudentClose,
+    selectedStudent, setSelectedStudent,
+    handleStudentClose,
     handleClear, handleTeacherToggle, handleConvChange,
-    totalStudents, globalAttendance, alertStudents, searchResults,
+    totalStudents, globalAttendance, alertStudents, streakStudents, searchResults,
   } = useDashboard()
 
   if (loading) return <DashboardSkeleton />
@@ -58,11 +58,9 @@ export default function DashboardPage() {
             <StatCard value={`${globalAttendance}%`} label="Asistencia" color="gold" variant="dark" />
             <StatCard
               value={alertStudents.length}
-              label="Alerta"
+              label="En alerta"
               color="gold"
               variant="dark"
-              onClick={handleAlertClick}
-              className="hover:bg-gold/15"
             />
           </div>
         </PageHeader>
@@ -97,9 +95,16 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Alertas de la semana */}
+        <WeekAlerts
+          weekStudents={alertStudents}
+          streakStudents={streakStudents}
+          onStudentClick={setSelectedStudent}
+        />
+
         {/* Lista de profesores */}
         <div className="px-4">
-          <h3 className="font-cinzel text-[15px] font-semibold text-text-dark mt-4 mb-3 text-balance">
+          <h3 className="font-cinzel text-[15px] font-semibold text-text-dark mt-6 mb-3 text-balance">
             Profesores
           </h3>
           {(teachers || []).map(teacher => (
@@ -114,20 +119,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Popups */}
+      {/* Popup detalle alumno */}
       <StudentDetailPopup
         student={selectedStudent}
         convocatoriaId={convocatoria?.id}
         onClose={handleStudentClose}
       />
-
-      {showAlertPopup && (
-        <AlertList
-          students={alertStudents}
-          onStudentClick={(s) => { setSelectedStudent(s); handleAlertClose() }}
-          onClose={handleAlertClose}
-        />
-      )}
     </>
   )
 }

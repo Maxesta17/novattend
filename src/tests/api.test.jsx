@@ -120,7 +120,7 @@ describe('api.js', () => {
       'https://script.google.com/test',
       expect.objectContaining({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       })
     )
 

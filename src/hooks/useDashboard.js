@@ -24,9 +24,6 @@ import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
  *   setSearchQuery: (q: string) => void,
  *   selectedStudent: Object|null,
  *   setSelectedStudent: (s: Object|null) => void,
- *   showAlertPopup: boolean,
- *   handleAlertClick: () => void,
- *   handleAlertClose: () => void,
  *   handleStudentClose: () => void,
  *   handleClear: () => void,
  *   handleTeacherToggle: (id: string) => void,
@@ -34,6 +31,7 @@ import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
  *   totalStudents: number,
  *   globalAttendance: number,
  *   alertStudents: Array,
+ *   streakStudents: Array,
  *   searchResults: Array,
  * }}
  */
@@ -53,12 +51,9 @@ export default function useDashboard() {
   const [expandedTeacher, setExpandedTeacher] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
-  const [showAlertPopup, setShowAlertPopup] = useState(false)
   const debouncedSearch = useDebounce(searchQuery, 300)
 
   // Handlers estabilizados con useCallback para componentes memorizados
-  const handleAlertClick = useCallback(() => setShowAlertPopup(true), [])
-  const handleAlertClose = useCallback(() => setShowAlertPopup(false), [])
   const handleStudentClose = useCallback(() => setSelectedStudent(null), [])
   const handleClear = useCallback(() => setSearchQuery(''), [])
   const handleTeacherToggle = useCallback((id) => setExpandedTeacher(prev => prev === id ? null : id), [])
@@ -129,16 +124,21 @@ export default function useDashboard() {
     return teachers.reduce((acc, t) => acc + t.groups.reduce((g, gr) => g + gr.students.length, 0), 0)
   }, [teachers])
 
+  // Asistencia global: % presentes sobre total de clases registradas en la convocatoria
   const globalAttendance = useMemo(() => {
     if (!teachers || teachers.length === 0) return 0
-    return Math.round(
-      teachers.reduce((acc, t) =>
-        acc + t.groups.reduce((g, gr) => {
-          if (gr.students.length === 0) return g
-          return g + gr.students.reduce((s, st) => s + st.monthly, 0) / gr.students.length
-        }, 0) / (t.groups.length || 1), 0
-      ) / teachers.length
+    let totalClases = 0
+    let totalFaltas = 0
+    teachers.forEach(t =>
+      t.groups.forEach(gr =>
+        gr.students.forEach(st => {
+          totalClases += st.clasesTotal ?? 0
+          totalFaltas += st.faltasTotal ?? 0
+        })
+      )
     )
+    if (totalClases === 0) return 0
+    return Math.round(((totalClases - totalFaltas) / totalClases) * 100)
   }, [teachers])
 
   const allStudents = useMemo(() => {
@@ -155,7 +155,21 @@ export default function useDashboard() {
     )
   }, [teachers])
 
-  const alertStudents = useMemo(() => allStudents.filter(s => s.weekly <= 80), [allStudents])
+  // Alertas CEO: alumnos con 2+ faltas en la semana en curso (lun-jue)
+  const alertStudents = useMemo(
+    () => allStudents
+      .filter(s => (s.faltasSemana ?? 0) >= 2)
+      .sort((a, b) => (b.faltasSemana ?? 0) - (a.faltasSemana ?? 0)),
+    [allStudents]
+  )
+
+  // Racha activa: alumnos cuyas 2+ ultimas clases consecutivas son falta
+  const streakStudents = useMemo(
+    () => allStudents
+      .filter(s => (s.rachaFaltas ?? 0) >= 2)
+      .sort((a, b) => (b.rachaFaltas ?? 0) - (a.rachaFaltas ?? 0)),
+    [allStudents]
+  )
 
   const searchResults = useMemo(() => {
     if (debouncedSearch.length < 2) return []
@@ -174,9 +188,6 @@ export default function useDashboard() {
     setSearchQuery,
     selectedStudent,
     setSelectedStudent,
-    showAlertPopup,
-    handleAlertClick,
-    handleAlertClose,
     handleStudentClose,
     handleClear,
     handleTeacherToggle,
@@ -184,6 +195,7 @@ export default function useDashboard() {
     totalStudents,
     globalAttendance,
     alertStudents,
+    streakStudents,
     searchResults,
   }
 }
