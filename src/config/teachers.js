@@ -127,11 +127,60 @@ export const TEACHERS_DATA = [
   },
 ]
 
-// Inyectar fechas de inasistencia a todos los alumnos
+// Genera campos nuevos (faltas absolutas + tendencia) derivados del % monthly viejo
+// para que el modo offline/dev muestre alertas reales sin depender del backend.
+const buildMockMetrics = (monthlyPct) => {
+  const semanalClases = 4
+  const mesClases = 16
+  const totalClases = 20
+  const probFalta = (100 - monthlyPct) / 100
+
+  // Distribuye faltas pseudo-aleatoriamente entre las 20 ultimas clases
+  const registros = []
+  let racha = 0
+  for (let i = 0; i < totalClases; i++) {
+    const presente = Math.random() > probFalta
+    registros.push(presente)
+  }
+  // Calcular racha desde el final
+  for (let i = registros.length - 1; i >= 0; i--) {
+    if (!registros[i]) racha++
+    else break
+  }
+
+  const faltasSemana = registros.slice(-semanalClases).filter(p => !p).length
+  const faltasMes = registros.slice(-mesClases).filter(p => !p).length
+  const faltasTotal = registros.filter(p => !p).length
+
+  // Construir ultimas_8 con fechas mock (los ultimos 8 dias laborables)
+  const today = new Date()
+  const ultimas8 = []
+  let cursor = new Date(today)
+  while (ultimas8.length < 8) {
+    if (cursor.getDay() !== 0 && cursor.getDay() !== 6) {
+      const fecha = cursor.toISOString().split('T')[0]
+      const idx = totalClases - 1 - ultimas8.length
+      ultimas8.unshift({ fecha, presente: registros[idx] ?? true })
+    }
+    cursor.setDate(cursor.getDate() - 1)
+  }
+
+  return {
+    faltasSemana, clasesSemana: semanalClases,
+    faltasMes, clasesMes: mesClases,
+    faltasTotal, clasesTotal: totalClases,
+    rachaFaltas: racha,
+    ultimas8,
+    historicoSemanas: [],
+  }
+}
+
+// Inyectar fechas de inasistencia y campos nuevos a todos los alumnos
 TEACHERS_DATA.forEach(teacher => {
   teacher.groups.forEach(group => {
     group.students.forEach(student => {
       student.absences = generateAbsences(student.monthly)
+      Object.assign(student, buildMockMetrics(student.monthly))
     })
   })
 })
