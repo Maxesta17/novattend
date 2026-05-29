@@ -301,33 +301,45 @@ function handleGetAlumnos(e) {
 
 /**
  * Devuelve registros de asistencia filtrados.
+ *
+ * Cacheado por combinacion de filtros. La consulta tipica (un alumno concreto,
+ * desde el popup de detalle) devuelve pocos registros y cabe de sobra en el
+ * limite de 100KB de CacheService, evitando releer las ~900 filas de la hoja
+ * en cada apertura del popup.
  */
 function handleGetAsistencia(e) {
-  const convocatoriaId = e.parameter.convocatoria_id;
-  const profesorId = e.parameter.profesor_id;
-  const grupo = e.parameter.grupo;
-  const fecha = e.parameter.fecha; // formato: yyyy-MM-dd
-  const alumnoId = e.parameter.alumno_id;
+  const convocatoriaId = e.parameter.convocatoria_id || '';
+  const profesorId = e.parameter.profesor_id || '';
+  const grupo = e.parameter.grupo || '';
+  const fecha = e.parameter.fecha || ''; // formato: yyyy-MM-dd
+  const alumnoId = e.parameter.alumno_id || '';
 
-  let registros = sheetToObjects(SHEET_NAMES.ASISTENCIA);
+  const cacheKey = 'asist_' + convocatoriaId + '_' + profesorId + '_' +
+    grupo + '_' + fecha + '_' + alumnoId;
 
-  if (convocatoriaId) {
-    registros = registros.filter(r => r.convocatoria_id === convocatoriaId);
-  }
-  if (profesorId) {
-    registros = registros.filter(r => r.profesor_id === profesorId);
-  }
-  if (grupo) {
-    registros = registros.filter(r => r.grupo === grupo);
-  }
-  if (fecha) {
-    registros = registros.filter(r => r.fecha === fecha);
-  }
-  if (alumnoId) {
-    registros = registros.filter(r => r.alumno_id === alumnoId);
-  }
+  const data = cachedGet(cacheKey, function() {
+    let registros = sheetToObjects(SHEET_NAMES.ASISTENCIA);
 
-  return jsonResponse(registros);
+    if (convocatoriaId) {
+      registros = registros.filter(r => r.convocatoria_id === convocatoriaId);
+    }
+    if (profesorId) {
+      registros = registros.filter(r => r.profesor_id === profesorId);
+    }
+    if (grupo) {
+      registros = registros.filter(r => r.grupo === grupo);
+    }
+    if (fecha) {
+      registros = registros.filter(r => r.fecha === fecha);
+    }
+    if (alumnoId) {
+      registros = registros.filter(r => r.alumno_id === alumnoId);
+    }
+
+    return registros;
+  });
+
+  return jsonResponse(data);
 }
 
 /**
@@ -639,8 +651,8 @@ function handleGuardarAsistencia(body) {
     sheet.getRange(2, 1, todasLasFilas.length, 7).setValues(todasLasFilas);
   }
 
-  // Invalidar cache de resumen para esta convocatoria
-  cacheInvalidate(['res_' + convocatoria_id]);
+  // Invalidar cache de resumen y de asistencia para esta convocatoria
+  cacheInvalidate(['res_' + convocatoria_id, 'asist_' + convocatoria_id]);
 
   // Actualizar estadisticas de la hoja de grupo afectada
   try {
@@ -787,8 +799,9 @@ function handleActualizarAlumno(body) {
     }
   });
 
-  // Invalidar cache de alumnos (puede cambiar grupo/profesor)
-  cacheInvalidate(['alu_']);
+  // Invalidar cache de alumnos, asistencia y resumen.
+  // Un cambio de grupo/profesor afecta a las tres (el filtrado depende de ellos).
+  cacheInvalidate(['alu_', 'asist_', 'res_']);
 
   writeLog(
     body.usuario || 'admin',
@@ -801,6 +814,43 @@ function handleActualizarAlumno(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ============================================================
+// WARM CACHE — Calentar cache de resumenes (disparador matutino)
+// ============================================================
+
+/**
+ * Pre-calcula y cachea el resumen de cada convocatoria activa.
+ *
+ * Pensado para ejecutarse con un disparador time-driven temprano (ej. 7:00),
+ * de modo que el primer profesor del dia no pague el calculo en frio
+ * (medido en ~6,5s vs ~1,6s en caliente).
+ *
+ * Configuracion del disparador (manual, una vez):
+ *   Editor Apps Script > Disparadores > Anadir disparador
+ *   - Funcion: warmCache
+ *   - Evento: Basado en tiempo > Temporizador diario > 6-7 a.m.
+ */
+function warmCache() {
+  const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const convocatorias = sheetToObjects(SHEET_NAMES.CONVOCATORIAS)
+    .filter(c => c.activa === true && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+
+  let calentadas = 0;
+  convocatorias.forEach(c => {
+    // Resumen global de la convocatoria (sin filtro de profesor/grupo).
+    // La clave debe coincidir EXACTA con la de handleGetResumen:
+    // 'res_' + convocatoria_id + '_' + profesor_id + '_' + grupo (ultimos vacios).
+    const cacheKey = 'res_' + c.id + '_' + '' + '_' + '';
+    cachedGet(cacheKey, function() {
+      return computeResumen(c.id, '', '');
+    });
+    calentadas++;
+  });
+
+  writeLog('SISTEMA', 'WARM_CACHE', calentadas + ' convocatoria(s) precalentada(s)');
+  return calentadas;
 }
 
 // ============================================================
