@@ -82,9 +82,17 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-router': ['react-router-dom'],
+        // Separar dependencias de node_modules en chunks cacheables propios.
+        // Una funcion (en vez de array de nombres) garantiza que React acabe
+        // en su chunk en vez de mezclarse en index.js, para que el navegador
+        // no re-descargue React en cada deploy de codigo propio.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router')) return 'vendor-router'
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+              return 'vendor-react'
+            }
+          }
         }
       }
     }
