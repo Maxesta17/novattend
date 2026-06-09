@@ -1,8 +1,31 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-04-27
-- **Hito:** Dashboard CEO orientado a alertas — faltas absolutas (semana lun-jue) sustituyen porcentajes rolling
+- **Fecha:** 2026-06-09
+- **Hito:** Registrar asistencia de dias pasados (ultimos 7 dias) + fix boton anidado StudentRow
+
+### 2026-06-09 — Asistencia retroactiva + fix HTML invalido + fix Nadine
+- **Fix operativo (Sheet):** Nadine olvido pasar lista el lunes 2026-06-08 (su G1, conv-abr26) y la app no le dejaba registrar dias pasados. Insertados sus 10 registros (ASISTENCIA A1119:G1128): todos presentes menos Jorge (alu-0051) y Manuel (alu-0052). Via `appendRows` (no calcular fila a mano: la hoja tiene datos mas alla de la fila 1000, insertar en 1001 habria pisado registros de Elisabeth).
+- **Feature: registrar dia pasado (ultimos 7 dias).** Causa raiz del dolor: la fecha estaba fijada a HOY en AttendancePage (`new Date().toISOString()`), no habia selector. El backend YA aceptaba cualquier fecha (upsert idempotente), asi que fue solo frontend.
+  - Nuevos: `utils/dateUtils.js` (formatLocalDate FIX bug UTC, getLast7Days, labelFromIso), `features/DateSelector.jsx` (panel 7 dias), `features/DateHeaderControl.jsx`, `features/ConfirmPastDayModal.jsx`. Todos <250 lineas.
+  - `useStudents` acepta `selectedDate`; en dia pasado pre-carga la asistencia ya guardada (edicion real, no en blanco) via getAsistencia. Token last-write-wins contra race al cambiar grupo/dia rapido.
+  - UX: selector oculto por defecto (flujo de hoy intacto). En dia pasado: aviso "Registrando dia pasado" + modal de confirmacion antes de sobrescribir. Se permite 0 presentes solo en dia pasado (registrar "no vino nadie").
+  - Revision adversarial multi-agente detecto 2 bugs ALTOS pre-commit (race condition que persistia grupo equivocado + clave id/name inconsistente que perdia datos). Corregidos.
+  - Tests nuevos: dateUtils (6) + pre-carga dia pasado (3). Verificado en navegador (Playwright): flujo completo.
+- **Fix: boton anidado en StudentRow (HTML invalido).** La fila era `<button>` con el `<button>` de ToggleSwitch dentro. React lo avisaba en runtime (no eslint). Conflicto: div->button dispara jsx-a11y, button anidado es invalido. Solucion: un solo control — la fila es `<button role="switch" aria-checked>` y ToggleSwitch gana prop `presentational` (`<span aria-hidden>`). Sin eslint-disable. Borrada rama basura `worktree-agent-aad53906` (144 commits tras main).
+- **Estado:** lint 0 errores, 162/162 tests OK, build OK. Feature y fix mergeados a main + push (Vercel desplegando). 3 ramas de trabajo cerradas y borradas; solo queda main.
+- **Pendiente:** panel admin Aurora (su dolor de fondo, no toca aun), decision G4 LINGNOVA de Sven.
+
+### 2026-05-29 — Rendimiento backend + reasignacion grupo financiado
+- **Operacion de datos (Sheet):** Sven despedido. Reasignado su grupo financiado **G3 de conv-abr26** a Sonja: 7 alumnos (ALUMNOS D9:D15) + 140 registros de ASISTENCIA cambiados de `prof-sven` a `prof-sonja`. Sonja hereda el historico. Pestana fisica renombrada a "ABR26 B2 - Sonja - G3". NO tocado: el G4 de LINGNOVA de Sven (clases 1-a-1, fila 645) — sigue con prof-sven. Sven sigue activo en PROFESORES.
+- **Diagnostico de lentitud (medido con curl):** peaje fijo de Apps Script ~1,6s (medido con `ping`). Cuello real = `getAsistencia` sin cache leyendo las ~900 filas de ASISTENCIA en cada llamada → 4-8s. El bundle de React (85KB gzip) NO era problema.
+- **Fix backend (`Código.js`, desplegado v13):** `handleGetAsistencia` envuelto en `cachedGet` (clave por filtros) → 4-8s a ~1,6s en caliente. Invalidacion `asist_`/`res_` en guardar/actualizar. Nueva funcion `warmCache()` + disparador time-driven diario 06-07h (configurado) para evitar calculo en frio (~6,5s) del primer profe.
+- **Fix frontend (`vite.config.js`):** `manualChunks` por funcion en vez de array → React en chunk propio cacheable. index.js 196KB→16KB, vendor-react 0KB(vacio)→192KB. Mejora cache entre deploys.
+- **Estado:** lint 0 errores, 151/151 tests OK, build 1.26s. Merge a main + push a GitHub (resuelto conflicto cuenta Maxesta18/Maxesta17 con `gh auth switch`). Vercel desplegando.
+- **Decision Firebase:** APLAZADA con criterio. Solo ahorraria el peaje fijo ~1,6s; el problema gordo se resolvio sin migrar. Orden acordado: 1) optimizar [HECHO], 2) panel admin Aurora [PENDIENTE, no toca aun], 3) Firebase solo si el peaje sigue molestando.
+
+### 2026-04-27 — Faltas absolutas + Alertas semana en curso (hito anterior)
+- **Hito previo:** Dashboard CEO orientado a alertas — faltas absolutas (semana lun-jue) sustituyen porcentajes rolling
 
 ### 2026-04-27 — Faltas absolutas + Alertas semana en curso
 - **Por que:** los porcentajes semanal/quincenal/mensual del popup eran ruido (ventanas solapadas sobre 3-4 clases, "0%" engañoso cuando no hay clases, no detectaban "alumno empieza a faltar"). El CEO necesita ver de un vistazo "quien faltó 2+ veces esta semana".

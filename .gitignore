@@ -36,6 +36,9 @@ dist-ssr
 *.jpg
 .vercel
 
+# Outputs de debug de la API (resumenes descargados ad-hoc)
+resumen_*.json
+
 # Cache de herramientas
 .vite/
 coverage/
