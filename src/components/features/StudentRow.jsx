@@ -21,8 +21,13 @@ export default memo(function StudentRow({
   stats,
 }) {
   return (
+    // La fila ENTERA es el control switch. El ToggleSwitch interno es solo
+    // visual (presentational), para no anidar un boton dentro de otro.
     <button
       type="button"
+      role="switch"
+      aria-checked={isPresent}
+      aria-label={`Asistencia de ${name}: ${isPresent ? 'presente' : 'ausente'}`}
       className={[
         'animate-slide-up flex items-center gap-3 p-3 mb-2 rounded-xl text-left w-full',
         'transition-all duration-300 border-[1.5px]',
@@ -54,8 +59,8 @@ export default memo(function StudentRow({
         {stats}
       </div>
 
-      {/* Toggle */}
-      <ToggleSwitch checked={isPresent} onChange={onToggle} />
+      {/* Indicador visual (no interactivo: la fila ya es el control) */}
+      <ToggleSwitch checked={isPresent} presentational />
     </button>
   )
 })
