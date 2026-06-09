@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import StatCard from '../components/ui/StatCard.jsx'
 import Button from '../components/ui/Button.jsx'
+import { formatLocalDate, labelFromIso } from '../utils/dateUtils'
 
 /**
  * Pagina de confirmacion post-guardado de asistencia.
@@ -21,10 +22,14 @@ export default function SavedPage() {
 
   if (!state) return null
 
-  const { present, total, group, convocatoria } = state
+  const { present, total, group, convocatoria, savedDate } = state
   const absent = total - present
   const percentage = Math.round((present / total) * 100)
-  const today = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+  const todayIso = formatLocalDate(new Date())
+  const isPastDay = Boolean(savedDate) && savedDate !== todayIso
+  const dateText = savedDate
+    ? labelFromIso(savedDate)
+    : new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
     <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-off-white flex flex-col items-center justify-center p-5 box-border relative">
@@ -43,9 +48,14 @@ export default function SavedPage() {
       </h1>
 
       {/* Subtitulo */}
-      <p className="animate-fade-up delay-6 font-montserrat text-[13px] text-text-muted m-0 mb-7 text-pretty text-center">
-        {group} · {today}
-        {convocatoria && <span className="block mt-0.5 text-[11px]">{convocatoria.nombre}</span>}
+      <p className="animate-fade-up delay-6 font-montserrat text-[13px] text-text-muted m-0 mb-7 text-pretty text-center capitalize">
+        {group} · {dateText}
+        {isPastDay && (
+          <span className="block mt-1 not-italic font-bold text-warning normal-case">
+            (dia pasado)
+          </span>
+        )}
+        {convocatoria && <span className="block mt-0.5 text-[11px] normal-case">{convocatoria.nombre}</span>}
       </p>
 
       {/* Card resumen */}
