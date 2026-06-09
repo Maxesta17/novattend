@@ -2,10 +2,13 @@ import { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { isApiEnabled } from '../config/api'
 import { guardarAsistencia } from '../services/api'
+import { formatLocalDate, labelFromIso } from '../utils/dateUtils'
 import useStudents, { GROUPS } from '../hooks/useStudents'
 import PageHeader from '../components/features/PageHeader.jsx'
 import GroupTabs from '../components/features/GroupTabs.jsx'
 import StudentRow from '../components/features/StudentRow.jsx'
+import DateHeaderControl from '../components/features/DateHeaderControl.jsx'
+import ConfirmPastDayModal from '../components/features/ConfirmPastDayModal.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import ProgressBar from '../components/ui/ProgressBar.jsx'
 import Badge from '../components/ui/Badge.jsx'
@@ -32,6 +35,15 @@ export default function AttendancePage() {
   const profesorId = sessionUser?.username ? `prof-${sessionUser.username}` : null
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  // todayIso se fija una vez por sesion (igual que selectedDate) para que
+  // cruzar medianoche con la pestana abierta no marque "dia pasado" en falso.
+  const todayIso = useMemo(() => formatLocalDate(new Date()), [])
+  const [selectedDate, setSelectedDate] = useState(todayIso)
+  const [selectorOpen, setSelectorOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const isPastDay = selectedDate !== todayIso
+  const selectedLabel = labelFromIso(selectedDate)
 
   const {
     students,
@@ -44,20 +56,36 @@ export default function AttendancePage() {
     presentCount,
     absentCount,
     attendancePercent,
-  } = useStudents(convocatoria, profesorId)
+  } = useStudents(convocatoria, profesorId, selectedDate)
 
   const totalCount = students.length
 
-  const handleSave = async () => {
-    if (presentCount === 0) return
+  // En el flujo de hoy exigimos al menos 1 presente (evita guardados vacios
+  // por error). Al editar un dia pasado SI se permite 0 presentes, para poder
+  // registrar correctamente un dia en que no vino nadie.
+  const canSave = isPastDay || presentCount > 0
+
+  // Al pulsar Guardar: si es un dia pasado, pedir confirmacion antes de
+  // sobrescribir (evita machacar por error la asistencia ya registrada).
+  const handleSaveClick = () => {
+    if (!canSave) return
+    if (isPastDay) {
+      setSelectorOpen(false)
+      setConfirmOpen(true)
+      return
+    }
+    persistAttendance()
+  }
+
+  const persistAttendance = async () => {
+    setConfirmOpen(false)
     setSaving(true)
     setSaveError(null)
 
     if (isApiEnabled() && convocatoria) {
       try {
-        const hoy = new Date().toISOString().split('T')[0]
         await guardarAsistencia({
-          fecha: hoy,
+          fecha: selectedDate,
           convocatoria_id: convocatoria.id,
           profesor_id: profesorId,
           grupo: selectedGroup,
@@ -82,14 +110,16 @@ export default function AttendancePage() {
         total: totalCount,
         group: selectedGroup,
         convocatoria,
+        savedDate: selectedDate,
       },
     })
   }
 
   const today = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+  const dateText = isPastDay ? selectedLabel : today
   const subtitle = convocatoria
-    ? `${convocatoria.nombre} · ${today}`
-    : today
+    ? `${convocatoria.nombre} · ${dateText}`
+    : dateText
 
   const saveIcon = (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -109,6 +139,15 @@ export default function AttendancePage() {
           groups={GROUPS}
           selected={selectedGroup}
           onChange={setSelectedGroup}
+        />
+        <DateHeaderControl
+          selectedDate={selectedDate}
+          selectedLabel={selectedLabel}
+          isPastDay={isPastDay}
+          isOpen={selectorOpen}
+          onToggle={() => setSelectorOpen(o => !o)}
+          onSelectDate={setSelectedDate}
+          onClose={() => setSelectorOpen(false)}
         />
       </PageHeader>
 
@@ -177,15 +216,23 @@ export default function AttendancePage() {
       <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pt-3 pb-[max(22px,env(safe-area-inset-bottom))] bg-off-white shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
         <ErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
         <Button
-          variant={presentCount === 0 ? 'disabled' : 'primary'}
+          variant={canSave ? 'primary' : 'disabled'}
           loading={saving}
           icon={saveIcon}
           fullWidth
-          onClick={handleSave}
+          onClick={handleSaveClick}
         >
           {saving ? 'Guardando...' : `Guardar asistencia · ${presentCount}/${totalCount}`}
         </Button>
       </div>
+
+      <ConfirmPastDayModal
+        isOpen={confirmOpen}
+        dateLabel={selectedLabel}
+        group={selectedGroup}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={persistAttendance}
+      />
     </div>
   )
 }
