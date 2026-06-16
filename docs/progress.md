@@ -1,8 +1,20 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
+- **Fecha:** 2026-06-16
+- **Hito:** Justificar faltas de asistencia (profesores) — full-stack, rama `feat/justificar-faltas`
+
+### 2026-06-16 — Justificar faltas (profesor)
+- **Feature:** el profesor puede justificar/quitar la justificacion de faltas pasadas de sus alumnos. Una falta justificada NO penaliza el porcentaje (se excluye del calculo) pero SIGUE visible en el historial, marcada distinto (gold). Decisiones de negocio del usuario: excluir del %, justificar dias despues (no en el marcado diario), motivo de lista predefinida + "Otro", tocar backend ahora (pese a ser "Ola 4").
+- **Backend (`apps-script/Código.js`):** 2 columnas nuevas en ASISTENCIA (`justificada`, `motivo`) al final + lectura defensiva para filas viejas de 7 cols. `computeResumen`: justificada NO suma a total/presentes en ninguna ventana (% sube) pero SI entra en `registros` → visible en `ultimas_8`/`historico_semanas` con flags (`ultimas_8[i].justificada`, `historico_semanas[i].justificadas`); racha la salta como neutral (ni suma ni rompe). `handleGuardarAsistencia` preserva justificada/motivo al re-guardar el dia (solo si el alumno sigue ausente). Nuevo endpoint POST `justificarFalta` (clave de fila unica = `fecha+alumno_id+convocatoria_id`, valida `presente===false`, invalida cache). **Pendiente manual del usuario: redeploy clasp (`clasp push`+`version`+`redeploy <ID>`) y verificar/crear cabeceras `justificada`/`motivo` en la hoja real.**
+- **Frontend:** `config/justificationReasons.js` (motivos + "Otro"); `api.justificarFalta`; `JustifyAbsenceModal.jsx` (elegir motivo, "Otro"→textarea, confirmar/quitar, muestra error); `AbsencesBlock.jsx` (justificadas en gold con motivo); `StudentDetailPopup` refrescado + captura de error. **Acceso del profesor:** `StudentRow` admite prop opcional `onInfo` → boton "i" hermano del switch (no anidado, respeta patron "un solo control"); `StudentList.jsx` (nuevo) monta el detalle desde `AttendancePage`. `WhatsNewModal.jsx` (novedad con mini-tutorial, una vez por dispositivo via localStorage `novattend_whatsnew_justificar_v1`, solo teacher). Last8Block/WeeklyHistoryBlock pintan las justificadas en gold.
+- **Hallazgo clave de la auditoria:** `StudentDetailPopup` solo existia en el dashboard del CEO; el profesor no tenia forma de ver/justificar faltas. Resuelto dando acceso desde AttendancePage (decision del usuario).
+- **Estado:** lint 0 errores, 180/180 tests OK (29 suites; +nuevos de config, api, JustifyAbsenceModal, WhatsNewModal, error de justificar), build OK. 16 commits en `feat/justificar-faltas`, sin mergear aun. Backend sin redeploy todavia.
+- **Pendiente:** redeploy clasp + cabeceras en hoja real; mejora futura opcional: ilustrar el tutorial con imagen generada (OpenRouter); merge a main tras validar en navegador con backend desplegado.
+
+### 2026-06-09 — Asistencia retroactiva + fix HTML invalido + fix Nadine
 - **Fecha:** 2026-06-09
-- **Hito:** Registrar asistencia de dias pasados (ultimos 7 dias) + fix boton anidado StudentRow
+- **Hito previo:** Registrar asistencia de dias pasados (ultimos 7 dias) + fix boton anidado StudentRow
 
 ### 2026-06-09 — Asistencia retroactiva + fix HTML invalido + fix Nadine
 - **Fix operativo (Sheet):** Nadine olvido pasar lista el lunes 2026-06-08 (su G1, conv-abr26) y la app no le dejaba registrar dias pasados. Insertados sus 10 registros (ASISTENCIA A1119:G1128): todos presentes menos Jorge (alu-0051) y Manuel (alu-0052). Via `appendRows` (no calcular fila a mano: la hoja tiene datos mas alla de la fila 1000, insertar en 1001 habria pisado registros de Elisabeth).
