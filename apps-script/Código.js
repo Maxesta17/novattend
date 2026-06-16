@@ -438,18 +438,26 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
     const stats = porAlumno[r.alumno_id];
     const fecha = r.fecha;
     const presente = r.presente === true;
+    // Lectura defensiva: solo === true cuenta como justificada.
+    const justificada = r.justificada === true;
 
-    // Falta justificada: se excluye por completo del calculo. No cuenta como
-    // clase ni como falta en ninguna ventana (semanal, quincenal, mensual,
-    // semana actual, mes actual, total). Lectura defensiva: solo === true excluye.
-    if (r.justificada === true) {
+    // Toda fila (justificada o no) se guarda en registros para que siga
+    // VISIBLE en el historial (ultimas_8, racha, historico_semanas). El flag
+    // justificada permite al frontend pintarla distinta (gold).
+    stats.registros.push({ fecha: fecha, presente: presente, justificada: justificada });
+
+    // Falta justificada: se EXCLUYE de todos los porcentajes. No suma a total
+    // ni a presentes en ninguna ventana (semanal, quincenal, mensual, semana
+    // actual, mes actual, total), para que el % no se vea penalizado.
+    // Solo se contabiliza aparte en stats.justificadas. No tocamos los _total
+    // de las ventanas mas abajo: salimos tras registrar la justificada.
+    if (justificada) {
       stats.justificadas++;
       return;
     }
 
     stats.total++;
     if (presente) stats.presentes++;
-    stats.registros.push({ fecha: fecha, presente: presente });
 
     if (fecha >= hace7Str && fecha <= hoyStr) {
       stats.sem_total++;
@@ -492,17 +500,26 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       return x.fecha < y.fecha ? -1 : (x.fecha > y.fecha ? 1 : 0);
     });
 
-    // Ultimas 8 clases (mas reciente al final, como histograma)
+    // Ultimas 8 clases (mas reciente al final, como histograma). Incluye las
+    // justificadas con su flag para que el frontend las pinte distinto (gold).
     const ultimas_8 = regsOrdenados.slice(-8);
 
-    // Racha de faltas: cuantas clases consecutivas mas recientes son falta
+    // Racha de faltas: cuantas clases consecutivas mas recientes son falta NO
+    // justificada. Una justificada es NEUTRAL: no incrementa la racha (no es
+    // una falta real) pero tampoco la rompe (se salta con continue). Asi una
+    // justificada no infla la racha ni oculta faltas reales consecutivas.
     let racha = 0;
     for (let i = regsOrdenados.length - 1; i >= 0; i--) {
+      if (regsOrdenados[i].justificada === true) continue; // neutral: ni suma ni resetea
       if (regsOrdenados[i].presente === false) racha++;
       else break;
     }
 
-    // Historico semanal: agrupar por semana lun-dom, ultimas 8 semanas
+    // Historico semanal: agrupar por semana lun-dom, ultimas 8 semanas.
+    // Coherencia con el %: una justificada NO cuenta en 'clases' ni en 'faltas'
+    // (igual que se excluye del porcentaje). Se contabiliza aparte en
+    // 'justificadas' para que la semana siga siendo visible y el frontend pueda
+    // mostrar el marcador gold sin penalizar la ratio faltas/clases.
     const porSemana = {};
     regsOrdenados.forEach(function(r) {
       const partes = r.fecha.split('-');
@@ -510,7 +527,11 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       const lun = mondayOf_(dt);
       const lunStr = fmt(lun);
       if (!porSemana[lunStr]) {
-        porSemana[lunStr] = { semana_inicio: lunStr, clases: 0, faltas: 0 };
+        porSemana[lunStr] = { semana_inicio: lunStr, clases: 0, faltas: 0, justificadas: 0 };
+      }
+      if (r.justificada === true) {
+        porSemana[lunStr].justificadas++;
+        return; // no suma a clases ni faltas: coherente con el %
       }
       porSemana[lunStr].clases++;
       if (!r.presente) porSemana[lunStr].faltas++;
