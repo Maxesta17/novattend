@@ -336,7 +336,14 @@ function handleGetAsistencia(e) {
       registros = registros.filter(r => r.alumno_id === alumnoId);
     }
 
-    return registros;
+    // Lectura defensiva de columnas nuevas: filas antiguas (7 columnas) no
+    // tienen 'justificada'/'motivo'; sheetToObjects las deja como undefined.
+    // Coaccionar a tipos estables para el frontend: justificada=boolean, motivo=string.
+    return registros.map(r => {
+      r.justificada = r.justificada === true;
+      r.motivo = r.motivo || '';
+      return r;
+    });
   });
 
   return jsonResponse(data);
@@ -868,7 +875,7 @@ function setupSheets() {
     'CONVOCATORIAS': ['id', 'nombre', 'fecha_inicio', 'fecha_fin', 'activa'],
     'PROFESORES': ['id', 'nombre', 'email', 'activo'],
     'ALUMNOS': ['id', 'nombre', 'convocatoria_id', 'profesor_id', 'grupo', 'email', 'telefono', 'activo'],
-    'ASISTENCIA': ['fecha', 'alumno_id', 'convocatoria_id', 'profesor_id', 'grupo', 'presente', 'hora_registro'],
+    'ASISTENCIA': ['fecha', 'alumno_id', 'convocatoria_id', 'profesor_id', 'grupo', 'presente', 'hora_registro', 'justificada', 'motivo'],
     'LOG': ['timestamp', 'usuario', 'accion', 'detalle']
   };
 
