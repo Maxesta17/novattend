@@ -93,7 +93,10 @@ export async function getAlumnos(convocatoriaId, profesorId, grupo) {
 }
 
 /**
- * Obtener registros de asistencia
+ * Obtener registros de asistencia.
+ * Cada registro incluye, ademas de los campos base, los campos de justificacion:
+ * `justificada` (boolean) y `motivo` (string, '' si no hay motivo). Las filas
+ * antiguas sin esas columnas se devuelven como `justificada=false`/`motivo=''`.
  * @param {string} convocatoriaId
  * @param {string} [profesorId]
  * @param {string} [grupo]
@@ -123,7 +126,9 @@ export async function getResumen(convocatoriaId, profesorId, grupo) {
 }
 
 /**
- * Obtener registros de asistencia de un alumno concreto
+ * Obtener registros de asistencia de un alumno concreto.
+ * Cada registro incluye `justificada` (boolean) y `motivo` (string) ademas de
+ * los campos base; las faltas justificadas se distinguen por `justificada=true`.
  * @param {string} convocatoriaId
  * @param {string} alumnoId
  */
@@ -172,4 +177,20 @@ export async function crearAlumno(data) {
  */
 export async function actualizarAlumno(alumnoId, campos) {
   return apiPost('actualizarAlumno', { alumno_id: alumnoId, campos })
+}
+
+/**
+ * Justificar (o quitar la justificacion de) una falta pasada concreta.
+ * Una falta justificada se excluye del calculo de asistencia en el backend.
+ * @param {Object} payload
+ * @param {string} payload.convocatoria_id
+ * @param {string} payload.profesor_id
+ * @param {string} payload.grupo - formato 'G1', 'G2'...
+ * @param {string} payload.alumno_id
+ * @param {string} payload.fecha - formato yyyy-MM-dd
+ * @param {boolean} payload.justificada - true justifica, false quita la justificacion
+ * @param {string} payload.motivo - motivo de la justificacion ('' si justificada=false)
+ */
+export async function justificarFalta(payload) {
+  return apiPost('justificarFalta', payload)
 }
