@@ -623,10 +623,18 @@ function handleGuardarAsistencia(body) {
   const convCol = headers.indexOf('convocatoria_id');
   const profCol = headers.indexOf('profesor_id');
   const grupoCol = headers.indexOf('grupo');
+  const alumnoCol = headers.indexOf('alumno_id');
+  // Columnas nuevas; -1 si la hoja real aun no tiene las cabeceras (degradacion con gracia)
+  const justCol = headers.indexOf('justificada');
+  const motivoCol = headers.indexOf('motivo');
   const tz = Session.getScriptTimeZone();
 
-  // Filtrar: conservar filas que NO son del mismo grupo/fecha
+  // Filtrar: conservar filas que NO son del mismo grupo/fecha.
+  // En paralelo, construir mapa de preservacion de justificaciones de las filas
+  // que SI vamos a borrar (mismo fecha/grupo/profesor/convocatoria), para no
+  // perder justificaciones previas al borrar+reescribir el dia.
   const filasConservadas = [];
+  const preservadas = {}; // alumno_id -> { justificada: bool, motivo: string }
   for (let i = 1; i < data.length; i++) {
     // Saltar filas vacias
     if (!data[i][0] && data[i][0] !== 0) continue;
@@ -643,30 +651,52 @@ function handleGuardarAsistencia(body) {
 
     if (!esMismoGrupo) {
       filasConservadas.push(data[i]);
+    } else if (justCol !== -1) {
+      // Fila que se va a borrar: guardar su justificacion si la tiene
+      const rowJust = data[i][justCol] === true;
+      if (rowJust) {
+        preservadas[data[i][alumnoCol]] = {
+          justificada: true,
+          motivo: motivoCol !== -1 ? (data[i][motivoCol] || '') : ''
+        };
+      }
     }
   }
 
-  // Agregar nuevos registros
+  // Agregar nuevos registros. Cada fila se extiende a headers.length valores.
+  // Justificada/motivo solo se preservan para alumnos que SIGUEN ausentes
+  // (no tiene sentido justificar una presencia).
   const ahora = new Date();
-  const filasNuevas = alumnos.map(a => [
-    fecha,
-    a.alumno_id,
-    convocatoria_id,
-    profesor_id,
-    grupo,
-    a.presente === true,
-    ahora
-  ]);
+  const numCols = headers.length;
+  const filasNuevas = alumnos.map(a => {
+    const presente = a.presente === true;
+    const prev = (!presente && preservadas[a.alumno_id]) || null;
+    const fila = [
+      fecha,
+      a.alumno_id,
+      convocatoria_id,
+      profesor_id,
+      grupo,
+      presente,
+      ahora
+    ];
+    // Rellenar columnas restantes (justificada, motivo y cualquier futura) por indice
+    while (fila.length < numCols) fila.push('');
+    if (justCol !== -1) fila[justCol] = prev ? true : false;
+    if (motivoCol !== -1) fila[motivoCol] = prev ? prev.motivo : '';
+    return fila;
+  });
 
   const todasLasFilas = filasConservadas.concat(filasNuevas);
 
-  // Reescribir hoja completa (una sola operacion)
+  // Reescribir hoja completa (una sola operacion). Usar headers.length en vez
+  // de un numero magico para robustez ante el numero real de columnas.
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, 7).clearContent();
+    sheet.getRange(2, 1, lastRow - 1, numCols).clearContent();
   }
   if (todasLasFilas.length > 0) {
-    sheet.getRange(2, 1, todasLasFilas.length, 7).setValues(todasLasFilas);
+    sheet.getRange(2, 1, todasLasFilas.length, numCols).setValues(todasLasFilas);
   }
 
   // Invalidar cache de resumen y de asistencia para esta convocatoria
