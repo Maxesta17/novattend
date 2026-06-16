@@ -125,6 +125,7 @@ describe('StudentDetailPopup', () => {
       <StudentDetailPopup
         student={apiStudent}
         convocatoriaId="c1"
+        allowJustify
         onClose={vi.fn()}
       />
     )
@@ -140,5 +141,31 @@ describe('StudentDetailPopup', () => {
 
     const alert = await within(dialog).findByRole('alert')
     expect(alert).toHaveTextContent('Falta no encontrada')
+  })
+
+  it('NO muestra el boton Justificar con allowJustify=false aunque haya teacherId+API (CEO solo lectura)', async () => {
+    isApiEnabled.mockReturnValue(true)
+    const apiStudent = {
+      id: 'a1',
+      name: 'Belen Cases',
+      group: 3,
+      teacherId: 'p1',
+    }
+    getAsistenciaAlumno.mockResolvedValue([
+      { fecha: '2026-04-23', presente: false, justificada: false, motivo: '' },
+    ])
+
+    render(
+      <StudentDetailPopup
+        student={apiStudent}
+        convocatoriaId="c1"
+        allowJustify={false}
+        onClose={vi.fn()}
+      />
+    )
+
+    // La falta se carga via API pero sin allowJustify no se ofrece justificar.
+    expect(await screen.findByText('23/04/2026')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Justificar' })).not.toBeInTheDocument()
   })
 })

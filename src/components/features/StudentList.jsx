@@ -57,6 +57,7 @@ export default function StudentList({
       <StudentDetailPopup
         student={detailStudent}
         convocatoriaId={convocatoria?.id}
+        allowJustify
         onClose={() => setDetailStudent(null)}
       />
     </>

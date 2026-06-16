@@ -119,10 +119,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Popup detalle alumno */}
+      {/* Popup detalle alumno (CEO solo lectura: no puede justificar faltas) */}
       <StudentDetailPopup
         student={selectedStudent}
         convocatoriaId={convocatoria?.id}
+        allowJustify={false}
         onClose={handleStudentClose}
       />
     </>

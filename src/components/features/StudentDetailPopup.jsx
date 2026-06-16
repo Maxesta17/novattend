@@ -21,9 +21,10 @@ import { getAsistenciaAlumno, justificarFalta } from '../../services/api'
  * @param {object} props
  * @param {object|null} props.student - Datos del alumno (null = cerrado)
  * @param {string} [props.convocatoriaId] - ID de convocatoria para cargar faltas via API
+ * @param {boolean} [props.allowJustify=false] - Habilita justificar faltas (solo profesor; el CEO es solo lectura)
  * @param {function} props.onClose - Handler al cerrar
  */
-export default function StudentDetailPopup({ student, convocatoriaId, onClose }) {
+export default function StudentDetailPopup({ student, convocatoriaId, allowJustify = false, onClose }) {
   const [apiAbsences, setApiAbsences] = useState([])
   const [loadingAbsences, setLoadingAbsences] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState(null)
@@ -66,8 +67,9 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
     return () => { cancelled = true }
   }, [student, shouldFetchApi, fetchAbsences])
 
-  // El boton "Justificar" solo se ofrece en modo API con los datos del payload.
-  const canJustify = shouldFetchApi && !!student?.teacherId
+  // El boton "Justificar" solo se ofrece al profesor (allowJustify) en modo API
+  // con los datos del payload. El CEO es solo lectura: nunca recibe allowJustify.
+  const canJustify = allowJustify && shouldFetchApi && !!student?.teacherId
   const handleJustifyClick = canJustify ? setSelectedAbsence : undefined
 
   const buildPayload = (justificada, motivo) => ({
