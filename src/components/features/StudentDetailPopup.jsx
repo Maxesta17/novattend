@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Modal from '../ui/Modal.jsx'
 import AbsencesBlock from './AbsencesBlock.jsx'
 import JustifyAbsenceModal from './JustifyAbsenceModal.jsx'
@@ -34,13 +34,19 @@ export default function StudentDetailPopup({ student, convocatoriaId, allowJusti
   const mockAbsences = useMemo(() => student?.absences ?? [], [student])
   const shouldFetchApi = isApiEnabled() && !!convocatoriaId && !student?.absences?.length
 
+  // Token de peticion: el popup se reusa (no remonta) al cambiar de alumno, asi
+  // que cada fetch captura su id local y descarta respuestas obsoletas tras el await.
+  const requestIdRef = useRef(0)
+
   // Carga las faltas del alumno desde la API mapeando justificada/motivo.
   // Reutilizable para refrescar la lista tras justificar/quitar.
   const fetchAbsences = useCallback(async () => {
     if (!student || !shouldFetchApi) return
+    const localId = ++requestIdRef.current
     setLoadingAbsences(true)
     try {
       const records = await getAsistenciaAlumno(convocatoriaId, student.id)
+      if (localId !== requestIdRef.current) return
       const items = (records || [])
         .filter((r) => r.presente === false)
         .map((r) => ({
@@ -51,20 +57,19 @@ export default function StudentDetailPopup({ student, convocatoriaId, allowJusti
         .sort((a, b) => b.fecha.localeCompare(a.fecha))
       setApiAbsences(items)
     } catch {
+      if (localId !== requestIdRef.current) return
       setApiAbsences([])
     } finally {
-      setLoadingAbsences(false)
+      if (localId === requestIdRef.current) setLoadingAbsences(false)
     }
   }, [student, convocatoriaId, shouldFetchApi])
 
   useEffect(() => {
     if (!student || !shouldFetchApi) return
-    let cancelled = false
+    // Invalida cualquier fetch en curso antes de cargar el nuevo alumno.
+    requestIdRef.current++
     setApiAbsences([])
-    ;(async () => {
-      if (!cancelled) await fetchAbsences()
-    })()
-    return () => { cancelled = true }
+    fetchAbsences()
   }, [student, shouldFetchApi, fetchAbsences])
 
   // El boton "Justificar" solo se ofrece al profesor (allowJustify) en modo API
