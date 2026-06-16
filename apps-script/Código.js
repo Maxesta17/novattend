@@ -565,6 +565,8 @@ function doPost(e) {
         return handleCrearAlumno(body);
       case 'actualizarAlumno':
         return handleActualizarAlumno(body);
+      case 'justificarFalta':
+        return handleJustificarFalta(body);
       default:
         return jsonError('Accion POST no reconocida: ' + action, 400);
     }
@@ -722,6 +724,123 @@ function handleGuardarAsistencia(body) {
     registros: filasNuevas.length,
     presentes: presentes
   });
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Justifica (o desjustifica) una falta concreta de un alumno.
+ *
+ * Una falta justificada se excluye del calculo de asistencia (ver computeResumen).
+ * Solo se pueden justificar ausencias (presente === false), nunca presencias.
+ *
+ * Body esperado:
+ * {
+ *   action: "justificarFalta",
+ *   convocatoria_id: "conv-2026-04",
+ *   profesor_id: "prof-samuel",
+ *   grupo: "G1",
+ *   alumno_id: "alu-001",
+ *   fecha: "2026-04-15",
+ *   justificada: true,
+ *   motivo: "Enfermedad"
+ * }
+ *
+ * La fila se identifica por fecha + alumno_id + convocatoria_id (clave unica
+ * en la practica: un alumno pertenece a un solo grupo/profesor por convocatoria).
+ */
+function handleJustificarFalta(body) {
+  const { convocatoria_id, profesor_id, grupo, alumno_id, fecha, justificada, motivo } = body;
+
+  // Validar obligatorios. justificada debe ser booleano explicito.
+  if (!convocatoria_id || !alumno_id || !fecha || typeof justificada !== 'boolean') {
+    return jsonError('Faltan campos obligatorios: convocatoria_id, alumno_id, fecha, justificada (booleano)', 400);
+  }
+
+  // Lock para evitar escrituras concurrentes (mismo patron que guardar)
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (e) {
+    return jsonError('Servidor ocupado, reintenta en unos segundos', 503);
+  }
+
+  try {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.ASISTENCIA);
+
+  if (!sheet) {
+    return jsonError('No se encontro la hoja ASISTENCIA', 500);
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const fechaCol = headers.indexOf('fecha');
+  const alumnoCol = headers.indexOf('alumno_id');
+  const convCol = headers.indexOf('convocatoria_id');
+  const presenteCol = headers.indexOf('presente');
+  const justCol = headers.indexOf('justificada');
+  const motivoCol = headers.indexOf('motivo');
+  const tz = Session.getScriptTimeZone();
+
+  // Las columnas nuevas deben existir en la hoja real (paso manual del usuario).
+  // Si faltan, no se puede escribir: devolver error claro en vez de corromper datos.
+  if (justCol === -1 || motivoCol === -1) {
+    return jsonError('La hoja ASISTENCIA no tiene las columnas justificada/motivo. Anadelas en la fila 1.', 500);
+  }
+
+  // Localizar la fila unica por fecha + alumno_id + convocatoria_id
+  let filaIndex = -1;
+  let coincidencias = 0;
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][0] && data[i][0] !== 0) continue;
+
+    const rowFecha = data[i][fechaCol];
+    const rowFechaStr = rowFecha instanceof Date
+      ? Utilities.formatDate(rowFecha, tz, 'yyyy-MM-dd')
+      : rowFecha;
+
+    if (rowFechaStr === fecha &&
+        data[i][alumnoCol] === alumno_id &&
+        data[i][convCol] === convocatoria_id) {
+      coincidencias++;
+      if (filaIndex === -1) filaIndex = i;
+    }
+  }
+
+  if (filaIndex === -1) {
+    return jsonError('Falta no encontrada', 404);
+  }
+
+  // Datos sucios: loguear si hay duplicados; se actualiza la primera coincidencia.
+  if (coincidencias > 1) {
+    writeLog(profesor_id || 'API', 'JUSTIFICAR_FALTA_DUP',
+      'Duplicados (' + coincidencias + ') para ' + fecha + ' | ' + alumno_id + ' | ' + convocatoria_id);
+  }
+
+  // No se puede justificar una presencia
+  if (data[filaIndex][presenteCol] === true) {
+    return jsonError('No se puede justificar una presencia', 400);
+  }
+
+  // Escribir justificada/motivo. Al desjustificar se limpia el motivo.
+  const nuevoMotivo = justificada ? (motivo || '') : '';
+  sheet.getRange(filaIndex + 1, justCol + 1).setValue(justificada);
+  sheet.getRange(filaIndex + 1, motivoCol + 1).setValue(nuevoMotivo);
+
+  // Invalidar cache de resumen y asistencia (cambia el calculo de porcentajes)
+  cacheInvalidate(['res_' + convocatoria_id, 'asist_' + convocatoria_id]);
+
+  writeLog(
+    profesor_id || 'API',
+    'JUSTIFICAR_FALTA',
+    (grupo || '') + ' | ' + fecha + ' | ' + alumno_id + ' | ' + (justificada ? nuevoMotivo : 'quitada')
+  );
+
+  return jsonResponse({ message: 'Falta actualizada', justificada: justificada, motivo: nuevoMotivo });
 
   } finally {
     lock.releaseLock();
