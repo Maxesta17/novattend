@@ -21,7 +21,7 @@ export function Header({ initials, student }) {
         {student.name}
       </h3>
       <p className="font-montserrat text-xs text-text-muted m-0 text-pretty text-center">
-        {student.teacher} · Grupo {student.group}
+        {student.teacher && <>{student.teacher} · </>}Grupo {student.group}
       </p>
     </div>
   )
