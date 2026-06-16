@@ -57,10 +57,19 @@ export function SummaryRows({ faltasSemana, clasesSemana, faltasMes, clasesMes, 
   )
 }
 
+// Estilo de cada celda segun estado: presente (verde), falta justificada
+// (gold/warning, no penaliza) o falta sin justificar (rojo).
+function last8Tone(record) {
+  if (record.presente) return { cell: 'bg-success-soft text-success', label: 'Presente' }
+  if (record.justificada) return { cell: 'bg-warning-soft text-warning', label: 'Falta justificada' }
+  return { cell: 'bg-error-soft text-error', label: 'Falta' }
+}
+
 /**
  * Mini-historial visual de las ultimas clases (presente/falta por fecha).
+ * Las faltas justificadas se distinguen en gold y no penalizan el porcentaje.
  * @param {object} props
- * @param {Array<{fecha: string, presente: boolean}>} props.records
+ * @param {Array<{fecha: string, presente: boolean, justificada?: boolean}>} props.records
  */
 export function Last8Block({ records }) {
   return (
@@ -69,19 +78,22 @@ export function Last8Block({ records }) {
         Ultimas clases
       </h4>
       <div className="flex items-center gap-1.5 flex-wrap">
-        {records.map(r => (
-          <div
-            key={r.fecha}
-            title={`${formatDate(r.fecha)} · ${r.presente ? 'Presente' : 'Falta'}`}
-            className={[
-              'w-7 h-7 rounded-md flex items-center justify-center',
-              'font-cinzel text-[9px] font-semibold tabular-nums',
-              r.presente ? 'bg-success-soft text-success' : 'bg-error-soft text-error',
-            ].join(' ')}
-          >
-            {formatShort(r.fecha)}
-          </div>
-        ))}
+        {records.map(r => {
+          const tone = last8Tone(r)
+          return (
+            <div
+              key={r.fecha}
+              title={`${formatDate(r.fecha)} · ${tone.label}`}
+              className={[
+                'w-7 h-7 rounded-md flex items-center justify-center',
+                'font-cinzel text-[9px] font-semibold tabular-nums',
+                tone.cell,
+              ].join(' ')}
+            >
+              {formatShort(r.fecha)}
+            </div>
+          )
+        })}
       </div>
       <p className="font-montserrat text-[10px] text-text-muted mt-1.5">
         Mas antiguo a la izquierda, mas reciente a la derecha
@@ -92,8 +104,9 @@ export function Last8Block({ records }) {
 
 /**
  * Historico de faltas/clases semana a semana.
+ * Si la semana tuvo faltas justificadas, se indican aparte en gold.
  * @param {object} props
- * @param {Array<{semana_inicio: string, faltas: number, clases: number}>} props.weeks
+ * @param {Array<{semana_inicio: string, faltas: number, clases: number, justificadas?: number}>} props.weeks
  */
 export function WeeklyHistoryBlock({ weeks }) {
   return (
@@ -104,13 +117,21 @@ export function WeeklyHistoryBlock({ weeks }) {
       <ul className="bg-cream rounded-[10px] px-3 py-1">
         {weeks.map(w => {
           const tone = weekTone(w.faltas)
+          const justificadas = w.justificadas ?? 0
           return (
             <li key={w.semana_inicio} className="flex items-center justify-between py-1.5 border-b border-border-light last:border-b-0">
               <span className="font-montserrat text-[11px] text-text-body">
                 Sem. {formatShort(w.semana_inicio)}
               </span>
-              <span className={`font-montserrat text-[11px] font-semibold ${tone.color}`}>
-                {w.faltas} {w.faltas === 1 ? 'falta' : 'faltas'} / {w.clases}
+              <span className="font-montserrat text-[11px] font-semibold flex items-center gap-1.5">
+                <span className={tone.color}>
+                  {w.faltas} {w.faltas === 1 ? 'falta' : 'faltas'} / {w.clases}
+                </span>
+                {justificadas > 0 && (
+                  <span className="text-warning">
+                    +{justificadas} just.
+                  </span>
+                )}
               </span>
             </li>
           )
