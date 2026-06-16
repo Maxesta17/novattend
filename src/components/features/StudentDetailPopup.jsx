@@ -1,66 +1,126 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Modal from '../ui/Modal.jsx'
-import Avatar from '../ui/Avatar.jsx'
+import AbsencesBlock from './AbsencesBlock.jsx'
+import JustifyAbsenceModal from './JustifyAbsenceModal.jsx'
+import {
+  Header,
+  SummaryRows,
+  Last8Block,
+  WeeklyHistoryBlock,
+} from './StudentDetailBlocks.jsx'
+import { weekStatusLabel, weekTone } from './studentDetailHelpers'
 import { isApiEnabled } from '../../config/api'
-import { getAsistenciaAlumno } from '../../services/api'
-
-const formatDate = (dateStr) => {
-  const [y, m, d] = dateStr.split('-')
-  return `${d}/${m}/${y}`
-}
-
-const formatShort = (dateStr) => {
-  const [, m, d] = dateStr.split('-')
-  return `${d}/${m}`
-}
-
-// Color segun faltas absolutas en una semana de clases (lun-jue)
-const weekTone = (faltas) => {
-  if (faltas >= 3) return { color: 'text-error', bg: 'bg-error-soft', border: 'border-error' }
-  if (faltas >= 2) return { color: 'text-warning', bg: 'bg-warning-soft', border: 'border-warning' }
-  return { color: 'text-success', bg: 'bg-success-soft', border: 'border-success' }
-}
+import { getAsistenciaAlumno, justificarFalta } from '../../services/api'
 
 /**
  * Popup con detalle de asistencia de un alumno.
  * Muestra faltas absolutas (semana, mes, convocatoria), mini-historial visual
- * de las ultimas 8 clases, evolucion semana a semana y dias de inasistencia.
+ * de las ultimas 8 clases, evolucion semana a semana y dias de inasistencia,
+ * con opcion de justificar/quitar la justificacion de cada falta (modo API).
  *
  * @param {object} props
  * @param {object|null} props.student - Datos del alumno (null = cerrado)
  * @param {string} [props.convocatoriaId] - ID de convocatoria para cargar faltas via API
+ * @param {boolean} [props.allowJustify=false] - Habilita justificar faltas (solo profesor; el CEO es solo lectura)
  * @param {function} props.onClose - Handler al cerrar
  */
-export default function StudentDetailPopup({ student, convocatoriaId, onClose }) {
+export default function StudentDetailPopup({ student, convocatoriaId, allowJustify = false, onClose }) {
   const [apiAbsences, setApiAbsences] = useState([])
   const [loadingAbsences, setLoadingAbsences] = useState(false)
+  const [selectedAbsence, setSelectedAbsence] = useState(null)
+  const [justifying, setJustifying] = useState(false)
+  const [justifyError, setJustifyError] = useState(null)
 
   const mockAbsences = useMemo(() => student?.absences ?? [], [student])
   const shouldFetchApi = isApiEnabled() && !!convocatoriaId && !student?.absences?.length
 
+  // Token de peticion: el popup se reusa (no remonta) al cambiar de alumno, asi
+  // que cada fetch captura su id local y descarta respuestas obsoletas tras el await.
+  const requestIdRef = useRef(0)
+
+  // Carga las faltas del alumno desde la API mapeando justificada/motivo.
+  // Reutilizable para refrescar la lista tras justificar/quitar.
+  const fetchAbsences = useCallback(async () => {
+    if (!student || !shouldFetchApi) return
+    const localId = ++requestIdRef.current
+    setLoadingAbsences(true)
+    try {
+      const records = await getAsistenciaAlumno(convocatoriaId, student.id)
+      if (localId !== requestIdRef.current) return
+      const items = (records || [])
+        .filter((r) => r.presente === false)
+        .map((r) => ({
+          fecha: r.fecha,
+          justificada: r.justificada === true,
+          motivo: r.motivo || '',
+        }))
+        .sort((a, b) => b.fecha.localeCompare(a.fecha))
+      setApiAbsences(items)
+    } catch {
+      if (localId !== requestIdRef.current) return
+      setApiAbsences([])
+    } finally {
+      if (localId === requestIdRef.current) setLoadingAbsences(false)
+    }
+  }, [student, convocatoriaId, shouldFetchApi])
+
   useEffect(() => {
     if (!student || !shouldFetchApi) return
-    let cancelled = false
-    const fetchAbsences = async () => {
-      setLoadingAbsences(true)
-      setApiAbsences([])
-      try {
-        const records = await getAsistenciaAlumno(convocatoriaId, student.id)
-        if (cancelled) return
-        const dates = (records || [])
-          .filter((r) => r.presente === false)
-          .map((r) => r.fecha)
-          .sort((a, b) => b.localeCompare(a))
-        setApiAbsences(dates)
-      } catch {
-        if (!cancelled) setApiAbsences([])
-      } finally {
-        if (!cancelled) setLoadingAbsences(false)
-      }
-    }
+    // Invalida cualquier fetch en curso antes de cargar el nuevo alumno.
+    requestIdRef.current++
+    setApiAbsences([])
     fetchAbsences()
-    return () => { cancelled = true }
-  }, [student, convocatoriaId, shouldFetchApi])
+  }, [student, shouldFetchApi, fetchAbsences])
+
+  // El boton "Justificar" solo se ofrece al profesor (allowJustify) en modo API
+  // con los datos del payload. El CEO es solo lectura: nunca recibe allowJustify.
+  const canJustify = allowJustify && shouldFetchApi && !!student?.teacherId
+  const handleJustifyClick = canJustify ? setSelectedAbsence : undefined
+
+  const buildPayload = (justificada, motivo) => ({
+    convocatoria_id: convocatoriaId,
+    profesor_id: student.teacherId,
+    // Acepta group como numero (1) o string ("G1"/"1") sin duplicar el prefijo.
+    grupo: `G${String(student.group).replace(/^G/i, '')}`,
+    alumno_id: student.id,
+    fecha: selectedAbsence.fecha,
+    justificada,
+    motivo,
+  })
+
+  const handleConfirm = async (motivo) => {
+    setJustifying(true)
+    setJustifyError(null)
+    try {
+      await justificarFalta(buildPayload(true, motivo))
+      await fetchAbsences()
+      setSelectedAbsence(null)
+    } catch (e) {
+      setJustifyError(e.message || 'No se pudo justificar la falta')
+    } finally {
+      setJustifying(false)
+    }
+  }
+
+  const handleUnjustify = async () => {
+    setJustifying(true)
+    setJustifyError(null)
+    try {
+      await justificarFalta(buildPayload(false, ''))
+      await fetchAbsences()
+      setSelectedAbsence(null)
+    } catch (e) {
+      setJustifyError(e.message || 'No se pudo quitar la justificacion')
+    } finally {
+      setJustifying(false)
+    }
+  }
+
+  // Cierra el modal de justificacion limpiando cualquier error previo.
+  const closeJustifyModal = () => {
+    setJustifyError(null)
+    setSelectedAbsence(null)
+  }
 
   const absences = shouldFetchApi ? apiAbsences : mockAbsences
 
@@ -91,147 +151,31 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
 
       {historico.length > 0 && <WeeklyHistoryBlock weeks={historico} />}
 
-      <AbsencesBlock loading={loadingAbsences} absences={absences} />
+      <AbsencesBlock
+        loading={loadingAbsences}
+        absences={absences}
+        onJustifyClick={handleJustifyClick}
+      />
 
       <div className={`mt-4 px-3.5 py-2.5 rounded-[10px] ${tone.bg} border-[1.5px] ${tone.border}`}>
         <div className={`font-montserrat text-xs font-semibold ${tone.color} text-center`}>
           {weekStatusLabel(faltasSemana, clasesSemana)}
         </div>
       </div>
+
+      {selectedAbsence && (
+        <JustifyAbsenceModal
+          isOpen
+          absence={{ alumno_id: student.id, fecha: selectedAbsence.fecha }}
+          currentReason={selectedAbsence.motivo}
+          isJustified={selectedAbsence.justificada}
+          loading={justifying}
+          error={justifyError}
+          onClose={closeJustifyModal}
+          onConfirm={handleConfirm}
+          onUnjustify={handleUnjustify}
+        />
+      )}
     </Modal>
-  )
-}
-
-function weekStatusLabel(faltas, clases) {
-  if (clases === 0) return 'Sin clases registradas esta semana'
-  if (faltas >= 3) return `Alerta — ${faltas} faltas esta semana`
-  if (faltas >= 2) return `Atencion — ${faltas} faltas esta semana`
-  return 'Asistencia regular esta semana'
-}
-
-function Header({ initials, student }) {
-  return (
-    <div className="flex flex-col items-center mb-4">
-      <Avatar
-        initials={initials}
-        variant="colored"
-        color="bg-burgundy"
-        size="lg"
-        className="mb-3 text-gold shadow-md"
-      />
-      <h3 className="font-cinzel text-lg font-bold text-text-dark m-0 mb-1 text-balance text-center">
-        {student.name}
-      </h3>
-      <p className="font-montserrat text-xs text-text-muted m-0 text-pretty text-center">
-        {student.teacher} · Grupo {student.group}
-      </p>
-    </div>
-  )
-}
-
-function SummaryRow({ label, faltas, clases, isTotal }) {
-  const tone = weekTone(faltas)
-  const showTone = !isTotal && clases > 0
-  const meta = clases === 0
-    ? 'Sin clases'
-    : `${faltas} ${faltas === 1 ? 'falta' : 'faltas'} / ${clases} ${clases === 1 ? 'clase' : 'clases'}`
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-border-light last:border-b-0">
-      <span className="font-montserrat text-xs font-medium text-text-dark">{label}</span>
-      <span className={`font-montserrat text-xs tabular-nums ${showTone ? tone.color + ' font-semibold' : 'text-text-body'}`}>
-        {meta}
-      </span>
-    </div>
-  )
-}
-
-function SummaryRows({ faltasSemana, clasesSemana, faltasMes, clasesMes, faltasTotal, clasesTotal }) {
-  return (
-    <div className="bg-cream rounded-[10px] px-3 py-1 mb-4">
-      <SummaryRow label="Esta semana" faltas={faltasSemana} clases={clasesSemana} />
-      <SummaryRow label="Este mes" faltas={faltasMes} clases={clasesMes} />
-      <SummaryRow label="Convocatoria" faltas={faltasTotal} clases={clasesTotal} isTotal />
-    </div>
-  )
-}
-
-function Last8Block({ records }) {
-  return (
-    <div className="mb-4">
-      <h4 className="font-cinzel text-xs font-semibold text-text-dark mb-2">
-        Ultimas clases
-      </h4>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {records.map(r => (
-          <div
-            key={r.fecha}
-            title={`${formatDate(r.fecha)} · ${r.presente ? 'Presente' : 'Falta'}`}
-            className={[
-              'w-7 h-7 rounded-md flex items-center justify-center',
-              'font-cinzel text-[9px] font-semibold tabular-nums',
-              r.presente ? 'bg-success-soft text-success' : 'bg-error-soft text-error',
-            ].join(' ')}
-          >
-            {formatShort(r.fecha)}
-          </div>
-        ))}
-      </div>
-      <p className="font-montserrat text-[10px] text-text-muted mt-1.5">
-        Mas antiguo a la izquierda, mas reciente a la derecha
-      </p>
-    </div>
-  )
-}
-
-function WeeklyHistoryBlock({ weeks }) {
-  return (
-    <div className="mb-4">
-      <h4 className="font-cinzel text-xs font-semibold text-text-dark mb-2">
-        Historico semanal
-      </h4>
-      <ul className="bg-cream rounded-[10px] px-3 py-1">
-        {weeks.map(w => {
-          const tone = weekTone(w.faltas)
-          return (
-            <li key={w.semana_inicio} className="flex items-center justify-between py-1.5 border-b border-border-light last:border-b-0">
-              <span className="font-montserrat text-[11px] text-text-body">
-                Sem. {formatShort(w.semana_inicio)}
-              </span>
-              <span className={`font-montserrat text-[11px] font-semibold ${tone.color}`}>
-                {w.faltas} {w.faltas === 1 ? 'falta' : 'faltas'} / {w.clases}
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
-function AbsencesBlock({ loading, absences }) {
-  if (loading) {
-    return (
-      <p className="mt-2 font-montserrat text-xs text-text-muted text-center">
-        Cargando faltas...
-      </p>
-    )
-  }
-  if (!absences.length) return null
-  return (
-    <div className="mb-2">
-      <h4 className="font-cinzel text-xs font-semibold text-text-dark mb-2">
-        Dias faltados ({absences.length})
-      </h4>
-      <div className="flex flex-wrap gap-1.5">
-        {absences.map(date => (
-          <span
-            key={date}
-            className="font-montserrat text-[10px] px-2 py-1 rounded-md bg-error-soft text-error font-medium"
-          >
-            {formatDate(date)}
-          </span>
-        ))}
-      </div>
-    </div>
   )
 }

@@ -17,6 +17,7 @@ import {
   guardarAsistencia,
   crearAlumno,
   actualizarAlumno,
+  justificarFalta,
 } from '../services/api'
 import { isApiEnabled, API_KEY } from '../config/api'
 
@@ -194,6 +195,68 @@ describe('api.js', () => {
     expect(sentBody.action).toBe('actualizarAlumno')
     expect(sentBody.alumno_id).toBe('alum-3')
     expect(sentBody.campos).toEqual({ grupo: 'G2' })
+  })
+
+  // --- justificarFalta ---
+
+  it('justificarFalta envia action y payload completo en el body', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', data: { message: 'Falta actualizada' } }),
+    })
+
+    const payload = {
+      convocatoria_id: 'conv-1',
+      profesor_id: 'prof-1',
+      grupo: 'G2',
+      alumno_id: 'alum-7',
+      fecha: '2026-05-01',
+      justificada: true,
+      motivo: 'Enfermedad',
+    }
+    await justificarFalta(payload)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://script.google.com/test',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      })
+    )
+
+    const sentBody = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(sentBody.action).toBe('justificarFalta')
+    expect(sentBody.convocatoria_id).toBe('conv-1')
+    expect(sentBody.profesor_id).toBe('prof-1')
+    expect(sentBody.grupo).toBe('G2')
+    expect(sentBody.alumno_id).toBe('alum-7')
+    expect(sentBody.fecha).toBe('2026-05-01')
+    expect(sentBody.justificada).toBe(true)
+    expect(sentBody.motivo).toBe('Enfermedad')
+  })
+
+  it('justificarFalta devuelve la data de la respuesta', async () => {
+    const data = { message: 'Falta actualizada', justificada: false, motivo: '' }
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ok', data }),
+    })
+
+    const result = await justificarFalta({
+      convocatoria_id: 'conv-1',
+      alumno_id: 'alum-7',
+      fecha: '2026-05-01',
+      justificada: false,
+      motivo: '',
+    })
+    expect(result).toEqual(data)
+  })
+
+  it('justificarFalta devuelve null si API no esta habilitada', async () => {
+    isApiEnabled.mockReturnValue(false)
+    const result = await justificarFalta({ alumno_id: 'a1' })
+    expect(result).toBeNull()
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   // --- SEC-03: Inyeccion de API key ---

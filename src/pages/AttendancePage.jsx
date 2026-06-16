@@ -6,9 +6,10 @@ import { formatLocalDate, labelFromIso } from '../utils/dateUtils'
 import useStudents, { GROUPS } from '../hooks/useStudents'
 import PageHeader from '../components/features/PageHeader.jsx'
 import GroupTabs from '../components/features/GroupTabs.jsx'
-import StudentRow from '../components/features/StudentRow.jsx'
+import StudentList from '../components/features/StudentList.jsx'
 import DateHeaderControl from '../components/features/DateHeaderControl.jsx'
 import ConfirmPastDayModal from '../components/features/ConfirmPastDayModal.jsx'
+import WhatsNewModal from '../components/features/WhatsNewModal.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import ProgressBar from '../components/ui/ProgressBar.jsx'
 import Badge from '../components/ui/Badge.jsx'
@@ -197,19 +198,15 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {!loadingStudents && students.map((student, idx) => {
-            const initials = student.name.split(' ').slice(0, 2).map(n => n[0]).join('')
-            return (
-              <StudentRow
-                key={`${selectedGroup}-${student.id || idx}`}
-                name={student.name}
-                initials={initials}
-                isPresent={student.present}
-                onToggle={() => toggleStudent(idx)}
-                delay={Math.min(idx * 0.015, 0.15)}
-              />
-            )
-          })}
+          {!loadingStudents && (
+            <StudentList
+              students={students}
+              selectedGroup={selectedGroup}
+              onToggle={toggleStudent}
+              convocatoria={convocatoria}
+              profesorId={profesorId}
+            />
+          )}
         </div>
       </div>
 
@@ -233,6 +230,9 @@ export default function AttendancePage() {
         onCancel={() => setConfirmOpen(false)}
         onConfirm={persistAttendance}
       />
+
+      {/* Novedad "justificar faltas": se muestra una vez por dispositivo. */}
+      <WhatsNewModal enabled={sessionUser?.role === 'teacher'} />
     </div>
   )
 }

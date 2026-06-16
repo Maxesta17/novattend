@@ -336,7 +336,14 @@ function handleGetAsistencia(e) {
       registros = registros.filter(r => r.alumno_id === alumnoId);
     }
 
-    return registros;
+    // Lectura defensiva de columnas nuevas: filas antiguas (7 columnas) no
+    // tienen 'justificada'/'motivo'; sheetToObjects las deja como undefined.
+    // Coaccionar a tipos estables para el frontend: justificada=boolean, motivo=string.
+    return registros.map(r => {
+      r.justificada = r.justificada === true;
+      r.motivo = r.motivo || '';
+      return r;
+    });
   });
 
   return jsonResponse(data);
@@ -424,16 +431,33 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
         mens_total: 0, mens_presentes: 0,
         sem_actual_total: 0, sem_actual_faltas: 0,
         mes_total: 0, mes_faltas: 0,
+        justificadas: 0,
         registros: []
       };
     }
     const stats = porAlumno[r.alumno_id];
     const fecha = r.fecha;
     const presente = r.presente === true;
+    // Lectura defensiva: solo === true cuenta como justificada.
+    const justificada = r.justificada === true;
+
+    // Toda fila (justificada o no) se guarda en registros para que siga
+    // VISIBLE en el historial (ultimas_8, racha, historico_semanas). El flag
+    // justificada permite al frontend pintarla distinta (gold).
+    stats.registros.push({ fecha: fecha, presente: presente, justificada: justificada });
+
+    // Falta justificada: se EXCLUYE de todos los porcentajes. No suma a total
+    // ni a presentes en ninguna ventana (semanal, quincenal, mensual, semana
+    // actual, mes actual, total), para que el % no se vea penalizado.
+    // Solo se contabiliza aparte en stats.justificadas. No tocamos los _total
+    // de las ventanas mas abajo: salimos tras registrar la justificada.
+    if (justificada) {
+      stats.justificadas++;
+      return;
+    }
 
     stats.total++;
     if (presente) stats.presentes++;
-    stats.registros.push({ fecha: fecha, presente: presente });
 
     if (fecha >= hace7Str && fecha <= hoyStr) {
       stats.sem_total++;
@@ -467,6 +491,7 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       mens_total: 0, mens_presentes: 0,
       sem_actual_total: 0, sem_actual_faltas: 0,
       mes_total: 0, mes_faltas: 0,
+      justificadas: 0,
       registros: []
     };
 
@@ -475,17 +500,26 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       return x.fecha < y.fecha ? -1 : (x.fecha > y.fecha ? 1 : 0);
     });
 
-    // Ultimas 8 clases (mas reciente al final, como histograma)
+    // Ultimas 8 clases (mas reciente al final, como histograma). Incluye las
+    // justificadas con su flag para que el frontend las pinte distinto (gold).
     const ultimas_8 = regsOrdenados.slice(-8);
 
-    // Racha de faltas: cuantas clases consecutivas mas recientes son falta
+    // Racha de faltas: cuantas clases consecutivas mas recientes son falta NO
+    // justificada. Una justificada es NEUTRAL: no incrementa la racha (no es
+    // una falta real) pero tampoco la rompe (se salta con continue). Asi una
+    // justificada no infla la racha ni oculta faltas reales consecutivas.
     let racha = 0;
     for (let i = regsOrdenados.length - 1; i >= 0; i--) {
+      if (regsOrdenados[i].justificada === true) continue; // neutral: ni suma ni resetea
       if (regsOrdenados[i].presente === false) racha++;
       else break;
     }
 
-    // Historico semanal: agrupar por semana lun-dom, ultimas 8 semanas
+    // Historico semanal: agrupar por semana lun-dom, ultimas 8 semanas.
+    // Coherencia con el %: una justificada NO cuenta en 'clases' ni en 'faltas'
+    // (igual que se excluye del porcentaje). Se contabiliza aparte en
+    // 'justificadas' para que la semana siga siendo visible y el frontend pueda
+    // mostrar el marcador gold sin penalizar la ratio faltas/clases.
     const porSemana = {};
     regsOrdenados.forEach(function(r) {
       const partes = r.fecha.split('-');
@@ -493,7 +527,11 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       const lun = mondayOf_(dt);
       const lunStr = fmt(lun);
       if (!porSemana[lunStr]) {
-        porSemana[lunStr] = { semana_inicio: lunStr, clases: 0, faltas: 0 };
+        porSemana[lunStr] = { semana_inicio: lunStr, clases: 0, faltas: 0, justificadas: 0 };
+      }
+      if (r.justificada === true) {
+        porSemana[lunStr].justificadas++;
+        return; // no suma a clases ni faltas: coherente con el %
       }
       porSemana[lunStr].clases++;
       if (!r.presente) porSemana[lunStr].faltas++;
@@ -520,6 +558,7 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       faltas_mes: s.mes_faltas,
       clases_mes: s.mes_total,
       faltas_total: s.total - s.presentes,
+      faltas_justificadas: s.justificadas,
       racha_faltas: racha,
       ultimas_8: ultimas_8,
       historico_semanas: historico_semanas
@@ -547,6 +586,8 @@ function doPost(e) {
         return handleCrearAlumno(body);
       case 'actualizarAlumno':
         return handleActualizarAlumno(body);
+      case 'justificarFalta':
+        return handleJustificarFalta(body);
       default:
         return jsonError('Accion POST no reconocida: ' + action, 400);
     }
@@ -605,10 +646,18 @@ function handleGuardarAsistencia(body) {
   const convCol = headers.indexOf('convocatoria_id');
   const profCol = headers.indexOf('profesor_id');
   const grupoCol = headers.indexOf('grupo');
+  const alumnoCol = headers.indexOf('alumno_id');
+  // Columnas nuevas; -1 si la hoja real aun no tiene las cabeceras (degradacion con gracia)
+  const justCol = headers.indexOf('justificada');
+  const motivoCol = headers.indexOf('motivo');
   const tz = Session.getScriptTimeZone();
 
-  // Filtrar: conservar filas que NO son del mismo grupo/fecha
+  // Filtrar: conservar filas que NO son del mismo grupo/fecha.
+  // En paralelo, construir mapa de preservacion de justificaciones de las filas
+  // que SI vamos a borrar (mismo fecha/grupo/profesor/convocatoria), para no
+  // perder justificaciones previas al borrar+reescribir el dia.
   const filasConservadas = [];
+  const preservadas = {}; // alumno_id -> { justificada: bool, motivo: string }
   for (let i = 1; i < data.length; i++) {
     // Saltar filas vacias
     if (!data[i][0] && data[i][0] !== 0) continue;
@@ -625,30 +674,52 @@ function handleGuardarAsistencia(body) {
 
     if (!esMismoGrupo) {
       filasConservadas.push(data[i]);
+    } else if (justCol !== -1) {
+      // Fila que se va a borrar: guardar su justificacion si la tiene
+      const rowJust = data[i][justCol] === true;
+      if (rowJust) {
+        preservadas[data[i][alumnoCol]] = {
+          justificada: true,
+          motivo: motivoCol !== -1 ? (data[i][motivoCol] || '') : ''
+        };
+      }
     }
   }
 
-  // Agregar nuevos registros
+  // Agregar nuevos registros. Cada fila se extiende a headers.length valores.
+  // Justificada/motivo solo se preservan para alumnos que SIGUEN ausentes
+  // (no tiene sentido justificar una presencia).
   const ahora = new Date();
-  const filasNuevas = alumnos.map(a => [
-    fecha,
-    a.alumno_id,
-    convocatoria_id,
-    profesor_id,
-    grupo,
-    a.presente === true,
-    ahora
-  ]);
+  const numCols = headers.length;
+  const filasNuevas = alumnos.map(a => {
+    const presente = a.presente === true;
+    const prev = (!presente && preservadas[a.alumno_id]) || null;
+    const fila = [
+      fecha,
+      a.alumno_id,
+      convocatoria_id,
+      profesor_id,
+      grupo,
+      presente,
+      ahora
+    ];
+    // Rellenar columnas restantes (justificada, motivo y cualquier futura) por indice
+    while (fila.length < numCols) fila.push('');
+    if (justCol !== -1) fila[justCol] = prev ? true : false;
+    if (motivoCol !== -1) fila[motivoCol] = prev ? prev.motivo : '';
+    return fila;
+  });
 
   const todasLasFilas = filasConservadas.concat(filasNuevas);
 
-  // Reescribir hoja completa (una sola operacion)
+  // Reescribir hoja completa (una sola operacion). Usar headers.length en vez
+  // de un numero magico para robustez ante el numero real de columnas.
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, 7).clearContent();
+    sheet.getRange(2, 1, lastRow - 1, numCols).clearContent();
   }
   if (todasLasFilas.length > 0) {
-    sheet.getRange(2, 1, todasLasFilas.length, 7).setValues(todasLasFilas);
+    sheet.getRange(2, 1, todasLasFilas.length, numCols).setValues(todasLasFilas);
   }
 
   // Invalidar cache de resumen y de asistencia para esta convocatoria
@@ -674,6 +745,123 @@ function handleGuardarAsistencia(body) {
     registros: filasNuevas.length,
     presentes: presentes
   });
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Justifica (o desjustifica) una falta concreta de un alumno.
+ *
+ * Una falta justificada se excluye del calculo de asistencia (ver computeResumen).
+ * Solo se pueden justificar ausencias (presente === false), nunca presencias.
+ *
+ * Body esperado:
+ * {
+ *   action: "justificarFalta",
+ *   convocatoria_id: "conv-2026-04",
+ *   profesor_id: "prof-samuel",
+ *   grupo: "G1",
+ *   alumno_id: "alu-001",
+ *   fecha: "2026-04-15",
+ *   justificada: true,
+ *   motivo: "Enfermedad"
+ * }
+ *
+ * La fila se identifica por fecha + alumno_id + convocatoria_id (clave unica
+ * en la practica: un alumno pertenece a un solo grupo/profesor por convocatoria).
+ */
+function handleJustificarFalta(body) {
+  const { convocatoria_id, profesor_id, grupo, alumno_id, fecha, justificada, motivo } = body;
+
+  // Validar obligatorios. justificada debe ser booleano explicito.
+  if (!convocatoria_id || !alumno_id || !fecha || typeof justificada !== 'boolean') {
+    return jsonError('Faltan campos obligatorios: convocatoria_id, alumno_id, fecha, justificada (booleano)', 400);
+  }
+
+  // Lock para evitar escrituras concurrentes (mismo patron que guardar)
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (e) {
+    return jsonError('Servidor ocupado, reintenta en unos segundos', 503);
+  }
+
+  try {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.ASISTENCIA);
+
+  if (!sheet) {
+    return jsonError('No se encontro la hoja ASISTENCIA', 500);
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const fechaCol = headers.indexOf('fecha');
+  const alumnoCol = headers.indexOf('alumno_id');
+  const convCol = headers.indexOf('convocatoria_id');
+  const presenteCol = headers.indexOf('presente');
+  const justCol = headers.indexOf('justificada');
+  const motivoCol = headers.indexOf('motivo');
+  const tz = Session.getScriptTimeZone();
+
+  // Las columnas nuevas deben existir en la hoja real (paso manual del usuario).
+  // Si faltan, no se puede escribir: devolver error claro en vez de corromper datos.
+  if (justCol === -1 || motivoCol === -1) {
+    return jsonError('La hoja ASISTENCIA no tiene las columnas justificada/motivo. Anadelas en la fila 1.', 500);
+  }
+
+  // Localizar la fila unica por fecha + alumno_id + convocatoria_id
+  let filaIndex = -1;
+  let coincidencias = 0;
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][0] && data[i][0] !== 0) continue;
+
+    const rowFecha = data[i][fechaCol];
+    const rowFechaStr = rowFecha instanceof Date
+      ? Utilities.formatDate(rowFecha, tz, 'yyyy-MM-dd')
+      : rowFecha;
+
+    if (rowFechaStr === fecha &&
+        data[i][alumnoCol] === alumno_id &&
+        data[i][convCol] === convocatoria_id) {
+      coincidencias++;
+      if (filaIndex === -1) filaIndex = i;
+    }
+  }
+
+  if (filaIndex === -1) {
+    return jsonError('Falta no encontrada', 404);
+  }
+
+  // Datos sucios: loguear si hay duplicados; se actualiza la primera coincidencia.
+  if (coincidencias > 1) {
+    writeLog(profesor_id || 'API', 'JUSTIFICAR_FALTA_DUP',
+      'Duplicados (' + coincidencias + ') para ' + fecha + ' | ' + alumno_id + ' | ' + convocatoria_id);
+  }
+
+  // No se puede justificar una presencia
+  if (data[filaIndex][presenteCol] === true) {
+    return jsonError('No se puede justificar una presencia', 400);
+  }
+
+  // Escribir justificada/motivo. Al desjustificar se limpia el motivo.
+  const nuevoMotivo = justificada ? (motivo || '') : '';
+  sheet.getRange(filaIndex + 1, justCol + 1).setValue(justificada);
+  sheet.getRange(filaIndex + 1, motivoCol + 1).setValue(nuevoMotivo);
+
+  // Invalidar cache de resumen y asistencia (cambia el calculo de porcentajes)
+  cacheInvalidate(['res_' + convocatoria_id, 'asist_' + convocatoria_id]);
+
+  writeLog(
+    profesor_id || 'API',
+    'JUSTIFICAR_FALTA',
+    (grupo || '') + ' | ' + fecha + ' | ' + alumno_id + ' | ' + (justificada ? nuevoMotivo : 'quitada')
+  );
+
+  return jsonResponse({ message: 'Falta actualizada', justificada: justificada, motivo: nuevoMotivo });
 
   } finally {
     lock.releaseLock();
@@ -868,7 +1056,7 @@ function setupSheets() {
     'CONVOCATORIAS': ['id', 'nombre', 'fecha_inicio', 'fecha_fin', 'activa'],
     'PROFESORES': ['id', 'nombre', 'email', 'activo'],
     'ALUMNOS': ['id', 'nombre', 'convocatoria_id', 'profesor_id', 'grupo', 'email', 'telefono', 'activo'],
-    'ASISTENCIA': ['fecha', 'alumno_id', 'convocatoria_id', 'profesor_id', 'grupo', 'presente', 'hora_registro'],
+    'ASISTENCIA': ['fecha', 'alumno_id', 'convocatoria_id', 'profesor_id', 'grupo', 'presente', 'hora_registro', 'justificada', 'motivo'],
     'LOG': ['timestamp', 'usuario', 'accion', 'detalle']
   };
 
