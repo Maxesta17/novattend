@@ -431,12 +431,21 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
         mens_total: 0, mens_presentes: 0,
         sem_actual_total: 0, sem_actual_faltas: 0,
         mes_total: 0, mes_faltas: 0,
+        justificadas: 0,
         registros: []
       };
     }
     const stats = porAlumno[r.alumno_id];
     const fecha = r.fecha;
     const presente = r.presente === true;
+
+    // Falta justificada: se excluye por completo del calculo. No cuenta como
+    // clase ni como falta en ninguna ventana (semanal, quincenal, mensual,
+    // semana actual, mes actual, total). Lectura defensiva: solo === true excluye.
+    if (r.justificada === true) {
+      stats.justificadas++;
+      return;
+    }
 
     stats.total++;
     if (presente) stats.presentes++;
@@ -474,6 +483,7 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       mens_total: 0, mens_presentes: 0,
       sem_actual_total: 0, sem_actual_faltas: 0,
       mes_total: 0, mes_faltas: 0,
+      justificadas: 0,
       registros: []
     };
 
@@ -527,6 +537,7 @@ function computeResumen(convocatoriaId, profesorId, grupo) {
       faltas_mes: s.mes_faltas,
       clases_mes: s.mes_total,
       faltas_total: s.total - s.presentes,
+      faltas_justificadas: s.justificadas,
       racha_faltas: racha,
       ultimas_8: ultimas_8,
       historico_semanas: historico_semanas
