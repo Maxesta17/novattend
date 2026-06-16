@@ -30,6 +30,7 @@ const initialSelection = (currentReason) => {
  * @param {string} [props.currentReason] - Motivo actual (si ya estaba justificada)
  * @param {boolean} [props.isJustified] - Si la falta ya esta justificada
  * @param {boolean} [props.loading] - Deshabilita los botones mientras el padre resuelve
+ * @param {string|null} [props.error] - Mensaje de error a mostrar (null = sin error)
  * @param {function} props.onConfirm - Callback con el motivo final (string)
  * @param {function} props.onUnjustify - Callback para quitar la justificacion
  */
@@ -40,6 +41,7 @@ export default function JustifyAbsenceModal({
   currentReason = '',
   isJustified = false,
   loading = false,
+  error = null,
   onConfirm,
   onUnjustify,
 }) {
@@ -114,6 +116,15 @@ export default function JustifyAbsenceModal({
           />
         )}
       </fieldset>
+
+      {error && (
+        <p
+          role="alert"
+          className="font-montserrat text-xs font-medium text-error text-center mb-3"
+        >
+          {error}
+        </p>
+      )}
 
       <Button
         variant={canConfirm ? 'primary' : 'disabled'}

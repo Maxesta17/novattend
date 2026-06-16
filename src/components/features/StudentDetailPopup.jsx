@@ -28,6 +28,7 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
   const [loadingAbsences, setLoadingAbsences] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState(null)
   const [justifying, setJustifying] = useState(false)
+  const [justifyError, setJustifyError] = useState(null)
 
   const mockAbsences = useMemo(() => student?.absences ?? [], [student])
   const shouldFetchApi = isApiEnabled() && !!convocatoriaId && !student?.absences?.length
@@ -72,7 +73,8 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
   const buildPayload = (justificada, motivo) => ({
     convocatoria_id: convocatoriaId,
     profesor_id: student.teacherId,
-    grupo: `G${student.group}`,
+    // Acepta group como numero (1) o string ("G1"/"1") sin duplicar el prefijo.
+    grupo: `G${String(student.group).replace(/^G/i, '')}`,
     alumno_id: student.id,
     fecha: selectedAbsence.fecha,
     justificada,
@@ -81,10 +83,13 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
 
   const handleConfirm = async (motivo) => {
     setJustifying(true)
+    setJustifyError(null)
     try {
       await justificarFalta(buildPayload(true, motivo))
       await fetchAbsences()
       setSelectedAbsence(null)
+    } catch (e) {
+      setJustifyError(e.message || 'No se pudo justificar la falta')
     } finally {
       setJustifying(false)
     }
@@ -92,13 +97,22 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
 
   const handleUnjustify = async () => {
     setJustifying(true)
+    setJustifyError(null)
     try {
       await justificarFalta(buildPayload(false, ''))
       await fetchAbsences()
       setSelectedAbsence(null)
+    } catch (e) {
+      setJustifyError(e.message || 'No se pudo quitar la justificacion')
     } finally {
       setJustifying(false)
     }
+  }
+
+  // Cierra el modal de justificacion limpiando cualquier error previo.
+  const closeJustifyModal = () => {
+    setJustifyError(null)
+    setSelectedAbsence(null)
   }
 
   const absences = shouldFetchApi ? apiAbsences : mockAbsences
@@ -149,7 +163,8 @@ export default function StudentDetailPopup({ student, convocatoriaId, onClose })
           currentReason={selectedAbsence.motivo}
           isJustified={selectedAbsence.justificada}
           loading={justifying}
-          onClose={() => setSelectedAbsence(null)}
+          error={justifyError}
+          onClose={closeJustifyModal}
           onConfirm={handleConfirm}
           onUnjustify={handleUnjustify}
         />

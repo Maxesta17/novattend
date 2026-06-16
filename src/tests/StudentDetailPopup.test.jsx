@@ -1,9 +1,15 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import StudentDetailPopup from '../components/features/StudentDetailPopup'
+import { isApiEnabled } from '../config/api'
+import { getAsistenciaAlumno, justificarFalta } from '../services/api'
 
-vi.mock('../config/api', () => ({ isApiEnabled: () => false }))
-vi.mock('../services/api', () => ({ getAsistenciaAlumno: vi.fn() }))
+vi.mock('../config/api', () => ({ isApiEnabled: vi.fn(() => false) }))
+vi.mock('../services/api', () => ({
+  getAsistenciaAlumno: vi.fn(),
+  justificarFalta: vi.fn(),
+}))
 
 const baseStudent = {
   id: 'a1',
@@ -30,6 +36,11 @@ const baseStudent = {
 }
 
 describe('StudentDetailPopup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    isApiEnabled.mockReturnValue(false)
+  })
+
   it('no renderiza nada si student es null', () => {
     const { container } = render(<StudentDetailPopup student={null} onClose={vi.fn()} />)
     expect(container.firstChild).toBeNull()
@@ -94,5 +105,40 @@ describe('StudentDetailPopup', () => {
     expect(screen.queryByText('Ultimas clases')).not.toBeInTheDocument()
     expect(screen.queryByText('Historico semanal')).not.toBeInTheDocument()
     expect(screen.queryByText(/Dias faltados/)).not.toBeInTheDocument()
+  })
+
+  it('muestra un mensaje de error si justificarFalta falla (modo API)', async () => {
+    isApiEnabled.mockReturnValue(true)
+    // Sin student.absences para forzar la carga via API (shouldFetchApi).
+    const apiStudent = {
+      id: 'a1',
+      name: 'Belen Cases',
+      group: 3,
+      teacherId: 'p1',
+    }
+    getAsistenciaAlumno.mockResolvedValue([
+      { fecha: '2026-04-23', presente: false, justificada: false, motivo: '' },
+    ])
+    justificarFalta.mockRejectedValue(new Error('Falta no encontrada'))
+
+    render(
+      <StudentDetailPopup
+        student={apiStudent}
+        convocatoriaId="c1"
+        onClose={vi.fn()}
+      />
+    )
+
+    // Abre el modal de justificacion desde la fila de la falta cargada.
+    const rowJustifyBtn = await screen.findByRole('button', { name: 'Justificar' })
+    await userEvent.click(rowJustifyBtn)
+
+    // Trabaja dentro del modal de justificacion (role=dialog con su aria-label).
+    const dialog = screen.getByRole('dialog', { name: 'Justificar falta de asistencia' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enfermedad' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Justificar' }))
+
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent('Falta no encontrada')
   })
 })
