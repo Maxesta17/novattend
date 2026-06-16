@@ -9,6 +9,7 @@ import GroupTabs from '../components/features/GroupTabs.jsx'
 import StudentRow from '../components/features/StudentRow.jsx'
 import DateHeaderControl from '../components/features/DateHeaderControl.jsx'
 import ConfirmPastDayModal from '../components/features/ConfirmPastDayModal.jsx'
+import WhatsNewModal from '../components/features/WhatsNewModal.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import ProgressBar from '../components/ui/ProgressBar.jsx'
 import Badge from '../components/ui/Badge.jsx'
@@ -233,6 +234,9 @@ export default function AttendancePage() {
         onCancel={() => setConfirmOpen(false)}
         onConfirm={persistAttendance}
       />
+
+      {/* Novedad "justificar faltas": se muestra una vez por dispositivo. */}
+      <WhatsNewModal enabled={sessionUser?.role === 'teacher'} />
     </div>
   )
 }
