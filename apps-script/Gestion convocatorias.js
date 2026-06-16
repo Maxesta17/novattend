@@ -633,6 +633,12 @@ function actualizarEstadisticasGrupo(convocatoriaId, profesorId, grupo) {
   const tz = Session.getScriptTimeZone();
   const stats = {};
 
+  // Localizar la columna 'justificada' por cabecera (fila 0 de asistData).
+  // getDataRange incluye la cabecera, asi que la buscamos por nombre igual que
+  // computeResumen en Codigo.js. Si la hoja real aun no tiene la columna,
+  // indexOf devuelve -1 y degradamos con gracia (justificada = false).
+  const justCol = asistData.length > 0 ? asistData[0].indexOf('justificada') : -1;
+
   for (let i = 1; i < asistData.length; i++) {
     if (asistData[i][2] !== convocatoriaId ||
         asistData[i][3] !== profesorId ||
@@ -641,12 +647,22 @@ function actualizarEstadisticasGrupo(convocatoriaId, profesorId, grupo) {
     const alumnoId = asistData[i][1] ? asistData[i][1].toString() : '';
     if (!alumnoId) continue;
 
+    // Lectura defensiva: solo === true cuenta como justificada. Si la columna
+    // no existe (justCol === -1) o la fila es antigua y mas corta, queda false.
+    const justificada = justCol !== -1 && asistData[i][justCol] === true;
+
     if (!stats[alumnoId]) {
       stats[alumnoId] = { total: 0, presentes: 0, ultimaFecha: '' };
     }
 
-    stats[alumnoId].total++;
-    if (asistData[i][5] === true) stats[alumnoId].presentes++;
+    // Falta justificada: se EXCLUYE del calculo (no suma a total ni presentes),
+    // exactamente como computeResumen, para que las hojas-resumen por grupo
+    // muestren el mismo porcentaje que el dashboard/app. Se salta el registro,
+    // pero su fecha si actualiza 'ultima clase' (la clase ocurrio).
+    if (!justificada) {
+      stats[alumnoId].total++;
+      if (asistData[i][5] === true) stats[alumnoId].presentes++;
+    }
 
     let fecha = asistData[i][0];
     if (fecha instanceof Date) {
