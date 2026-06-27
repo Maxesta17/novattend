@@ -23,14 +23,18 @@ const SHEET_NAMES = {
 // CACHE
 // ============================================================
 
-const CACHE_TTL = 120; // segundos (2 minutos)
+const CACHE_TTL = 120; // segundos (2 minutos) — TTL por defecto de lecturas en vivo
+// TTL largo para warmCache (6h = maximo de CacheService). El precalentado de las
+// 6:00 debe sobrevivir hasta la franja de uso real (8-12h), no expirar a los 2 min.
+// Es seguro porque toda escritura invalida la clave 'res_<convocatoria>' (cacheInvalidate).
+const WARM_TTL = 21600; // segundos (6 horas)
 const cache_ = CacheService.getScriptCache();
 
 /**
  * Lee del cache o ejecuta fetchFn y guarda el resultado.
  * Si el JSON supera 100KB, devuelve sin cachear.
  */
-function cacheGet(key, fetchFn) {
+function cacheGet(key, fetchFn, ttl) {
   const cached = cache_.get(key);
   if (cached) {
     return JSON.parse(cached);
@@ -41,7 +45,7 @@ function cacheGet(key, fetchFn) {
 
   // Limite de CacheService: 100KB por entrada
   if (json.length < 100000) {
-    cache_.put(key, json, CACHE_TTL);
+    cache_.put(key, json, ttl || CACHE_TTL);
   }
 
   return data;
@@ -85,9 +89,9 @@ function cacheTrackKey(key) {
 /**
  * Wrapper: cachea con tracking de clave.
  */
-function cachedGet(key, fetchFn) {
+function cachedGet(key, fetchFn, ttl) {
   cacheTrackKey(key);
-  return cacheGet(key, fetchFn);
+  return cacheGet(key, fetchFn, ttl);
 }
 
 // ============================================================
@@ -386,14 +390,18 @@ function mondayOf_(d) {
 /**
  * Calcula resumen de asistencia (extraido para cacheabilidad).
  */
-function computeResumen(convocatoriaId, profesorId, grupo) {
-  let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS)
+function computeResumen(convocatoriaId, profesorId, grupo, preAlumnos, preRegistros) {
+  // preAlumnos/preRegistros: filas ya leidas de ALUMNOS/ASISTENCIA. Permiten a
+  // warmCache leer cada hoja UNA vez y reutilizarla para todas las convocatorias,
+  // en lugar de releer las hojas completas por cada convocatoria. Si no se pasan,
+  // se leen aqui (comportamiento original para los callers en vivo).
+  let alumnos = (preAlumnos || sheetToObjects(SHEET_NAMES.ALUMNOS))
     .filter(a => a.activo === true && a.convocatoria_id === convocatoriaId);
 
   if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
   if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
 
-  let registros = sheetToObjects(SHEET_NAMES.ASISTENCIA)
+  let registros = (preRegistros || sheetToObjects(SHEET_NAMES.ASISTENCIA))
     .filter(r => r.convocatoria_id === convocatoriaId);
 
   if (profesorId) registros = registros.filter(r => r.profesor_id === profesorId);
@@ -1025,19 +1033,42 @@ function warmCache() {
   const convocatorias = sheetToObjects(SHEET_NAMES.CONVOCATORIAS)
     .filter(c => c.activa === true && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
 
+  if (convocatorias.length === 0) {
+    writeLog('SISTEMA', 'WARM_CACHE', '0 convocatorias activas, nada que precalentar');
+    return 0;
+  }
+
+  // Lectura UNICA de las hojas pesadas. Se reutilizan para todas las
+  // convocatorias en lugar de releerlas por cada una: esto elimina el
+  // O(convocatorias x hoja) que hacia que el run cruzara el cap de 6 min
+  // cuando la latencia de Sheets es alta a primera hora.
+  const alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS);
+  const registros = sheetToObjects(SHEET_NAMES.ASISTENCIA);
+
   let calentadas = 0;
+  let fallidas = 0;
   convocatorias.forEach(c => {
-    // Resumen global de la convocatoria (sin filtro de profesor/grupo).
-    // La clave debe coincidir EXACTA con la de handleGetResumen:
-    // 'res_' + convocatoria_id + '_' + profesor_id + '_' + grupo (ultimos vacios).
-    const cacheKey = 'res_' + c.id + '_' + '' + '_' + '';
-    cachedGet(cacheKey, function() {
-      return computeResumen(c.id, '', '');
-    });
-    calentadas++;
+    // try/catch por convocatoria: una lenta o con datos corruptos no debe
+    // tumbar el calentado de las demas.
+    try {
+      // Resumen global de la convocatoria (sin filtro de profesor/grupo).
+      // La clave debe coincidir EXACTA con la de handleGetResumen:
+      // 'res_' + convocatoria_id + '_' + profesor_id + '_' + grupo (ultimos vacios).
+      const cacheKey = 'res_' + c.id + '_' + '' + '_' + '';
+      // WARM_TTL (6h) en vez del CACHE_TTL por defecto: el calentado debe llegar
+      // a la franja de uso real, no expirar a los 2 min.
+      cachedGet(cacheKey, function() {
+        return computeResumen(c.id, '', '', alumnos, registros);
+      }, WARM_TTL);
+      calentadas++;
+    } catch (err) {
+      fallidas++;
+      writeLog('SISTEMA', 'WARM_CACHE_ERROR', c.id + ' | ' + err.message);
+    }
   });
 
-  writeLog('SISTEMA', 'WARM_CACHE', calentadas + ' convocatoria(s) precalentada(s)');
+  writeLog('SISTEMA', 'WARM_CACHE',
+    calentadas + ' precalentada(s)' + (fallidas ? ' | ' + fallidas + ' fallida(s)' : ''));
   return calentadas;
 }
 
