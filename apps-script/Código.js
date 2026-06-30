@@ -575,8 +575,20 @@ function computeResumen(convocatoriaId, profesorId, grupo, preAlumnos, preRegist
     // mostrar el marcador gold sin penalizar la ratio faltas/clases.
     const porSemana = {};
     regsOrdenados.forEach(function(r) {
+      // Guarda: si la fecha esta malformada (editada a mano por Aurora como
+      // dd/mm/yyyy, numero o vacia), dt queda Invalid Date y fmt/Utilities.formatDate
+      // lanzaria una excepcion que subia hasta doGet como HTTP 500 para toda la
+      // convocatoria. Ahora se salta del agrupado semanal sin tocar registros/
+      // ultimas_8/pct ni el resto del resumen.
+      if (typeof r.fecha !== 'string') return;
       const partes = r.fecha.split('-');
-      const dt = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+      if (partes.length !== 3) return;
+      const yr = Number(partes[0]);
+      const mo = Number(partes[1]);
+      const dy = Number(partes[2]);
+      if (isNaN(yr) || isNaN(mo) || isNaN(dy) || yr === 0 || mo === 0 || dy === 0) return;
+      const dt = new Date(yr, mo - 1, dy);
+      if (isNaN(dt.getTime())) return;
       const lun = mondayOf_(dt);
       const lunStr = fmt(lun);
       if (!porSemana[lunStr]) {
