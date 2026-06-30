@@ -4,11 +4,10 @@
  * Cuando VITE_API_URL no esta definida, todas las funciones
  * devuelven null y el frontend usa los datos mock locales.
  *
- * Inyeccion de token (Fase 5):
+ * Auth por token:
  *   - apiGet: agrega token como query param si existe en sesion.
  *   - apiPost: incluye token en el body JSON si existe.
- *   - El api_key legacy coexiste sin cambios (aditivo).
- *   - Sin token (modo mock o antes de Fase 6), el comportamiento es IDENTICO al anterior.
+ *   - El api_key compartido fue retirado; el token de sesion es la unica via de auth.
  *
  * Clasificacion de errores por code/reason numerico (no por regex de mensaje):
  *   - 401 → AuthError (limpia sesion y emite auth:expired)
@@ -18,7 +17,7 @@
  * @module services/api
  */
 
-import { API_URL, API_KEY, isApiEnabled } from '../config/api'
+import { API_URL, isApiEnabled } from '../config/api'
 import { getToken, clearSession } from '../config/session'
 
 // ============================================================
@@ -91,9 +90,8 @@ async function apiGet(action, params = {}) {
 
   const url = new URL(API_URL)
   url.searchParams.set('action', action)
-  if (API_KEY) url.searchParams.set('api_key', API_KEY)
 
-  // Inyeccion de token (aditivo — si no hay token, el api_key legacy sigue funcionando)
+  // Auth exclusiva por token de sesion; el api_key compartido fue retirado.
   const token = getToken()
   if (token) url.searchParams.set('token', token)
 
@@ -118,7 +116,7 @@ async function apiGet(action, params = {}) {
 async function apiPost(action, body = {}) {
   if (!isApiEnabled()) return null
 
-  // Inyeccion de token (aditivo — si no hay token, el api_key legacy sigue funcionando)
+  // Auth exclusiva por token de sesion; el api_key compartido fue retirado.
   const token = getToken()
 
   // Nota: usamos text/plain en lugar de application/json a proposito.
@@ -130,7 +128,6 @@ async function apiPost(action, body = {}) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({
       action,
-      ...(API_KEY ? { api_key: API_KEY } : {}),
       ...(token ? { token } : {}),
       ...body
     })

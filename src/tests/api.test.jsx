@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // Mock de config/api — API habilitada con URL de prueba
 vi.mock('../config/api', () => ({
   API_URL: 'https://script.google.com/test',
-  API_KEY: 'test-key-uuid-fake-12345',
   isApiEnabled: vi.fn(() => true),
 }))
 
@@ -19,7 +18,7 @@ import {
   actualizarAlumno,
   justificarFalta,
 } from '../services/api'
-import { isApiEnabled, API_KEY } from '../config/api'
+import { isApiEnabled } from '../config/api'
 
 describe('api.js', () => {
   beforeEach(() => {
@@ -259,9 +258,9 @@ describe('api.js', () => {
     expect(global.fetch).not.toHaveBeenCalled()
   })
 
-  // --- SEC-03: Inyeccion de API key ---
+  // --- SEC-03: api_key retirado — no debe enviarse en ningun request ---
 
-  it('apiGet incluye api_key como query param cuando API_KEY tiene valor', async () => {
+  it('apiGet NO incluye api_key como query param (auth exclusiva por token)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
@@ -270,10 +269,10 @@ describe('api.js', () => {
     await getConvocatorias()
 
     const calledUrl = new URL(global.fetch.mock.calls[0][0])
-    expect(calledUrl.searchParams.get('api_key')).toBe('test-key-uuid-fake-12345')
+    expect(calledUrl.searchParams.has('api_key')).toBe(false)
   })
 
-  it('apiPost incluye api_key en el body JSON cuando API_KEY tiene valor', async () => {
+  it('apiPost NO incluye api_key en el body JSON (auth exclusiva por token)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
@@ -282,12 +281,11 @@ describe('api.js', () => {
     await guardarAsistencia({ fecha: '2026-04-05', convocatoria_id: 'conv-1', alumnos: [] })
 
     const sentBody = JSON.parse(global.fetch.mock.calls[0][1].body)
-    expect(sentBody.api_key).toBe('test-key-uuid-fake-12345')
+    expect(sentBody).not.toHaveProperty('api_key')
     expect(sentBody.action).toBe('guardarAsistencia')
   })
 
-  it('apiGet usa guard condicional para api_key (if API_KEY)', async () => {
-    // Verificamos que el query param se agrega cuando hay key
+  it('apiGet no filtra api_key del body GET (param nunca generado)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ status: 'ok', data: [] }),
@@ -296,14 +294,10 @@ describe('api.js', () => {
     await getProfesores()
 
     const calledUrl = new URL(global.fetch.mock.calls[0][0])
-    // Confirmar que api_key esta presente cuando la key existe
-    expect(calledUrl.searchParams.has('api_key')).toBe(true)
-    // Confirmar que no es string vacio
-    expect(calledUrl.searchParams.get('api_key')).not.toBe('')
+    expect(calledUrl.searchParams.has('api_key')).toBe(false)
   })
 
-  it('apiPost usa spread condicional para api_key', async () => {
-    // Verificamos que api_key va junto con action y datos del body
+  it('apiPost no incluye api_key aunque haya datos en el body', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
@@ -312,7 +306,7 @@ describe('api.js', () => {
     await crearAlumno({ nombre: 'Test', convocatoria_id: 'c1', profesor_id: 'p1', grupo: 'G1' })
 
     const sentBody = JSON.parse(global.fetch.mock.calls[0][1].body)
-    expect(sentBody).toHaveProperty('api_key', 'test-key-uuid-fake-12345')
+    expect(sentBody).not.toHaveProperty('api_key')
     expect(sentBody).toHaveProperty('action', 'crearAlumno')
     expect(sentBody).toHaveProperty('nombre', 'Test')
   })
