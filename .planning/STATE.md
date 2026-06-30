@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 Phase: 06
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-30 - Completed quick task 260630-epo: fix historico_semanas NaN-guard y transferirHistorial lock
+Last activity: 2026-06-30 - Completed quick task 260630-f75: normaliza fechas dd/mm/yyyy a ISO en sheetToObjects
 
 Progress: [█████████░] 89%
 
@@ -54,6 +54,7 @@ Progress: [█████████░] 89%
 |---|-------------|------|--------|-----------|
 | 260630-dti | fix warmCache invalidacion (cacheInvalidate purga clave calentada) + lectura laxa de activo/activa | 2026-06-30 | 47a52c5 | [260630-dti-fix-warmcache-invalidacion-y-lectura-lax](./quick/260630-dti-fix-warmcache-invalidacion-y-lectura-lax/) |
 | 260630-epo | fix historico_semanas NaN-guard (no tumbar getResumen) + transferirHistorial LockService | 2026-06-30 | 3706495 | [260630-epo-fix-historico-semanas-nan-guard-y-transf](./quick/260630-epo-fix-historico-semanas-nan-guard-y-transf/) |
+| 260630-f75 | fix normaliza fechas dd/mm/yyyy a ISO en sheetToObjects (raiz F1/F2) | 2026-06-30 | 9dbb5ab | [260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en](./quick/260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en/) |
 
 ## Session Continuity
 
