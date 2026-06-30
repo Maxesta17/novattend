@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 Phase: 06
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-04-05
+Last activity: 2026-06-30 - Completed quick task 260630-dti: fix warmCache invalidacion y lectura laxa de activo
 
 Progress: [█████████░] 89%
 
@@ -47,6 +47,12 @@ Progress: [█████████░] 89%
 
 - @vitest/coverage-v8 debe coincidir exactamente con version de vitest instalada (peer dep dura)
 - SEC requiere deploy coordinado de 3 capas: Apps Script + .env + Vercel — no deployar a mitad de Phase 5
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260630-dti | fix warmCache invalidacion (cacheInvalidate purga clave calentada) + lectura laxa de activo/activa | 2026-06-30 | 47a52c5 | [260630-dti-fix-warmcache-invalidacion-y-lectura-lax](./quick/260630-dti-fix-warmcache-invalidacion-y-lectura-lax/) |
 
 ## Session Continuity
 
