@@ -3,7 +3,7 @@ import useConvocatorias from './useConvocatorias.js'
 import useDebounce from './useDebounce.js'
 import { TEACHERS_DATA } from '../config/teachers.js'
 import { isApiEnabled } from '../config/api'
-import { getProfesores, getResumen } from '../services/api'
+import { getProfesores, getResumen, AuthError } from '../services/api'
 import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
 
 /**
@@ -95,10 +95,12 @@ export default function useDashboard() {
     loadConvData(convocatoria)
       .then(() => { if (!cancelled) setLoading(false) })
       .catch(err => {
-        if (!cancelled) {
-          setError(err.message || 'Error al cargar datos')
-          setLoading(false)
-        }
+        if (cancelled) return
+        // Un 401 es sesion expirada, NO "sin datos": api.js ya emitio
+        // auth:expired (redirige al login). No mostramos pantalla de error.
+        if (err instanceof AuthError) return
+        setError(err.message || 'Error al cargar datos')
+        setLoading(false)
       })
     return () => { cancelled = true }
   }, [convsLoading, convsError, convocatoria]) // loadConvData es local sin useCallback, deps reales son convsLoading/convsError/convocatoria
@@ -113,7 +115,10 @@ export default function useDashboard() {
     try {
       await loadConvData(conv)
     } catch (err) {
-      setError(err.message || 'Error al cargar datos')
+      // 401 = sesion expirada (auth:expired ya redirige), no mostrar error.
+      if (!(err instanceof AuthError)) {
+        setError(err.message || 'Error al cargar datos')
+      }
     } finally {
       setLoading(false)
     }

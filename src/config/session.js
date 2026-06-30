@@ -55,8 +55,18 @@ export function isExpired() {
 }
 
 /**
+ * Elimina la sesion de sessionStorage SIN emitir eventos.
+ * Uso: logout intencional del usuario (no es una expiracion).
+ * Es idempotente.
+ */
+export function logout() {
+  sessionStorage.removeItem(SESSION_KEY)
+}
+
+/**
  * Elimina la sesion de sessionStorage y emite el evento 'auth:expired'
- * para que los listeners globales (App.jsx) puedan redirigir al login.
+ * para que los listeners globales (AuthExpiredListener) redirijan al login.
+ * Uso: expiracion/revocacion de sesion detectada en un 401.
  * Es idempotente: llamarlo multiples veces no tiene efectos secundarios adicionales.
  */
 export function clearSession() {

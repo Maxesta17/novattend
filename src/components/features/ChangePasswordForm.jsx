@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isApiEnabled } from '../../config/api'
 import { cambiarPassword } from '../../services/api'
-import { clearSession } from '../../config/session'
+import { logout } from '../../config/session'
 import { validatePassword } from '../../utils/passwordPolicy'
 import Button from '../ui/Button.jsx'
 import PasswordInput from '../ui/PasswordInput.jsx'
@@ -51,8 +51,9 @@ export default function ChangePasswordForm({ username, onSuccess }) {
         // Modo mock: simular latencia minima.
         await new Promise(r => setTimeout(r, 300))
       }
-      // El token actual queda revocado: limpiar sesion y volver al login.
-      clearSession()
+      // El token actual queda revocado por el backend (token_version++): limpiar
+      // sesion (sin evento de expiracion, lo gestionamos aqui) y volver al login.
+      logout()
       onSuccess()
     } catch (err) {
       setError(err.message || 'No se pudo cambiar la contraseña. Inténtalo de nuevo.')
