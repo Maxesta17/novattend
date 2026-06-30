@@ -771,30 +771,124 @@ function handleGetConvocatorias(e) {
 }
 
 /**
- * Devuelve profesores activos.
+ * Proyecta una fila de PROFESORES a los campos PUBLICOS seguros.
+ *
+ * NUNCA debe salir al cliente: password_hash, salt, must_change_password,
+ * token_version. Esta proyeccion se aplica DENTRO de la fetchFn (antes de
+ * cachear), de modo que el contenido cacheado tampoco contiene secretos
+ * (red-team cripto #10 / deploy #1).
+ *
+ * @param {Object} p - fila cruda de PROFESORES (objeto por cabecera).
+ * @returns {{id,nombre,email,activo,rol}}
  */
-function handleGetProfesores(e) {
+function projectProfesorPublico_(p) {
+  return {
+    id: p.id,
+    nombre: p.nombre,
+    email: p.email,
+    activo: p.activo,
+    rol: p.rol
+  };
+}
+
+/**
+ * Devuelve profesores (proyeccion publica: SIN password_hash/salt/etc).
+ *
+ * @param {Object} e - evento GET.
+ * @param {{profesor_id,rol}|null} identity - identidad del token (puede ser
+ *        null si llego por el camino legacy api_key — pero esta accion NO esta
+ *        en LEGACY_READONLY_ACTIONS, asi que en la practica siempre hay token).
+ */
+function handleGetProfesores(e, identity) {
+  // ?todos=true (incluye inactivos) restringido a ceo. El saneo se aplica
+  // tambien aqui, en la fuente, antes de devolver.
   if (e.parameter.todos === 'true') {
-    return jsonResponse(sheetToObjects(SHEET_NAMES.PROFESORES));
+    if (!identity || identity.rol !== 'ceo') {
+      return jsonError('Permiso denegado', 403, 'forbidden');
+    }
+    const todos = sheetToObjects(SHEET_NAMES.PROFESORES).map(projectProfesorPublico_);
+    return jsonResponse(todos);
   }
 
-  const data = cachedGet('prof', function() {
-    return sheetToObjects(SHEET_NAMES.PROFESORES).filter(p => isTruthy(p.activo));
+  // Namespace de cache 'prof_v2' para invalidar las entradas viejas (que
+  // cacheaban filas con secretos bajo la clave 'prof').
+  const data = cachedGet('prof_v2', function() {
+    return sheetToObjects(SHEET_NAMES.PROFESORES)
+      .filter(p => isTruthy(p.activo))
+      .map(projectProfesorPublico_);
   });
 
   return jsonResponse(data);
 }
 
 /**
- * Devuelve alumnos filtrados por convocatoria y/o profesor.
+ * Comprueba si un alumno pertenece a un profesor concreto.
+ *
+ * Mira la fila del alumno en ALUMNOS y compara su profesor_id con el dado. NO
+ * usa pertenencia por grupo (un grupo puede estar vacio o compartido): la
+ * unica fuente de verdad de la propiedad es la columna profesor_id del alumno
+ * (red-team bruteforce #8).
+ *
+ * @param {string} alumnoId   - id del alumno (ej. 'alu-001').
+ * @param {string} profesorId - id del profesor (ej. 'prof-samuel').
+ * @returns {boolean} true si el alumno existe y su profesor_id coincide.
  */
-function handleGetAlumnos(e) {
-  const convocatoriaId = e.parameter.convocatoria_id || '';
-  const profesorId = e.parameter.profesor_id || '';
-  const grupo = e.parameter.grupo || '';
+function ownsAlumno_(alumnoId, profesorId) {
+  if (!alumnoId || !profesorId) return false;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.ALUMNOS);
+  if (!sheet) return false;
 
-  // Sin cache si piden todos (incluidos inactivos)
-  if (e.parameter.todos === 'true') {
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return false;
+
+  const headers = data[0].map(h => String(h).trim());
+  const colId = headers.indexOf('id');
+  const colProf = headers.indexOf('profesor_id');
+  if (colId === -1 || colProf === -1) return false;
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][colId]).trim() === alumnoId) {
+      return String(data[i][colProf]).trim() === profesorId;
+    }
+  }
+  return false;
+}
+
+/**
+ * Devuelve alumnos filtrados por convocatoria y/o profesor.
+ *
+ * Autorizacion (red-team CRITICO bruteforce #3): un teacher SOLO puede ver sus
+ * propios alumnos. La identidad efectiva (profesorId) se DERIVA del token, no
+ * de e.parameter. Si un teacher pasara un profesor_id distinto (o lo dejara
+ * vacio) -> 403. La cacheKey se construye con la identidad efectiva, NUNCA con
+ * e.parameter: asi un teacher jamas lee la entrada global 'alu_<conv>__'.
+ *
+ * @param {Object} e - evento GET.
+ * @param {{profesor_id,rol}|null} identity - identidad del token.
+ */
+function handleGetAlumnos(e, identity) {
+  const convocatoriaId = e.parameter.convocatoria_id || '';
+  const grupo = e.parameter.grupo || '';
+  const esCeo = identity && identity.rol === 'ceo';
+
+  // Profesor EFECTIVO: para ceo se respeta el filtro recibido (puede ser ''
+  // para ver todos); para teacher se FUERZA su propio id y se rechaza cualquier
+  // intento de leer datos ajenos.
+  let profesorId;
+  if (esCeo) {
+    profesorId = e.parameter.profesor_id || '';
+  } else {
+    const pedido = e.parameter.profesor_id || '';
+    if (pedido && pedido !== identity.profesor_id) {
+      return jsonError('Permiso denegado', 403, 'forbidden');
+    }
+    profesorId = identity.profesor_id;
+  }
+
+  // Sin cache si piden todos (incluidos inactivos). Restringido a ceo: un
+  // teacher recibe la rama cacheada y filtrada por su propio profesor_id.
+  if (e.parameter.todos === 'true' && esCeo) {
     let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS);
     if (convocatoriaId) alumnos = alumnos.filter(a => a.convocatoria_id === convocatoriaId);
     if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
@@ -802,6 +896,7 @@ function handleGetAlumnos(e) {
     return jsonResponse(alumnos);
   }
 
+  // cacheKey DERIVADA de la identidad efectiva (profesorId), no de e.parameter.
   const cacheKey = 'alu_' + convocatoriaId + '_' + profesorId + '_' + grupo;
   const data = cachedGet(cacheKey, function() {
     let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS).filter(a => isTruthy(a.activo));
@@ -822,13 +917,33 @@ function handleGetAlumnos(e) {
  * limite de 100KB de CacheService, evitando releer las ~900 filas de la hoja
  * en cada apertura del popup.
  */
-function handleGetAsistencia(e) {
+function handleGetAsistencia(e, identity) {
   const convocatoriaId = e.parameter.convocatoria_id || '';
-  const profesorId = e.parameter.profesor_id || '';
   const grupo = e.parameter.grupo || '';
   const fecha = e.parameter.fecha || ''; // formato: yyyy-MM-dd
   const alumnoId = e.parameter.alumno_id || '';
+  const esCeo = identity && identity.rol === 'ceo';
 
+  // Profesor EFECTIVO derivado del token (mismo criterio que getAlumnos): el
+  // teacher solo ve lo suyo; un profesor_id ajeno o vacio -> 403. Si el teacher
+  // consulta por alumno_id concreto (popup de detalle), debe ser dueno del
+  // alumno (red-team bruteforce #3).
+  let profesorId;
+  if (esCeo) {
+    profesorId = e.parameter.profesor_id || '';
+  } else {
+    const pedido = e.parameter.profesor_id || '';
+    if (pedido && pedido !== identity.profesor_id) {
+      return jsonError('Permiso denegado', 403, 'forbidden');
+    }
+    if (alumnoId && !ownsAlumno_(alumnoId, identity.profesor_id)) {
+      return jsonError('Permiso denegado', 403, 'forbidden');
+    }
+    profesorId = identity.profesor_id;
+  }
+
+  // cacheKey DERIVADA de la identidad efectiva (profesorId), no de e.parameter:
+  // evita que un teacher lea la entrada global 'asist_<conv>___<alu>'.
   const cacheKey = 'asist_' + convocatoriaId + '_' + profesorId + '_' +
     grupo + '_' + fecha + '_' + alumnoId;
 
@@ -869,13 +984,29 @@ function handleGetAsistencia(e) {
  * Devuelve metricas absolutas (faltas) orientadas a deteccion de patrones,
  * mas campos viejos (semanal/quincenal/mensual en %) por compatibilidad.
  */
-function handleGetResumen(e) {
+function handleGetResumen(e, identity) {
   const convocatoriaId = e.parameter.convocatoria_id;
-  const profesorId = e.parameter.profesor_id || '';
   const grupo = e.parameter.grupo || '';
+  const esCeo = identity && identity.rol === 'ceo';
 
   if (!convocatoriaId) {
     return jsonError('convocatoria_id es obligatorio para getResumen', 400);
+  }
+
+  // Profesor EFECTIVO del token. El resumen GLOBAL (profesor_id vacio) queda
+  // reservado al ceo: un teacher SIEMPRE ve solo su propio resumen, y si pidiera
+  // un profesor_id ajeno o vacio -> 403. cacheKey derivada de la identidad
+  // efectiva, jamas de e.parameter (evita leer la entrada global 'res_<conv>__').
+  let profesorId;
+  if (esCeo) {
+    profesorId = e.parameter.profesor_id || '';
+  } else {
+    const pedido = e.parameter.profesor_id || '';
+    if (pedido !== identity.profesor_id) {
+      // Incluye el caso vacio (teacher no puede pedir el resumen global).
+      return jsonError('Permiso denegado', 403, 'forbidden');
+    }
+    profesorId = identity.profesor_id;
   }
 
   const cacheKey = 'res_' + convocatoriaId + '_' + profesorId + '_' + grupo;
@@ -1152,11 +1283,44 @@ function doPost(e) {
  *   ]
  * }
  */
-function handleGuardarAsistencia(body) {
-  const { fecha, convocatoria_id, profesor_id, grupo, alumnos } = body;
+function handleGuardarAsistencia(body, identity) {
+  const { fecha, convocatoria_id, grupo, alumnos } = body;
 
-  if (!fecha || !convocatoria_id || !profesor_id || !grupo || !alumnos) {
-    return jsonError('Faltan campos obligatorios: fecha, convocatoria_id, profesor_id, grupo, alumnos', 400);
+  // IGNORAR body.profesor_id: la identidad escribe SIEMPRE bajo su propio id
+  // (el ceo no usa este endpoint en el flujo, pero si lo hiciera escribe bajo su
+  // id; el frontend de teacher es quien marca asistencia). Asi un teacher no
+  // puede falsificar el profesor_id de los registros que guarda.
+  const profesor_id = identity.profesor_id;
+
+  if (!fecha || !convocatoria_id || !grupo || !alumnos) {
+    return jsonError('Faltan campos obligatorios: fecha, convocatoria_id, grupo, alumnos', 400);
+  }
+
+  // Ownership (red-team bruteforce #8): TODOS los alumno_id del payload deben
+  // pertenecer al profesor autenticado. Se construye el mapa alumno_id ->
+  // profesor_id UNA sola vez (no ownsAlumno_ por alumno, que releeria la hoja
+  // N veces). El ceo queda exento de esta comprobacion.
+  if (identity.rol !== 'ceo') {
+    const ss0 = SpreadsheetApp.getActiveSpreadsheet();
+    const alumnosSheet = ss0.getSheetByName(SHEET_NAMES.ALUMNOS);
+    if (!alumnosSheet) return jsonError('No se encontro la hoja ALUMNOS', 500);
+    const aData = alumnosSheet.getDataRange().getValues();
+    const aHeaders = aData[0].map(h => String(h).trim());
+    const aColId = aHeaders.indexOf('id');
+    const aColProf = aHeaders.indexOf('profesor_id');
+    if (aColId === -1 || aColProf === -1) {
+      return jsonError('La hoja ALUMNOS no tiene las columnas id/profesor_id', 500);
+    }
+    const ownerById = {};
+    for (let i = 1; i < aData.length; i++) {
+      const aid = String(aData[i][aColId]).trim();
+      if (aid) ownerById[aid] = String(aData[i][aColProf]).trim();
+    }
+    for (let k = 0; k < alumnos.length; k++) {
+      if (ownerById[alumnos[k].alumno_id] !== profesor_id) {
+        return jsonError('Permiso denegado', 403, 'forbidden');
+      }
+    }
   }
 
   // Lock para evitar escrituras concurrentes (cola india)
@@ -1311,12 +1475,22 @@ function handleGuardarAsistencia(body) {
  * La fila se identifica por fecha + alumno_id + convocatoria_id (clave unica
  * en la practica: un alumno pertenece a un solo grupo/profesor por convocatoria).
  */
-function handleJustificarFalta(body) {
-  const { convocatoria_id, profesor_id, grupo, alumno_id, fecha, justificada, motivo } = body;
+function handleJustificarFalta(body, identity) {
+  const { convocatoria_id, grupo, alumno_id, fecha, justificada, motivo } = body;
+
+  // El usuario que registra la accion es SIEMPRE la identidad del token, no
+  // body.profesor_id (que se ignora).
+  const profesor_id = identity.profesor_id;
 
   // Validar obligatorios. justificada debe ser booleano explicito.
   if (!convocatoria_id || !alumno_id || !fecha || typeof justificada !== 'boolean') {
     return jsonError('Faltan campos obligatorios: convocatoria_id, alumno_id, fecha, justificada (booleano)', 400);
+  }
+
+  // Ownership: un teacher solo puede justificar faltas de SUS alumnos
+  // (ownsAlumno_ compara por la columna profesor_id del alumno). El ceo es libre.
+  if (identity.rol !== 'ceo' && !ownsAlumno_(alumno_id, profesor_id)) {
+    return jsonError('Permiso denegado', 403, 'forbidden');
   }
 
   // Lock para evitar escrituras concurrentes (mismo patron que guardar)
@@ -1421,8 +1595,18 @@ function handleJustificarFalta(body) {
  *   telefono: ""
  * }
  */
-function handleCrearAlumno(body) {
-  const { nombre, convocatoria_id, profesor_id, grupo } = body;
+function handleCrearAlumno(body, identity) {
+  const { nombre, convocatoria_id, grupo } = body;
+
+  // Un teacher SOLO crea alumnos bajo su propio profesor_id (se ignora
+  // body.profesor_id). El ceo puede crear bajo cualquier profesor (toma el
+  // body.profesor_id, o el suyo si no lo especifica).
+  let profesor_id;
+  if (identity.rol === 'ceo') {
+    profesor_id = body.profesor_id || identity.profesor_id;
+  } else {
+    profesor_id = identity.profesor_id;
+  }
 
   if (!nombre || !convocatoria_id || !profesor_id || !grupo) {
     return jsonError('Faltan campos obligatorios: nombre, convocatoria_id, profesor_id, grupo', 400);
@@ -1457,7 +1641,7 @@ function handleCrearAlumno(body) {
   // Invalidar cache de alumnos para esta convocatoria
   cacheInvalidate(['alu_' + convocatoria_id]);
 
-  writeLog(body.usuario || 'admin', 'CREAR_ALUMNO', nombre + ' | ' + grupo + ' | ' + convocatoria_id);
+  writeLog(identity.profesor_id, 'CREAR_ALUMNO', nombre + ' | ' + grupo + ' | ' + convocatoria_id);
 
   return jsonResponse({ id: id, message: 'Alumno creado correctamente' });
 
@@ -1480,8 +1664,15 @@ function handleCrearAlumno(body) {
  *   }
  * }
  */
-function handleActualizarAlumno(body) {
+function handleActualizarAlumno(body, identity) {
   const { alumno_id, campos } = body;
+
+  // Operacion administrativa (mover grupo, cambiar profesor, dar de baja):
+  // SOLO el ceo. Un teacher recibe 403 (no puede reasignar ni desactivar
+  // alumnos, ni siquiera los suyos).
+  if (identity.rol !== 'ceo') {
+    return jsonError('Permiso denegado', 403, 'forbidden');
+  }
 
   if (!alumno_id || !campos) {
     return jsonError('Faltan campos obligatorios: alumno_id, campos', 400);
@@ -1531,7 +1722,7 @@ function handleActualizarAlumno(body) {
   cacheInvalidate(['alu_', 'asist_', 'res_']);
 
   writeLog(
-    body.usuario || 'admin',
+    identity.profesor_id,
     'ACTUALIZAR_ALUMNO',
     alumno_id + ' | ' + camposActualizados.join(', ')
   );
