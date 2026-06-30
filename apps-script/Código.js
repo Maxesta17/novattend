@@ -1308,6 +1308,222 @@ function protegerEstructura() {
 }
 
 // ============================================================
+// AUTENTICACION — PRIMITIVAS (v1.2)
+// ============================================================
+//
+// Bloque de primitivas criptograficas para la auth real (Fase 1 del plan
+// .planning/security-auth-plan-v1.2.md). SOLO helpers: NO se modifican
+// doGet/doPost/validateApiKey ni ningun handler. La integracion en el gate
+// y los handlers ocurre en la Fase 3.
+//
+// Modelo de amenaza cubierto (resumen): identidad y rol viajan firmados con
+// HMAC-SHA256 en un token de sesion, de modo que el backend deriva la
+// identidad del token (no del body/query). Las comparaciones de firma y de
+// hash de password se hacen en tiempo constante para no filtrar informacion
+// por timing. exp del token en SEGUNDOS Unix (unidad unica, red-team #9).
+
+// Algoritmos reutilizables (evita repetir las enums largas de Utilities).
+const DIGEST_SHA_256 = Utilities.DigestAlgorithm.SHA_256;
+
+// TTL maximo aceptable de un token, en segundos. validateToken_ rechaza
+// cualquier token cuyo exp supere now + MAX_TTL_SEG: corta tokens forjados
+// con expiraciones absurdamente lejanas aunque la firma fuese valida.
+const MAX_TTL_SEG = 24 * 60 * 60; // 24 horas
+
+// Prefijo de dominio que se antepone al payload antes de firmar/verificar.
+// Evita colisiones de firma entre contextos distintos (separacion de dominio).
+const TOKEN_SIGN_PREFIX = 'novattend.v1.';
+
+// Valor placeholder de SESSION_SECRET: si la propiedad aun contiene esto,
+// se considera NO configurada (signToken_ lanza, setSessionSecret regenera).
+const SESSION_SECRET_PLACEHOLDER = 'REEMPLAZAR';
+
+/**
+ * Comparacion en tiempo constante de dos valores (string o Byte[]).
+ *
+ * No hace early-return por longitud: hashea AMBOS lados con SHA-256 y compara
+ * los dos digests (siempre 32 bytes, longitud fija) byte a byte acumulando las
+ * diferencias en un OR. El tiempo de ejecucion no depende de en que byte
+ * difieren ni de la longitud de las entradas, asi que no filtra informacion
+ * util a un atacante que mida latencias.
+ *
+ * NOTA: dos entradas distintas con el mismo SHA-256 darian igual, pero eso
+ * exigiria una colision de SHA-256 (no factible), asi que es seguro.
+ *
+ * @param {string|Byte[]} a - Primer valor a comparar.
+ * @param {string|Byte[]} b - Segundo valor a comparar.
+ * @returns {boolean} true si los digests SHA-256 coinciden, false en otro caso.
+ */
+function constantEq_(a, b) {
+  const ha = Utilities.computeDigest(DIGEST_SHA_256, a);
+  const hb = Utilities.computeDigest(DIGEST_SHA_256, b);
+  let r = 0;
+  // Ambos digests miden 32 bytes; el bucle recorre longitud fija.
+  for (let i = 0; i < ha.length; i++) {
+    r |= ha[i] ^ hb[i];
+  }
+  return r === 0;
+}
+
+/**
+ * Derivacion de clave PBKDF2 manual (N iteraciones de HMAC-SHA256).
+ *
+ * No existe PBKDF2 nativo en Apps Script, asi que se encadena
+ * Utilities.computeHmacSha256Signature N veces usando el salt como clave HMAC.
+ * El numero de iteraciones (iter) se fija midiendo latencia real en deploy
+ * (Fase 0 del plan): el mayor N que mantenga el login por debajo de ~2-3s.
+ *
+ * @param {string} pwd  - Password en claro a derivar.
+ * @param {string} salt - Salt por usuario (string; se usa como clave HMAC).
+ * @param {number} iter - Numero de iteraciones (>= 1).
+ * @returns {string} Hash derivado en base64 estandar.
+ */
+function pbkdf2_(pwd, salt, iter) {
+  const saltBytes = Utilities.newBlob(salt).getBytes();
+  // Semilla: HMAC del material (salt+pwd) en la primera vuelta y despues se
+  // realimenta el resultado anterior, siempre con el salt como clave.
+  let b = Utilities.newBlob(salt + pwd).getBytes();
+  for (let i = 0; i < iter; i++) {
+    b = Utilities.computeHmacSha256Signature(b, saltBytes);
+  }
+  return Utilities.base64Encode(b);
+}
+
+/**
+ * Verifica un password en claro contra el hash almacenado.
+ *
+ * Rechaza explicitamente si faltan salt o hash (red-team deploy #6): una fila
+ * sin credenciales no debe poder autenticarse jamas. La comparacion final usa
+ * constantEq_ (tiempo constante) para no filtrar por timing si el prefijo del
+ * hash coincide.
+ *
+ * @param {string} plain      - Password en claro recibido en el login.
+ * @param {string} salt       - Salt almacenado para ese usuario.
+ * @param {string} storedHash - Hash PBKDF2 almacenado (base64).
+ * @param {number} iter       - Iteraciones usadas al generar storedHash.
+ * @returns {boolean} true si el password es correcto, false en otro caso.
+ */
+function verifyPassword_(plain, salt, storedHash, iter) {
+  if (!salt || !storedHash) return false; // sin credenciales: rechazo explicito
+  return constantEq_(pbkdf2_(plain, salt, iter), storedHash);
+}
+
+/**
+ * Firma un payload y devuelve el token de sesion.
+ *
+ * Exige SESSION_SECRET en ScriptProperties: lanza si falta o sigue siendo el
+ * placeholder, para no emitir nunca tokens firmados con un secreto trivial.
+ * Formato del token: `payloadB64.sigB64`, ambos en base64 WebSafe. La firma es
+ * HMAC-SHA256 sobre (TOKEN_SIGN_PREFIX + payloadB64), no sobre el payload
+ * crudo (separacion de dominio).
+ *
+ * @param {Object} payload - Objeto a firmar (ej. {v,profesor_id,rol,exp,ver}).
+ * @returns {string} Token de sesion `payloadB64.sigB64`.
+ * @throws {Error} Si SESSION_SECRET no esta configurado.
+ */
+function signToken_(payload) {
+  const sec = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
+  if (!sec || sec === SESSION_SECRET_PLACEHOLDER) {
+    throw new Error('SESSION_SECRET no configurado');
+  }
+  const p = Utilities.base64EncodeWebSafe(JSON.stringify(payload));
+  const sig = Utilities.computeHmacSha256Signature(TOKEN_SIGN_PREFIX + p, sec);
+  return p + '.' + Utilities.base64EncodeWebSafe(sig);
+}
+
+/**
+ * Valida un token de sesion y devuelve la identidad si es legitimo.
+ *
+ * Orden de validacion (critico): primero VERIFICA LA FIRMA y solo despues
+ * parsea el payload. Asi un payload manipulado (ej. forjar alg=none o inyectar
+ * campos arbitrarios, red-team cripto #1) nunca llega al JSON.parse con firma
+ * invalida. Tras parsear se aplican TIPOS ESTRICTOS:
+ *   - v === 1 (version de esquema esperada),
+ *   - profesor_id: string que matchea /^prof-[a-z0-9._-]+$/,
+ *   - rol en {'teacher','ceo'},
+ *   - exp: number en SEGUNDOS con now < exp <= now + MAX_TTL_SEG.
+ *
+ * @param {string} token - Token `payloadB64.sigB64`.
+ * @returns {{profesor_id: string, rol: string, ver: *}|null} Identidad o null.
+ */
+function validateToken_(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+
+  const sec = PropertiesService.getScriptProperties().getProperty('SESSION_SECRET');
+  if (!sec || sec === SESSION_SECRET_PLACEHOLDER) return null;
+
+  // 1) Verificar firma ANTES de parsear nada del payload.
+  const sig = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(TOKEN_SIGN_PREFIX + parts[0], sec)
+  );
+  if (!constantEq_(sig, parts[1])) return null;
+
+  // 2) Solo con firma valida se decodifica y parsea el payload.
+  let pl;
+  try {
+    pl = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
+  } catch (e) {
+    return null;
+  }
+  if (!pl || typeof pl !== 'object') return null;
+
+  // 3) Validacion estricta de tipos y rangos.
+  if (pl.v !== 1) return null;
+  if (typeof pl.profesor_id !== 'string' || !/^prof-[a-z0-9._-]+$/.test(pl.profesor_id)) return null;
+  if (pl.rol !== 'teacher' && pl.rol !== 'ceo') return null;
+  const now = Math.floor(Date.now() / 1000); // SEGUNDOS Unix
+  if (typeof pl.exp !== 'number' || pl.exp <= now || pl.exp > now + MAX_TTL_SEG) return null;
+
+  return { profesor_id: pl.profesor_id, rol: pl.rol, ver: pl.ver };
+}
+
+/**
+ * Configura SESSION_SECRET en ScriptProperties (idempotente).
+ *
+ * Ejecutar UNA VEZ desde el editor de Apps Script (NO via web). Es IDEMPOTENTE:
+ * si ya existe un secreto valido (distinto del placeholder), NO lo regenera,
+ * para no invalidar las sesiones activas (red-team deploy #5). Solo genera uno
+ * nuevo si falta o sigue siendo el placeholder.
+ *
+ * El secreto son 256 bits de entropia (dos UUID v4 concatenados, ~256 bits)
+ * codificados en base64. Suficiente para una clave HMAC-SHA256.
+ */
+function setSessionSecret() {
+  const props = PropertiesService.getScriptProperties();
+  const current = props.getProperty('SESSION_SECRET');
+  if (current && current !== SESSION_SECRET_PLACEHOLDER) {
+    Logger.log('SESSION_SECRET ya configurado: no se regenera (idempotente)');
+    return;
+  }
+  // 2x UUID v4 (32 hex utiles c/u) => ~256 bits de entropia.
+  const raw = Utilities.getUuid() + Utilities.getUuid();
+  const secret = Utilities.base64Encode(Utilities.newBlob(raw).getBytes());
+  props.setProperty('SESSION_SECRET', secret);
+  Logger.log('SESSION_SECRET generado y guardado (256 bits)');
+}
+
+// --- SELF-TEST MANUAL (NO ejecutar en deploy; solo referencia de uso) --------
+//
+// Para validar ida y vuelta desde el editor de Apps Script, tras correr
+// setSessionSecret() una vez, ejecutar manualmente algo como:
+//
+//   function _selfTestAuth() {
+//     const now = Math.floor(Date.now() / 1000);
+//     const tok = signToken_({ v: 1, profesor_id: 'prof-x', rol: 'teacher', exp: now + 3600, ver: 1 });
+//     Logger.log(validateToken_(tok));                 // => {profesor_id:'prof-x', rol:'teacher', ver:1}
+//     Logger.log(validateToken_(tok + 'x'));           // => null (firma alterada)
+//     const expirado = signToken_({ v: 1, profesor_id: 'prof-x', rol: 'teacher', exp: now - 1, ver: 1 });
+//     Logger.log(validateToken_(expirado));            // => null (exp pasado)
+//     const rolMalo = signToken_({ v: 1, profesor_id: 'prof-x', rol: 'admin', exp: now + 3600, ver: 1 });
+//     Logger.log(validateToken_(rolMalo));             // => null (rol no permitido)
+//   }
+//
+// Se deja COMENTADO a proposito: la Fase 1 no ejecuta nada, solo anade helpers.
+// -----------------------------------------------------------------------------
+
+// ============================================================
 // API KEY — Ejecutar manualmente para configurar
 // ============================================================
 
