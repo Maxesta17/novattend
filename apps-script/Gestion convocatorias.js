@@ -1328,6 +1328,19 @@ function sincronizarHoja(nombreHoja) {
  */
 function transferirHistorial() {
   const ui = SpreadsheetApp.getUi();
+
+  // handleGuardarAsistencia toma el script lock antes de escribir ASISTENCIA.
+  // Sin compartirlo, un profesor guardando en paralelo a esta transferencia
+  // perdia su asistencia: el snapshot viejo la pisaba con setValues. Ahora
+  // ambas operaciones comparten el mismo script lock -> exclusion mutua.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (e) {
+    ui.alert('Servidor ocupado, reintenta en unos segundos');
+    return;
+  }
+
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -1398,6 +1411,8 @@ function transferirHistorial() {
     );
   } catch (err) {
     ui.alert('Error: ' + err.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
