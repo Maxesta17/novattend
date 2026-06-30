@@ -206,6 +206,25 @@ export async function loginRequest(username, password) {
 }
 
 // ============================================================
+// Endpoint de cambio de password
+// ============================================================
+
+/**
+ * Cambia la password del usuario autenticado.
+ * El token de sesion ya se inyecta automaticamente por apiPost.
+ *
+ * IMPORTANTE: el backend incrementa token_version al cambiar la password,
+ * lo que REVOCA el token actual. Tras un cambio correcto, la sesion debe
+ * limpiarse (clearSession) y el usuario re-autenticarse con la nueva password.
+ *
+ * @param {string} nuevaPassword - nueva password en claro (validada por el backend)
+ * @returns {Promise<Object|null>} data de confirmacion del backend
+ */
+export async function cambiarPassword(nuevaPassword) {
+  return apiPost('cambiarPassword', { nueva_password: nuevaPassword })
+}
+
+// ============================================================
 // Endpoints de lectura
 // ============================================================
 
