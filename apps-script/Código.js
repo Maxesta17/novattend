@@ -19,6 +19,11 @@ const SHEET_NAMES = {
   LOG: 'LOG'
 };
 
+// Columnas que contienen valores de fecha y reciben normalizacion a ISO (yyyy-MM-dd).
+// Solo estas cabeceras pasan por normalizeSheetDate_; el resto de columnas se
+// convierten unicamente si son instanceof Date (comportamiento previo).
+const DATE_COLUMNS = ['fecha', 'fecha_inicio', 'fecha_fin'];
+
 // ============================================================
 // CACHE
 // ============================================================
@@ -55,23 +60,40 @@ function cacheGet(key, fetchFn, ttl) {
  * Invalida todas las claves que coincidan con los prefijos dados.
  * CacheService no soporta iteracion, asi que mantenemos un registro
  * de claves activas en una clave especial '_keys'.
+ *
+ * La purga determinista al final corre SIEMPRE, aunque _keys haya expirado.
+ * Es necesaria porque warmCache cachea la clave 'res_<conv>__' con WARM_TTL (6h)
+ * pero el indice _keys solo vive CACHE_TTL*3 (6 min). A partir del minuto 6,
+ * _keys ya no lista la clave calentada y la purga via indice no la borra; sin
+ * esta purga extra, el CEO veria resumen stale hasta que expiren las 6h.
  */
 function cacheInvalidate(prefixes) {
   const keysJson = cache_.get('_keys');
-  if (!keysJson) return;
 
-  const keys = JSON.parse(keysJson);
-  const toRemove = keys.filter(k => prefixes.some(p => k.startsWith(p)));
+  // Purga via indice: solo si _keys aun esta en cache
+  if (keysJson) {
+    const keys = JSON.parse(keysJson);
+    const toRemove = keys.filter(k => prefixes.some(p => k.startsWith(p)));
 
-  if (toRemove.length > 0) {
-    cache_.removeAll(toRemove);
-    const remaining = keys.filter(k => !toRemove.includes(k));
-    if (remaining.length > 0) {
-      cache_.put('_keys', JSON.stringify(remaining), CACHE_TTL * 3);
-    } else {
-      cache_.remove('_keys');
+    if (toRemove.length > 0) {
+      cache_.removeAll(toRemove);
+      const remaining = keys.filter(k => !toRemove.includes(k));
+      if (remaining.length > 0) {
+        cache_.put('_keys', JSON.stringify(remaining), CACHE_TTL * 3);
+      } else {
+        cache_.remove('_keys');
+      }
     }
   }
+
+  // Purga determinista de la clave calentada huerfana: la clave global de
+  // warmCache es 'res_<conv>__' (profesor_id y grupo vacios). Se borra aunque
+  // _keys haya expirado y ya no la liste.
+  prefixes.forEach(function(p) {
+    if (p.indexOf('res_') === 0) {
+      cache_.remove(p + '__');
+    }
+  });
 }
 
 /**
@@ -99,6 +121,47 @@ function cachedGet(key, fetchFn, ttl) {
 // ============================================================
 
 /**
+ * Normaliza un valor de celda de fecha a string ISO (yyyy-MM-dd).
+ *
+ * Casos soportados:
+ *   - instanceof Date  → formatea con Utilities.formatDate (comportamiento original).
+ *   - string yyyy-MM-dd → se devuelve sin cambios (ya es ISO correcto).
+ *   - string dd/mm/yyyy → se interpreta como DIA/MES/AÑO (locale espanol, NO mes/dia)
+ *                         y se convierte a yyyy-MM-dd.
+ *   - Cualquier otro string → se devuelve tal cual (no romper guardia downstream).
+ *   - Otro tipo          → se devuelve sin tocar.
+ *
+ * ASUNCION CLAVE: el formato dd/mm/yyyy sigue la convencion espanola (dia primero),
+ * NO la anglosajona (mes primero). Ejemplo: "30/06/2026" → "2026-06-30".
+ *
+ * @param {*}      v  - Valor crudo de la celda.
+ * @param {string} tz - Zona horaria del script (Session.getScriptTimeZone()).
+ * @returns {*} String ISO yyyy-MM-dd o el valor original si no aplica.
+ */
+function normalizeSheetDate_(v, tz) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  }
+  if (typeof v === 'string') {
+    const s = v.trim();
+    // Ya esta en formato ISO correcto
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // Formato dd/mm/yyyy (locale espanol): DIA/MES/AÑO
+    const ddmmyyyy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (ddmmyyyy) {
+      const dia = ddmmyyyy[1].padStart(2, '0');
+      const mes = ddmmyyyy[2].padStart(2, '0');
+      const anio = ddmmyyyy[3];
+      return anio + '-' + mes + '-' + dia;
+    }
+    // Otro formato de texto: devolver sin cambios
+    return s;
+  }
+  // Tipo no reconocido (numero, booleano, null, etc.): sin cambios
+  return v;
+}
+
+/**
  * Convierte una hoja en array de objetos usando la fila 1 como cabeceras.
  */
 function sheetToObjects(sheetName) {
@@ -111,6 +174,8 @@ function sheetToObjects(sheetName) {
 
   const headers = data[0].map(h => h.toString().trim());
   const rows = [];
+  // Calcular zona horaria una sola vez fuera del bucle (evita llamada repetida)
+  const tz = Session.getScriptTimeZone();
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -120,9 +185,12 @@ function sheetToObjects(sheetName) {
     const obj = {};
     headers.forEach((header, j) => {
       let val = row[j];
-      // Convertir fechas de Google Sheets a string ISO
-      if (val instanceof Date) {
-        val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if (DATE_COLUMNS.indexOf(header) !== -1) {
+        // Columna de fecha: normalizar a ISO (soporta Date, yyyy-MM-dd y dd/mm/yyyy)
+        val = normalizeSheetDate_(val, tz);
+      } else if (val instanceof Date) {
+        // Columna no-fecha con celda Date (ej: hora_registro): convertir a ISO igual que antes
+        val = Utilities.formatDate(val, tz, 'yyyy-MM-dd');
       }
       obj[header] = val;
     });
@@ -180,6 +248,34 @@ function writeLog(usuario, accion, detalle) {
  */
 function generateId(prefix) {
   return prefix + '-' + Date.now().toString(36);
+}
+
+/**
+ * Coercion laxa de valores booleanos procedentes de Google Sheets.
+ *
+ * Cuando una celda no tiene checkbox (ej. filas 51+ en ALUMNOS antes de
+ * ejecutar setupSheets con el limite ampliado), el valor 'activo'/'activa'
+ * puede llegar como texto ('VERDADERO', 'TRUE', '1', 'SI', 'X') en vez del
+ * booleano nativo true. Un filtro estricto === true descartaria esas filas
+ * y el alumno desapareceria de la app.
+ *
+ * Este helper devuelve true para booleano nativo true, para el numero 1
+ * y para los textos canonicos de afirmacion de Sheets (ES/EN).
+ * En cualquier otro caso devuelve false.
+ *
+ * NO usar para 'presente' ni 'justificada': esos valores los escribe el
+ * codigo y deben seguir evaluandose de forma estricta (=== true).
+ *
+ * @param {*} v - Valor a evaluar (booleano, numero, string, null, undefined)
+ * @returns {boolean}
+ */
+function isTruthy(v) {
+  if (v === true) return true;
+  if (v === 1) return true;
+  if (typeof v === 'string') {
+    return ['TRUE', 'VERDADERO', 'SI', 'SÍ', 'X', '1'].indexOf(v.trim().toUpperCase()) !== -1;
+  }
+  return false;
 }
 
 // ============================================================
@@ -253,7 +349,7 @@ function handleGetConvocatorias(e) {
   const data = cachedGet('conv', function() {
     const todas = sheetToObjects(SHEET_NAMES.CONVOCATORIAS);
     const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    return todas.filter(c => c.activa === true && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+    return todas.filter(c => isTruthy(c.activa) && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
   });
 
   return jsonResponse(data);
@@ -268,7 +364,7 @@ function handleGetProfesores(e) {
   }
 
   const data = cachedGet('prof', function() {
-    return sheetToObjects(SHEET_NAMES.PROFESORES).filter(p => p.activo === true);
+    return sheetToObjects(SHEET_NAMES.PROFESORES).filter(p => isTruthy(p.activo));
   });
 
   return jsonResponse(data);
@@ -293,7 +389,7 @@ function handleGetAlumnos(e) {
 
   const cacheKey = 'alu_' + convocatoriaId + '_' + profesorId + '_' + grupo;
   const data = cachedGet(cacheKey, function() {
-    let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS).filter(a => a.activo === true);
+    let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS).filter(a => isTruthy(a.activo));
     if (convocatoriaId) alumnos = alumnos.filter(a => a.convocatoria_id === convocatoriaId);
     if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
     if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
@@ -396,7 +492,7 @@ function computeResumen(convocatoriaId, profesorId, grupo, preAlumnos, preRegist
   // en lugar de releer las hojas completas por cada convocatoria. Si no se pasan,
   // se leen aqui (comportamiento original para los callers en vivo).
   let alumnos = (preAlumnos || sheetToObjects(SHEET_NAMES.ALUMNOS))
-    .filter(a => a.activo === true && a.convocatoria_id === convocatoriaId);
+    .filter(a => isTruthy(a.activo) && a.convocatoria_id === convocatoriaId);
 
   if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
   if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
@@ -530,8 +626,20 @@ function computeResumen(convocatoriaId, profesorId, grupo, preAlumnos, preRegist
     // mostrar el marcador gold sin penalizar la ratio faltas/clases.
     const porSemana = {};
     regsOrdenados.forEach(function(r) {
+      // Guarda: si la fecha esta malformada (editada a mano por Aurora como
+      // dd/mm/yyyy, numero o vacia), dt queda Invalid Date y fmt/Utilities.formatDate
+      // lanzaria una excepcion que subia hasta doGet como HTTP 500 para toda la
+      // convocatoria. Ahora se salta del agrupado semanal sin tocar registros/
+      // ultimas_8/pct ni el resto del resumen.
+      if (typeof r.fecha !== 'string') return;
       const partes = r.fecha.split('-');
-      const dt = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+      if (partes.length !== 3) return;
+      const yr = Number(partes[0]);
+      const mo = Number(partes[1]);
+      const dy = Number(partes[2]);
+      if (isNaN(yr) || isNaN(mo) || isNaN(dy) || yr === 0 || mo === 0 || dy === 0) return;
+      const dt = new Date(yr, mo - 1, dy);
+      if (isNaN(dt.getTime())) return;
       const lun = mondayOf_(dt);
       const lunStr = fmt(lun);
       if (!porSemana[lunStr]) {
@@ -1031,7 +1139,7 @@ function handleActualizarAlumno(body) {
 function warmCache() {
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const convocatorias = sheetToObjects(SHEET_NAMES.CONVOCATORIAS)
-    .filter(c => c.activa === true && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+    .filter(c => isTruthy(c.activa) && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
 
   if (convocatorias.length === 0) {
     writeLog('SISTEMA', 'WARM_CACHE', '0 convocatorias activas, nada que precalentar');
@@ -1111,9 +1219,10 @@ function setupSheets() {
   });
 
   // Formato especial: columna 'activa'/'activo' como checkbox
-  // Solo aplicar a pocas filas para evitar crear datos fantasma (FALSE)
-  // que confunden a getLastRow() y getDataRange()
-  const CHECKBOX_ROWS = 50;
+  // 400 filas cubre los 336 alumnos actuales con margen. Si se deja en 50,
+  // las filas 51+ reciben el valor activo como texto (VERDADERO/TRUE) en vez
+  // de booleano nativo, y un filtro estricto === true descartaria esos alumnos.
+  const CHECKBOX_ROWS = 400;
   const checkboxSheets = ['CONVOCATORIAS', 'PROFESORES', 'ALUMNOS'];
   checkboxSheets.forEach(nombre => {
     const sheet = ss.getSheetByName(nombre);
