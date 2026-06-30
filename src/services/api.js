@@ -159,8 +159,12 @@ async function apiPost(action, body = {}) {
 export async function loginRequest(username, password) {
   if (!isApiEnabled()) return null
 
+  // 20s: PBKDF2 corre en el servidor (Apps Script). Con PBKDF2_ITER=1000 el login
+  // ronda ~3-4s en caliente, pero el primer login del dia (instancia fria) se midio
+  // en ~12s. Dejamos margen amplio para cold start + redes moviles lentas. (Antes
+  // 10s, que con los 10000 iters originales abortaba SIEMPRE -> "Error al conectar".)
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  const timeoutId = setTimeout(() => controller.abort(), 20000)
 
   try {
     const res = await fetch(API_URL, {
