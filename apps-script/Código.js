@@ -19,6 +19,11 @@ const SHEET_NAMES = {
   LOG: 'LOG'
 };
 
+// Columnas que contienen valores de fecha y reciben normalizacion a ISO (yyyy-MM-dd).
+// Solo estas cabeceras pasan por normalizeSheetDate_; el resto de columnas se
+// convierten unicamente si son instanceof Date (comportamiento previo).
+const DATE_COLUMNS = ['fecha', 'fecha_inicio', 'fecha_fin'];
+
 // ============================================================
 // CACHE
 // ============================================================
@@ -116,6 +121,47 @@ function cachedGet(key, fetchFn, ttl) {
 // ============================================================
 
 /**
+ * Normaliza un valor de celda de fecha a string ISO (yyyy-MM-dd).
+ *
+ * Casos soportados:
+ *   - instanceof Date  → formatea con Utilities.formatDate (comportamiento original).
+ *   - string yyyy-MM-dd → se devuelve sin cambios (ya es ISO correcto).
+ *   - string dd/mm/yyyy → se interpreta como DIA/MES/AÑO (locale espanol, NO mes/dia)
+ *                         y se convierte a yyyy-MM-dd.
+ *   - Cualquier otro string → se devuelve tal cual (no romper guardia downstream).
+ *   - Otro tipo          → se devuelve sin tocar.
+ *
+ * ASUNCION CLAVE: el formato dd/mm/yyyy sigue la convencion espanola (dia primero),
+ * NO la anglosajona (mes primero). Ejemplo: "30/06/2026" → "2026-06-30".
+ *
+ * @param {*}      v  - Valor crudo de la celda.
+ * @param {string} tz - Zona horaria del script (Session.getScriptTimeZone()).
+ * @returns {*} String ISO yyyy-MM-dd o el valor original si no aplica.
+ */
+function normalizeSheetDate_(v, tz) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  }
+  if (typeof v === 'string') {
+    const s = v.trim();
+    // Ya esta en formato ISO correcto
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // Formato dd/mm/yyyy (locale espanol): DIA/MES/AÑO
+    const ddmmyyyy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (ddmmyyyy) {
+      const dia = ddmmyyyy[1].padStart(2, '0');
+      const mes = ddmmyyyy[2].padStart(2, '0');
+      const anio = ddmmyyyy[3];
+      return anio + '-' + mes + '-' + dia;
+    }
+    // Otro formato de texto: devolver sin cambios
+    return s;
+  }
+  // Tipo no reconocido (numero, booleano, null, etc.): sin cambios
+  return v;
+}
+
+/**
  * Convierte una hoja en array de objetos usando la fila 1 como cabeceras.
  */
 function sheetToObjects(sheetName) {
@@ -128,6 +174,8 @@ function sheetToObjects(sheetName) {
 
   const headers = data[0].map(h => h.toString().trim());
   const rows = [];
+  // Calcular zona horaria una sola vez fuera del bucle (evita llamada repetida)
+  const tz = Session.getScriptTimeZone();
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -137,9 +185,12 @@ function sheetToObjects(sheetName) {
     const obj = {};
     headers.forEach((header, j) => {
       let val = row[j];
-      // Convertir fechas de Google Sheets a string ISO
-      if (val instanceof Date) {
-        val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if (DATE_COLUMNS.indexOf(header) !== -1) {
+        // Columna de fecha: normalizar a ISO (soporta Date, yyyy-MM-dd y dd/mm/yyyy)
+        val = normalizeSheetDate_(val, tz);
+      } else if (val instanceof Date) {
+        // Columna no-fecha con celda Date (ej: hora_registro): convertir a ISO igual que antes
+        val = Utilities.formatDate(val, tz, 'yyyy-MM-dd');
       }
       obj[header] = val;
     });
