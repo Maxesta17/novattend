@@ -32,9 +32,9 @@ import AttendancePage from '../pages/AttendancePage'
 
 function renderPage() {
   sessionStorage.setItem('user', JSON.stringify({
-    username: 'samuel',
-    name: 'Samuel',
-    role: 'teacher',
+    profesor_id: 'prof-samuel',
+    nombre: 'Samuel',
+    rol: 'teacher',
   }))
   return render(
     <MemoryRouter>

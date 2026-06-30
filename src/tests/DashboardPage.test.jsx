@@ -57,7 +57,7 @@ const MOCK_STATE = {
 }
 
 function renderPage() {
-  sessionStorage.setItem('user', JSON.stringify({ username: 'admin', name: 'Admin', role: 'ceo' }))
+  sessionStorage.setItem('user', JSON.stringify({ profesor_id: 'prof-admin', nombre: 'Admin', rol: 'ceo' }))
   return render(
     <MemoryRouter>
       <DashboardPage />
