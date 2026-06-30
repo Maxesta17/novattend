@@ -2155,7 +2155,14 @@ const SESSION_SECRET_PLACEHOLDER = 'REEMPLAZAR';
 // password migrado validaria jamas. Ajustable midiendo latencia real en deploy
 // (Fase 0): el mayor N que mantenga el login por debajo de ~2-3s. Cambiar este
 // valor obliga a re-migrar todos los hashes existentes.
-const PBKDF2_ITER = 10000;
+//
+// 2026-06-30: bajado de 10000 a 1000. Cada iteracion es una llamada nativa
+// Utilities.computeHmacSha256Signature (~3ms con su overhead de marshalling),
+// asi que 10000 iters daban ~31s de login y el frontend abortaba a los 10s
+// ("Error al conectar con el servidor"). Con 1000 el login baja a ~3s, dentro
+// del presupuesto documentado. El lockout durable (5 fallos -> 15 min) sigue
+// siendo la defensa real contra ataques online. Re-migrados los hashes a 1000.
+const PBKDF2_ITER = 1000;
 
 /**
  * Comparacion en tiempo constante de dos valores (string o Byte[]).
