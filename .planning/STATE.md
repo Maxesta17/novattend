@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 Phase: 06
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-30 - Completed quick task 260630-dti: fix warmCache invalidacion y lectura laxa de activo
+Last activity: 2026-06-30 - Completed quick task 260630-epo: fix historico_semanas NaN-guard y transferirHistorial lock
 
 Progress: [█████████░] 89%
 
@@ -53,6 +53,7 @@ Progress: [█████████░] 89%
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260630-dti | fix warmCache invalidacion (cacheInvalidate purga clave calentada) + lectura laxa de activo/activa | 2026-06-30 | 47a52c5 | [260630-dti-fix-warmcache-invalidacion-y-lectura-lax](./quick/260630-dti-fix-warmcache-invalidacion-y-lectura-lax/) |
+| 260630-epo | fix historico_semanas NaN-guard (no tumbar getResumen) + transferirHistorial LockService | 2026-06-30 | 3706495 | [260630-epo-fix-historico-semanas-nan-guard-y-transf](./quick/260630-epo-fix-historico-semanas-nan-guard-y-transf/) |
 
 ## Session Continuity
 
