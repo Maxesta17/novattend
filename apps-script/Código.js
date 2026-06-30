@@ -55,23 +55,40 @@ function cacheGet(key, fetchFn, ttl) {
  * Invalida todas las claves que coincidan con los prefijos dados.
  * CacheService no soporta iteracion, asi que mantenemos un registro
  * de claves activas en una clave especial '_keys'.
+ *
+ * La purga determinista al final corre SIEMPRE, aunque _keys haya expirado.
+ * Es necesaria porque warmCache cachea la clave 'res_<conv>__' con WARM_TTL (6h)
+ * pero el indice _keys solo vive CACHE_TTL*3 (6 min). A partir del minuto 6,
+ * _keys ya no lista la clave calentada y la purga via indice no la borra; sin
+ * esta purga extra, el CEO veria resumen stale hasta que expiren las 6h.
  */
 function cacheInvalidate(prefixes) {
   const keysJson = cache_.get('_keys');
-  if (!keysJson) return;
 
-  const keys = JSON.parse(keysJson);
-  const toRemove = keys.filter(k => prefixes.some(p => k.startsWith(p)));
+  // Purga via indice: solo si _keys aun esta en cache
+  if (keysJson) {
+    const keys = JSON.parse(keysJson);
+    const toRemove = keys.filter(k => prefixes.some(p => k.startsWith(p)));
 
-  if (toRemove.length > 0) {
-    cache_.removeAll(toRemove);
-    const remaining = keys.filter(k => !toRemove.includes(k));
-    if (remaining.length > 0) {
-      cache_.put('_keys', JSON.stringify(remaining), CACHE_TTL * 3);
-    } else {
-      cache_.remove('_keys');
+    if (toRemove.length > 0) {
+      cache_.removeAll(toRemove);
+      const remaining = keys.filter(k => !toRemove.includes(k));
+      if (remaining.length > 0) {
+        cache_.put('_keys', JSON.stringify(remaining), CACHE_TTL * 3);
+      } else {
+        cache_.remove('_keys');
+      }
     }
   }
+
+  // Purga determinista de la clave calentada huerfana: la clave global de
+  // warmCache es 'res_<conv>__' (profesor_id y grupo vacios). Se borra aunque
+  // _keys haya expirado y ya no la liste.
+  prefixes.forEach(function(p) {
+    if (p.indexOf('res_') === 0) {
+      cache_.remove(p + '__');
+    }
+  });
 }
 
 /**
