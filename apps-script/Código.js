@@ -366,10 +366,6 @@ function dummyLoginHash_() {
   return DUMMY_LOGIN_HASH_;
 }
 
-// Conjunto de acciones de SOLO-LECTURA NO sensibles a las que un request
-// legacy (api_key valido, sin token) puede acceder durante la coexistencia.
-// Cualquier otra accion EXIGE token via requireAuth_. NUNCA escritura.
-const LEGACY_READONLY_ACTIONS = ['getConvocatorias'];
 
 /**
  * Lee la hoja PROFESORES y devuelve el objeto del profesor con ese id, o null.
@@ -758,57 +754,41 @@ function requireAuth_(token, roles) {
  *   - Token con must_change_password=true: SOLO se admite la accion
  *     'cambiarPassword'. Cualquier otra accion -> 403 must_change_password
  *     (forzado de cambio server-side, no solo en el frontend).
- *   - Coexistencia legacy: un api_key valido SIN token solo accede a las
- *     acciones de LEGACY_READONLY_ACTIONS (solo-lectura no sensible). NUNCA
- *     concede identidad, rol ceo ni escritura.
- *   - Cualquier otra accion: EXIGE token via requireAuth_.
+ *   - Cualquier otra accion: EXIGE token via requireAuth_. Sin token -> 401.
+ *
+ * NOTA: el api_key compartido fue retirado. La autenticacion por token de
+ * sesion (HMAC) es la unica via de acceso. No existe camino legacy.
  *
  * @param {string} action - accion solicitada.
  * @param {string} token  - token de sesion (puede ser vacio).
- * @param {string} apiKey - api_key legacy (puede ser vacio).
- * @returns {{exempt?:boolean, legacy?:boolean, identity?:Object, error?:Object}}
+ * @returns {{exempt?:boolean, identity?:Object, error?:Object}}
  *          - exempt: accion publica (ping/login).
- *          - legacy: paso por api_key sin identidad (solo-lectura no sensible).
  *          - identity: identidad real derivada del token.
  *          - error: TextOutput de error a devolver.
  */
-function resolveAuth_(action, token, apiKey) {
+function resolveAuth_(action, token) {
   // Acciones publicas.
   if (action === 'ping' || action === 'login') {
     return { exempt: true };
   }
 
-  // Si hay token, manda el token (autoridad real).
-  if (token) {
-    const auth = requireAuth_(token, null);
-    if (auth.error) return auth;
+  // Cualquier accion protegida exige token. Sin token -> 401 token_invalid.
+  const auth = requireAuth_(token, null);
+  if (auth.error) return auth;
 
-    // Forzado de cambio de password SERVER-SIDE (red-team must_change_password):
-    // si el profesor tiene must_change_password=true, su token solo sirve para
-    // la accion 'cambiarPassword'. Cualquier otra accion se rechaza con 403
-    // hasta que cambie la contrasena. ('login'/'ping' ya salieron exentos
-    // arriba.) Asi una password temporal (expuesta en el git history) no permite
-    // operar: solo cambiarla.
-    if (auth.identity.must_change_password && action !== 'cambiarPassword') {
-      return {
-        error: jsonError('Debe cambiar la contrasena antes de continuar', 403, 'must_change_password')
-      };
-    }
-
-    return auth;
+  // Forzado de cambio de password SERVER-SIDE (red-team must_change_password):
+  // si el profesor tiene must_change_password=true, su token solo sirve para
+  // la accion 'cambiarPassword'. Cualquier otra accion se rechaza con 403
+  // hasta que cambie la contrasena. ('login'/'ping' ya salieron exentos
+  // arriba.) Asi una password temporal (expuesta en el git history) no permite
+  // operar: solo cambiarla.
+  if (auth.identity.must_change_password && action !== 'cambiarPassword') {
+    return {
+      error: jsonError('Debe cambiar la contrasena antes de continuar', 403, 'must_change_password')
+    };
   }
 
-  // Sin token: solo se admite el camino legacy api_key para SOLO-LECTURA no
-  // sensible. Para CUALQUIER otra accion se exige token (requireAuth_ devolvera
-  // 401 token_invalid porque token es vacio).
-  if (LEGACY_READONLY_ACTIONS.indexOf(action) !== -1) {
-    const apiKeyError = validateApiKey(apiKey, action);
-    if (apiKeyError) return { error: apiKeyError };
-    return { legacy: true };
-  }
-
-  // Accion sensible o de escritura sin token: rechazo.
-  return { error: jsonError('No autorizado', 401, 'token_invalid') };
+  return auth;
 }
 
 // ============================================================
@@ -819,12 +799,11 @@ function doGet(e) {
   try {
     const action = e.parameter.action;
 
-    // Gate Fase 3: ping/login exentos; token manda; api_key solo da acceso
-    // legacy de solo-lectura no sensible. requireAuth_ jamas concede ceo por
-    // api_key.
-    const auth = resolveAuth_(action, e.parameter.token || '', e.parameter.api_key);
+    // Gate: ping/login exentos; cualquier otra accion exige token de sesion.
+    // El api_key compartido fue retirado; no existe camino legacy.
+    const auth = resolveAuth_(action, e.parameter.token || '');
     if (auth.error) return auth.error;
-    // identity es la identidad real derivada del token (undefined en exempt/legacy).
+    // identity es la identidad real derivada del token (undefined si exempt).
     const identity = auth.identity || null;
 
     switch (action) {
@@ -1337,9 +1316,9 @@ function doPost(e) {
 
     const action = body.action;
 
-    // Gate Fase 3. 'login' es EXENTO: no requiere token (es quien lo emite).
-    // Todas las escrituras exigen token; el api_key legacy NO da escritura.
-    const auth = resolveAuth_(action, body.token || '', body.api_key);
+    // Gate: 'login' es EXENTO (es quien emite el token). Cualquier otra
+    // accion exige token de sesion. El api_key compartido fue retirado.
+    const auth = resolveAuth_(action, body.token || '');
     if (auth.error) return auth.error;
     const identity = auth.identity || null;
 
