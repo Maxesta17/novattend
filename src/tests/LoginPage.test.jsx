@@ -10,10 +10,16 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-// Mock de api.js
-vi.mock('../services/api', () => ({
-  getConvocatorias: vi.fn(),
-}))
+// Mock de api.js: getConvocatorias + clases de error reales para instanceof
+vi.mock('../services/api', () => {
+  class AuthError extends Error {
+    constructor(message, reason) { super(message); this.name = 'AuthError'; this.code = 401; this.reason = reason }
+  }
+  class PermissionError extends Error {
+    constructor(message, reason) { super(message); this.name = 'PermissionError'; this.code = 403; this.reason = reason }
+  }
+  return { getConvocatorias: vi.fn(), AuthError, PermissionError }
+})
 
 // Mock de config/api.js
 vi.mock('../config/api', () => ({
@@ -21,8 +27,14 @@ vi.mock('../config/api', () => ({
   API_URL: '',
 }))
 
+// Mock del hook useAuth: controlamos el resultado del login en cada test
+const mockLogin = vi.fn()
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: () => ({ login: mockLogin, loading: false, error: null }),
+}))
+
 import LoginPage from '../pages/LoginPage'
-import { getConvocatorias } from '../services/api'
+import { getConvocatorias, AuthError } from '../services/api'
 import { isApiEnabled } from '../config/api'
 
 function renderLogin() {
@@ -31,6 +43,12 @@ function renderLogin() {
       <LoginPage />
     </MemoryRouter>
   )
+}
+
+async function submitLogin(user, username = 'samuel', password = 'secreto') {
+  await user.type(screen.getByPlaceholderText('Usuario'), username)
+  await user.type(screen.getByPlaceholderText('Contraseña'), password)
+  await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
 }
 
 describe('LoginPage', () => {
@@ -54,60 +72,61 @@ describe('LoginPage', () => {
     expect(screen.getByText('Control de Asistencia')).toBeInTheDocument()
   })
 
-  it('muestra error con credenciales incorrectas', async () => {
+  it('muestra error de credenciales cuando login lanza AuthError 401', async () => {
+    mockLogin.mockRejectedValue(new AuthError('credenciales', 'credentials'))
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'falso')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'wrong')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user, 'falso', 'wrong')
 
-    expect(screen.getByText('Usuario o contraseña incorrectos')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Usuario o contraseña incorrectos')).toBeInTheDocument()
+    })
     expect(mockNavigate).not.toHaveBeenCalled()
   })
 
-  it('navega a /dashboard para rol ceo', async () => {
+  it('muestra mensaje de red distinto cuando login lanza error generico', async () => {
+    mockLogin.mockRejectedValue(new Error('Network down'))
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'admin')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'lingnova2026')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user)
 
-    expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
+    await waitFor(() => {
+      expect(screen.getByText(/Error al conectar con el servidor/i)).toBeInTheDocument()
+    })
   })
 
-  it('guarda usuario en sessionStorage al hacer login correcto', async () => {
+  it('navega a /dashboard para rol ceo', async () => {
+    mockLogin.mockResolvedValue({ rol: 'ceo', nombre: 'CEO', profesor_id: 'prof-admin' })
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'admin')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'lingnova2026')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user, 'admin', 'secreto')
 
-    const stored = JSON.parse(sessionStorage.getItem('user'))
-    expect(stored.role).toBe('ceo')
-    expect(stored.username).toBe('admin')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
+    })
   })
 
   it('navega a /attendance para teacher sin API', async () => {
     isApiEnabled.mockReturnValue(false)
+    mockLogin.mockResolvedValue({ rol: 'teacher', nombre: 'Samuel', profesor_id: 'prof-samuel' })
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'samuel')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'samuel2026')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user)
 
-    expect(mockNavigate).toHaveBeenCalledWith('/attendance')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/attendance')
+    })
   })
 
   it('navega a /attendance con state si API devuelve 1 convocatoria', async () => {
     isApiEnabled.mockReturnValue(true)
+    mockLogin.mockResolvedValue({ rol: 'teacher', nombre: 'Samuel', profesor_id: 'prof-samuel' })
     const mockConv = { id: 'conv-1', nombre: 'Test' }
     getConvocatorias.mockResolvedValue([mockConv])
 
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'samuel')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'samuel2026')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user)
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/attendance', {
@@ -118,6 +137,7 @@ describe('LoginPage', () => {
 
   it('navega a /convocatorias con state si API devuelve 2+ convocatorias', async () => {
     isApiEnabled.mockReturnValue(true)
+    mockLogin.mockResolvedValue({ rol: 'teacher', nombre: 'Samuel', profesor_id: 'prof-samuel' })
     const mockConvs = [
       { id: 'conv-1', nombre: 'Enero' },
       { id: 'conv-2', nombre: 'Febrero' },
@@ -126,9 +146,7 @@ describe('LoginPage', () => {
 
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'samuel')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'samuel2026')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user)
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/convocatorias', {
@@ -137,18 +155,29 @@ describe('LoginPage', () => {
     })
   })
 
-  it('muestra error si API falla para teacher', async () => {
+  it('muestra error si getConvocatorias falla para teacher', async () => {
     isApiEnabled.mockReturnValue(true)
+    mockLogin.mockResolvedValue({ rol: 'teacher', nombre: 'Samuel', profesor_id: 'prof-samuel' })
     getConvocatorias.mockRejectedValue(new Error('Network error'))
 
     renderLogin()
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText('Usuario'), 'samuel')
-    await user.type(screen.getByPlaceholderText('Contraseña'), 'samuel2026')
-    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+    await submitLogin(user)
 
     await waitFor(() => {
       expect(screen.getByText('Error al conectar con el servidor. Reintenta.')).toBeInTheDocument()
     })
+  })
+
+  it('muestra el formulario de cambio de password si must_change_password=true', async () => {
+    mockLogin.mockResolvedValue({ rol: 'teacher', nombre: 'Samuel', profesor_id: 'prof-samuel', must_change_password: true })
+    renderLogin()
+    const user = userEvent.setup()
+    await submitLogin(user)
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Nueva contraseña')).toBeInTheDocument()
+    })
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 })

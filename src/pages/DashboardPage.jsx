@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { logout } from '../config/session'
 import useDashboard from '../hooks/useDashboard.js'
 import PageHeader from '../components/features/PageHeader.jsx'
 import TeacherCard from '../components/features/TeacherCard.jsx'
@@ -46,7 +47,7 @@ export default function DashboardPage() {
           title="Dashboard"
           subtitle={subtitle}
           badge={<Badge variant="admin">ADMIN</Badge>}
-          onLogout={() => { sessionStorage.removeItem('user'); navigate('/') }}
+          onLogout={() => { logout(); navigate('/') }}
         >
           <ConvocatoriaSelector
             convocatorias={convocatorias}

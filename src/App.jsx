@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './App.css'
 import MobileContainer from './components/MobileContainer'
 import ProtectedRoute from './components/ProtectedRoute'
+import AuthExpiredListener from './components/AuthExpiredListener.jsx'
 import LoadingSpinner from './components/ui/LoadingSpinner.jsx'
 // Eager (sin lazy — se incluyen en el chunk principal):
 import LoginPage from './pages/LoginPage'
@@ -17,6 +18,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 function App() {
   return (
     <BrowserRouter>
+      <AuthExpiredListener />
       <MobileContainer>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>

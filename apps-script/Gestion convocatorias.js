@@ -802,8 +802,38 @@ function reabrirConvocatoria() {
 // ============================================================
 
 /**
+ * Genera una password temporal aleatoria y legible (~12 chars).
+ *
+ * Fuente de entropia: Utilities.getUuid() (NO Math.random). Se concatenan dos
+ * UUID v4 y se proyectan sus bytes sobre un alfabeto sin caracteres ambiguos
+ * (se excluyen 0/O/o, 1/l/I para evitar confusiones al dictarla en privado).
+ *
+ * @returns {string} Password temporal de 12 caracteres.
+ */
+function generarPasswordTemporal_() {
+  // Alfabeto sin caracteres ambiguos (sin 0 O o 1 l I).
+  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  // 2x UUID v4 => 32 bytes utiles tras decodificar el hex; sobra para 12 chars.
+  const raw = Utilities.getUuid() + Utilities.getUuid();
+  const bytes = Utilities.newBlob(raw).getBytes();
+  let pwd = '';
+  for (let i = 0; i < 12; i++) {
+    // El byte puede ser negativo (signed); se normaliza a 0..255 antes del modulo.
+    const idx = (bytes[i] & 0xff) % alfabeto.length;
+    pwd += alfabeto.charAt(idx);
+  }
+  return pwd;
+}
+
+/**
  * Agrega un profesor nuevo a la hoja PROFESORES.
  * Genera ID automatico: prof-{nombre normalizado}.
+ *
+ * El alta queda con credenciales validas: password temporal aleatoria hasheada
+ * con PBKDF2 + salt propio, rol 'teacher', must_change_password=true (fuerza el
+ * cambio en el primer login) y token_version=1. La password temporal se muestra
+ * al admin UNA vez via ui.alert para comunicarla en privado; nunca se guarda en
+ * claro en la hoja LOG.
  */
 function agregarProfesor() {
   const ui = SpreadsheetApp.getUi();
@@ -828,19 +858,38 @@ function agregarProfesor() {
       }
     }
 
-    sheet.appendRow([profId, nombre, email, true]);
+    // Generar credenciales: password temporal aleatoria + salt + hash PBKDF2.
+    // pbkdf2_ y PBKDF2_ITER son globales del proyecto (definidos en Codigo.js).
+    const tempPassword = generarPasswordTemporal_();
+    const salt = Utilities.getUuid();
+    const hash = pbkdf2_(tempPassword, salt, PBKDF2_ITER);
+
+    // Fila completa con el esquema de 9 columnas (mismo orden que la cabecera):
+    // id, nombre, email, activo, password_hash, salt, rol, must_change_password, token_version
+    sheet.appendRow([profId, nombre, email, true, hash, salt, 'teacher', true, 1]);
 
     // Checkbox en la celda de activo
     const lastRow = sheet.getLastRow();
     const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     sheet.getRange(lastRow, 4).setDataValidation(rule);
 
+    // LOG: registra el alta SIN la password en claro.
     const logSheet = ss.getSheetByName('LOG');
     if (logSheet) {
       logSheet.appendRow([new Date(), 'AURORA', 'AGREGAR_PROFESOR', profId + ' | ' + nombre]);
     }
 
-    ui.alert('Profesor agregado:\n\nID: ' + profId + '\nNombre: ' + nombre + '\nEmail: ' + email);
+    // Mostrar la password temporal UNA sola vez para comunicarla en privado.
+    ui.alert(
+      'Profesor agregado',
+      'ID (usuario): ' + profId + '\n' +
+      'Nombre: ' + nombre + '\n' +
+      'Email: ' + email + '\n\n' +
+      'Password temporal: ' + tempPassword + '\n\n' +
+      'Comunicasela al profesor EN PRIVADO. La cambiara obligatoriamente al ' +
+      'entrar por primera vez. Esta password no se mostrara de nuevo.',
+      ui.ButtonSet.OK
+    );
   } catch (err) {
     ui.alert('Error: ' + err.message);
   }

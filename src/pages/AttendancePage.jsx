@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { isApiEnabled } from '../config/api'
+import { getSession, logout } from '../config/session'
 import { guardarAsistencia } from '../services/api'
 import { formatLocalDate, labelFromIso } from '../utils/dateUtils'
 import useStudents, { GROUPS } from '../hooks/useStudents'
@@ -26,14 +27,12 @@ export default function AttendancePage() {
   const location = useLocation()
   const convocatoria = location.state?.convocatoria || null
 
-  const sessionUser = useMemo(() => {
-    try {
-      const raw = sessionStorage.getItem('user')
-      return raw ? JSON.parse(raw) : null
-    } catch { return null }
-  }, [])
+  const sessionUser = useMemo(() => getSession(), [])
 
-  const profesorId = sessionUser?.username ? `prof-${sessionUser.username}` : null
+  // El profesor_id viene del backend en la sesion (auth real). Compat: si una
+  // sesion vieja solo trae username, derivar el id como antes (no romper).
+  const profesorId = sessionUser?.profesor_id
+    ?? (sessionUser?.username ? `prof-${sessionUser.username}` : null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   // todayIso se fija una vez por sesion (igual que selectedDate) para que
@@ -131,10 +130,10 @@ export default function AttendancePage() {
   return (
     <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-off-white flex flex-col box-border">
       <PageHeader
-        title={sessionUser?.name || 'Profesor'}
+        title={sessionUser?.nombre || sessionUser?.name || 'Profesor'}
         subtitle={subtitle}
         badge={<Badge>LINGNOVA</Badge>}
-        onLogout={() => { sessionStorage.removeItem('user'); navigate('/') }}
+        onLogout={() => { logout(); navigate('/') }}
       >
         <GroupTabs
           groups={GROUPS}
@@ -232,7 +231,7 @@ export default function AttendancePage() {
       />
 
       {/* Novedad "justificar faltas": se muestra una vez por dispositivo. */}
-      <WhatsNewModal enabled={sessionUser?.role === 'teacher'} />
+      <WhatsNewModal enabled={(sessionUser?.rol ?? sessionUser?.role) === 'teacher'} />
     </div>
   )
 }
