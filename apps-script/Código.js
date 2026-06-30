@@ -342,7 +342,10 @@ const TTL_LOGIN_SEG = 8 * 60 * 60; // 8 horas
 // falle, exista o no el usuario (anti-enumeracion).
 const LOGIN_MAX_FAILS = 5;
 const LOGIN_LOCKOUT_SEG = 15 * 60; // 15 minutos
-// Prefijo de las claves de CacheService que cuentan fallos por usuario.
+// Prefijo de las claves (ScriptProperties + cache) que guardan el estado de
+// lockout por usuario. El valor es JSON { count, until }: count = fallos
+// acumulados; until = epoch ms de fin de lockout. La fuente de verdad es
+// ScriptProperties (durable, no evictable); el cache es solo lectura rapida.
 const LOGIN_FAIL_PREFIX = 'loginfail_';
 
 // Salt DUMMY fijo para timing constante en login: si el usuario no existe, se
@@ -418,32 +421,88 @@ function lookupProfesor_(profesorId) {
 }
 
 /**
- * Cuenta de fallos de login del usuario en la ventana de lockout.
+ * Lee el estado de lockout durable del usuario desde ScriptProperties.
+ *
+ * La FUENTE DE VERDAD del lockout es PropertiesService (persistente, no
+ * evictable), no CacheService: un atacante no puede saltarse el bloqueo
+ * esperando a que el contador sea desalojado del cache (red-team #2).
+ * CacheService se usa solo como cache de lectura rapida delante. Con 11
+ * usuarios el numero de claves es trivial y no hay problema de cuota.
+ *
  * @param {string} usuario - usuario en claro (ej. 'samuel').
- * @returns {number} numero de fallos acumulados.
+ * @returns {{count:number, until:number}} count = fallos acumulados;
+ *          until = epoch ms de fin de lockout (0 si no hay bloqueo).
  */
-function loginFailCount_(usuario) {
-  const raw = cache_.get(LOGIN_FAIL_PREFIX + usuario);
-  return raw ? Number(raw) || 0 : 0;
+function loginFailState_(usuario) {
+  const key = LOGIN_FAIL_PREFIX + usuario;
+  // Cache rapido delante de Properties (fuente de verdad).
+  let raw = cache_.get(key);
+  if (!raw) {
+    raw = PropertiesService.getScriptProperties().getProperty(key);
+    if (raw) cache_.put(key, raw, LOGIN_LOCKOUT_SEG);
+  }
+  if (!raw) return { count: 0, until: 0 };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      count: Number(parsed.count) || 0,
+      until: Number(parsed.until) || 0
+    };
+  } catch (e) {
+    return { count: 0, until: 0 };
+  }
 }
 
 /**
- * Incrementa el contador de fallos de login del usuario, refrescando la
- * ventana de lockout. Se llama en CADA fallo (exista o no el usuario).
+ * Indica si el usuario esta actualmente bloqueado por lockout durable.
+ * @param {string} usuario - usuario en claro.
+ * @returns {boolean} true si now < until (bloqueo vigente).
+ */
+function loginIsLocked_(usuario) {
+  return Date.now() < loginFailState_(usuario).until;
+}
+
+/**
+ * Incrementa el contador de fallos de login del usuario en el almacen DURABLE
+ * (ScriptProperties) y refresca el cache. Se llama en CADA fallo (exista o no
+ * el usuario: anti-enumeracion). Al alcanzar LOGIN_MAX_FAILS fija el fin de
+ * lockout (until = now + LOGIN_LOCKOUT_SEG) para bloquear nuevos intentos.
  * @param {string} usuario - usuario en claro.
  */
 function loginRegisterFail_(usuario) {
-  const next = loginFailCount_(usuario) + 1;
-  cache_.put(LOGIN_FAIL_PREFIX + usuario, String(next), LOGIN_LOCKOUT_SEG);
+  const key = LOGIN_FAIL_PREFIX + usuario;
+  const prev = loginFailState_(usuario);
+  const count = prev.count + 1;
+  // Preservar un lockout vigente; fijar uno nuevo al cruzar el umbral.
+  let until = prev.until;
+  if (count >= LOGIN_MAX_FAILS) {
+    until = Date.now() + LOGIN_LOCKOUT_SEG * 1000;
+  }
+  const json = JSON.stringify({ count: count, until: until });
+  // Fuente de verdad durable + cache rapido.
+  PropertiesService.getScriptProperties().setProperty(key, json);
+  cache_.put(key, json, LOGIN_LOCKOUT_SEG);
+}
+
+/**
+ * Limpia el estado de lockout del usuario tras un login correcto, tanto en el
+ * almacen durable como en el cache.
+ * @param {string} usuario - usuario en claro.
+ */
+function loginClearFail_(usuario) {
+  const key = LOGIN_FAIL_PREFIX + usuario;
+  PropertiesService.getScriptProperties().deleteProperty(key);
+  cache_.remove(key);
 }
 
 /**
  * Maneja el login (case 'login' en doPost). EXENTO del gate de auth.
  *
  * Seguridad:
- *   - Rate-limit/lockout por usuario en CacheService: tras LOGIN_MAX_FAILS
- *     fallos bloquea LOGIN_LOCKOUT_SEG. El contador sube en CADA fallo, exista
- *     o no el usuario (anti-enumeracion, red-team #5).
+ *   - Rate-limit/lockout por usuario DURABLE en ScriptProperties (no evictable;
+ *     red-team #2): tras LOGIN_MAX_FAILS fallos bloquea LOGIN_LOCKOUT_SEG. El
+ *     contador sube en CADA fallo, exista o no el usuario (anti-enumeracion,
+ *     red-team #5). CacheService es solo cache de lectura rapida delante.
  *   - Timing constante: si el usuario no existe se ejecuta igualmente
  *     verifyPassword_ contra un hash dummy fijo, para no revelar por latencia
  *     si el usuario existe.
@@ -469,8 +528,10 @@ function handleLogin(body) {
     return jsonError('Usuario o contrasena incorrectos', 401, 'credentials');
   }
 
-  // Lockout: si supera el umbral, rechazar sin siquiera tocar la hoja.
-  if (loginFailCount_(usuario) >= LOGIN_MAX_FAILS) {
+  // Lockout durable: si hay un bloqueo vigente (now < until), rechazar sin
+  // siquiera tocar la hoja. La fuente de verdad es ScriptProperties, no el
+  // cache evictable (red-team #2).
+  if (loginIsLocked_(usuario)) {
     return jsonError(
       'Demasiados intentos. Espera unos minutos e intentalo de nuevo.',
       429,
@@ -498,8 +559,8 @@ function handleLogin(body) {
     return jsonError('Usuario o contrasena incorrectos', 401, 'credentials');
   }
 
-  // Login correcto: limpiar el contador de fallos del usuario.
-  cache_.remove(LOGIN_FAIL_PREFIX + usuario);
+  // Login correcto: limpiar el contador de fallos durable del usuario.
+  loginClearFail_(usuario);
 
   const rol = String(prof.rol).trim().toLowerCase();
   const exp = Math.floor(Date.now() / 1000) + TTL_LOGIN_SEG; // SEGUNDOS Unix
@@ -638,7 +699,7 @@ function handleCambiarPassword(body, identity) {
  * @param {string} token - token de sesion (query en GET, body en POST).
  * @param {string[]} [roles] - roles permitidos (ej. ['ceo']). Si se omite,
  *        cualquier profesor activo con token valido pasa.
- * @returns {{identity:{profesor_id,rol}}|{error:GoogleAppsScript.Content.TextOutput}}
+ * @returns {{identity:{profesor_id,rol,must_change_password}}|{error:GoogleAppsScript.Content.TextOutput}}
  */
 function requireAuth_(token, roles) {
   const id = validateToken_(token);
@@ -647,11 +708,21 @@ function requireAuth_(token, roles) {
   }
 
   // Re-check de la fuente de verdad con cache corto (60s). NO usa cachedGet
-  // (su indice _keys no debe contaminarse con claves de auth); usa cacheGet
-  // directo, que ya respeta el TTL.
-  const prof = cacheGet('authprof_' + id.profesor_id, function() {
-    return lookupProfesor_(id.profesor_id);
-  }, 60);
+  // (su indice _keys no debe contaminarse con claves de auth) ni cacheGet
+  // (cachearia un null y rebotaria 401 hasta 60s a un profesor recien creado o
+  // reactivado, red-team #3). Se lee el cache manualmente y SOLO se cachea el
+  // resultado si es un objeto valido (truthy); los null NO se cachean.
+  const authKey = 'authprof_' + id.profesor_id;
+  let prof;
+  const cachedProf = cache_.get(authKey);
+  if (cachedProf) {
+    prof = JSON.parse(cachedProf);
+  } else {
+    prof = lookupProfesor_(id.profesor_id);
+    if (prof) {
+      cache_.put(authKey, JSON.stringify(prof), 60);
+    }
+  }
 
   if (!prof || !isTruthy(prof.activo)) {
     return { error: jsonError('No autorizado', 401, 'token_invalid') };
@@ -667,7 +738,16 @@ function requireAuth_(token, roles) {
     return { error: jsonError('Permiso denegado', 403, 'forbidden') };
   }
 
-  return { identity: { profesor_id: id.profesor_id, rol: rol } };
+  // Se propaga must_change_password VIGENTE de la hoja: el gate (resolveAuth_)
+  // lo usa para forzar el cambio server-side antes de permitir otra accion
+  // distinta de 'cambiarPassword' (red-team must_change_password).
+  return {
+    identity: {
+      profesor_id: id.profesor_id,
+      rol: rol,
+      must_change_password: isTruthy(prof.must_change_password)
+    }
+  };
 }
 
 /**
@@ -675,6 +755,9 @@ function requireAuth_(token, roles) {
  *
  * Reglas:
  *   - 'ping' y 'login': EXENTAS (no requieren auth).
+ *   - Token con must_change_password=true: SOLO se admite la accion
+ *     'cambiarPassword'. Cualquier otra accion -> 403 must_change_password
+ *     (forzado de cambio server-side, no solo en el frontend).
  *   - Coexistencia legacy: un api_key valido SIN token solo accede a las
  *     acciones de LEGACY_READONLY_ACTIONS (solo-lectura no sensible). NUNCA
  *     concede identidad, rol ceo ni escritura.
@@ -697,7 +780,22 @@ function resolveAuth_(action, token, apiKey) {
 
   // Si hay token, manda el token (autoridad real).
   if (token) {
-    return requireAuth_(token, null);
+    const auth = requireAuth_(token, null);
+    if (auth.error) return auth;
+
+    // Forzado de cambio de password SERVER-SIDE (red-team must_change_password):
+    // si el profesor tiene must_change_password=true, su token solo sirve para
+    // la accion 'cambiarPassword'. Cualquier otra accion se rechaza con 403
+    // hasta que cambie la contrasena. ('login'/'ping' ya salieron exentos
+    // arriba.) Asi una password temporal (expuesta en el git history) no permite
+    // operar: solo cambiarla.
+    if (auth.identity.must_change_password && action !== 'cambiarPassword') {
+      return {
+        error: jsonError('Debe cambiar la contrasena antes de continuar', 403, 'must_change_password')
+      };
+    }
+
+    return auth;
   }
 
   // Sin token: solo se admite el camino legacy api_key para SOLO-LECTURA no
@@ -1292,8 +1390,13 @@ function handleGuardarAsistencia(body, identity) {
   // puede falsificar el profesor_id de los registros que guarda.
   const profesor_id = identity.profesor_id;
 
-  if (!fecha || !convocatoria_id || !grupo || !alumnos) {
+  if (!fecha || !convocatoria_id || !grupo) {
     return jsonError('Faltan campos obligatorios: fecha, convocatoria_id, grupo, alumnos', 400);
+  }
+  // alumnos debe ser una lista no vacia: el guard !alumnos no cubre {} ni tipos
+  // raros, y un array vacio pasaria el ownership trivialmente sin guardar nada.
+  if (!Array.isArray(alumnos) || alumnos.length === 0) {
+    return jsonError('alumnos debe ser una lista no vacia', 400);
   }
 
   // Ownership (red-team bruteforce #8): TODOS los alumno_id del payload deben
@@ -2067,10 +2170,11 @@ function signToken_(payload) {
  *   - v === 1 (version de esquema esperada),
  *   - profesor_id: string que matchea /^prof-[a-z0-9._-]+$/,
  *   - rol en {'teacher','ceo'},
- *   - exp: number en SEGUNDOS con now < exp <= now + MAX_TTL_SEG.
+ *   - exp: number en SEGUNDOS con now < exp <= now + MAX_TTL_SEG,
+ *   - ver: number (defensa en profundidad para el re-check de token_version).
  *
  * @param {string} token - Token `payloadB64.sigB64`.
- * @returns {{profesor_id: string, rol: string, ver: *}|null} Identidad o null.
+ * @returns {{profesor_id: string, rol: string, ver: number}|null} Identidad o null.
  */
 function validateToken_(token) {
   if (!token || typeof token !== 'string') return null;
@@ -2101,6 +2205,10 @@ function validateToken_(token) {
   if (pl.rol !== 'teacher' && pl.rol !== 'ceo') return null;
   const now = Math.floor(Date.now() / 1000); // SEGUNDOS Unix
   if (typeof pl.exp !== 'number' || pl.exp <= now || pl.exp > now + MAX_TTL_SEG) return null;
+  // ver debe ser numero (defensa en profundidad): si llegara como string u otro
+  // tipo, el re-check de token_version (Number() vs Number()) podria comportarse
+  // de forma inesperada. Fail-fast aqui.
+  if (typeof pl.ver !== 'number') return null;
 
   return { profesor_id: pl.profesor_id, rol: pl.rol, ver: pl.ver };
 }
