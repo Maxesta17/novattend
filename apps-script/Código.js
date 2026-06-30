@@ -94,6 +94,28 @@ function cacheInvalidate(prefixes) {
       cache_.remove(p + '__');
     }
   });
+
+  // Purga via indice persistente de claves calentadas. warmCache calienta
+  // tambien los rosters per-profesor 'alu_<conv>_<prof>_<grupo>' con WARM_TTL
+  // (6h), claves que _keys (6 min) deja de listar y que NO son deterministas
+  // desde un prefijo (dependen del profesor/grupo presentes en los datos). El
+  // indice '_warm_keys' vive WARM_TTL —igual que las entradas— asi que la
+  // invalidacion siempre las encuentra (mismo patron que arreglo el bug
+  // huerfano de 'res_', generalizado a 'alu_').
+  const warmJson = cache_.get('_warm_keys');
+  if (warmJson) {
+    const warmKeys = JSON.parse(warmJson);
+    const toRemove = warmKeys.filter(k => prefixes.some(p => k.indexOf(p) === 0));
+    if (toRemove.length > 0) {
+      cache_.removeAll(toRemove);
+      const remaining = warmKeys.filter(k => toRemove.indexOf(k) === -1);
+      if (remaining.length > 0) {
+        cache_.put('_warm_keys', JSON.stringify(remaining), WARM_TTL);
+      } else {
+        cache_.remove('_warm_keys');
+      }
+    }
+  }
 }
 
 /**
@@ -1720,8 +1742,11 @@ function handleCrearAlumno(body, identity) {
     true // activo
   ]);
 
-  // Invalidar cache de alumnos para esta convocatoria
-  cacheInvalidate(['alu_' + convocatoria_id]);
+  // Crear un alumno cambia el roster Y el resumen del CEO: computeResumen itera
+  // el array de alumnos (el alumno nuevo aparece como fila de ceros), asi que
+  // 'res_<conv>__' —calentada 6h por warmCache— quedaria stale hasta 6h si solo
+  // invalidamos 'alu_'. Invalidar tambien 'res_'/'asist_' de la convocatoria.
+  cacheInvalidate(['alu_' + convocatoria_id, 'res_' + convocatoria_id, 'asist_' + convocatoria_id]);
 
   writeLog(identity.profesor_id, 'CREAR_ALUMNO', nombre + ' | ' + grupo + ' | ' + convocatoria_id);
 
@@ -1833,6 +1858,22 @@ function handleActualizarAlumno(body, identity) {
  *   - Evento: Basado en tiempo > Temporizador diario > 6-7 a.m.
  */
 function warmCache() {
+  // Serializa contra los escritores: guardarAsistencia/crearAlumno/
+  // actualizarAlumno toman este MISMO lock global alrededor de su
+  // cacheInvalidate. Sin el, una escritura podria colarse entre que warmCache
+  // calienta una entrada y publica el indice _warm_keys, dejando un huerfano
+  // stale 6h (la entrada vive pero ningun indice la lista para purgarla; aplica
+  // tanto a 'alu_' como a 'res_<conv>__'). Si el lock esta ocupado (escritura en
+  // curso), se OMITE el calentado: mejor cache frio que datos stale. A las
+  // 6-7am (trafico cero) el lock se adquiere al instante.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    writeLog('SISTEMA', 'WARM_CACHE', 'lock ocupado (escritura en curso), se omite el calentado');
+    return 0;
+  }
+  try {
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const convocatorias = sheetToObjects(SHEET_NAMES.CONVOCATORIAS)
     .filter(c => isTruthy(c.activa) && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
@@ -1849,31 +1890,101 @@ function warmCache() {
   const alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS);
   const registros = sheetToObjects(SHEET_NAMES.ASISTENCIA);
 
+  const warmedKeys = [];
   let calentadas = 0;
   let fallidas = 0;
   convocatorias.forEach(c => {
     // try/catch por convocatoria: una lenta o con datos corruptos no debe
     // tumbar el calentado de las demas.
     try {
-      // Resumen global de la convocatoria (sin filtro de profesor/grupo).
-      // La clave debe coincidir EXACTA con la de handleGetResumen:
-      // 'res_' + convocatoria_id + '_' + profesor_id + '_' + grupo (ultimos vacios).
-      const cacheKey = 'res_' + c.id + '_' + '' + '_' + '';
-      // WARM_TTL (6h) en vez del CACHE_TTL por defecto: el calentado debe llegar
-      // a la franja de uso real, no expirar a los 2 min.
-      cachedGet(cacheKey, function() {
+      // 1) Resumen global de la convocatoria (sin filtro de profesor/grupo) —
+      // lo consume el dashboard del CEO. La clave debe coincidir EXACTA con la
+      // de handleGetResumen: 'res_' + conv + '_' + profesor_id + '_' + grupo
+      // (ultimos vacios). WARM_TTL (6h) en vez del CACHE_TTL por defecto: el
+      // calentado debe llegar a la franja de uso real, no expirar a los 2 min.
+      const resumenKey = 'res_' + c.id + '_' + '' + '_' + '';
+      cachedGet(resumenKey, function() {
         return computeResumen(c.id, '', '', alumnos, registros);
       }, WARM_TTL);
+      warmedKeys.push(resumenKey);
       calentadas++;
+
+      // 2) Rosters per-profesor/grupo que pide el teacher en AttendancePage
+      // (getAlumnos por grupo, clave 'alu_<conv>_<prof>_<grupo>'). Se derivan
+      // del array `alumnos` ya leido: CERO lecturas extra de hoja. Sin esto el
+      // primer getAlumnos de cada profesor pagaba frio (~2s) y, con el TTL de
+      // 120s, se re-enfriaba durante el dia.
+      warmAlumnosRosters_(c.id, alumnos).forEach(k => warmedKeys.push(k));
     } catch (err) {
       fallidas++;
       writeLog('SISTEMA', 'WARM_CACHE_ERROR', c.id + ' | ' + err.message);
     }
   });
 
+  // Indice persistente de claves calentadas (vive WARM_TTL, igual que las
+  // entradas): permite a cacheInvalidate purgar los rosters 'alu_' calentados
+  // aunque _keys (6 min) ya no los liste. Sin el, un actualizarAlumno dejaria
+  // rosters stale hasta 6h (mismo bug huerfano que ya arreglamos para 'res_').
+  if (warmedKeys.length > 0) {
+    cache_.put('_warm_keys', JSON.stringify(warmedKeys), WARM_TTL);
+  }
+
   writeLog('SISTEMA', 'WARM_CACHE',
     calentadas + ' precalentada(s)' + (fallidas ? ' | ' + fallidas + ' fallida(s)' : ''));
   return calentadas;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Calienta los rosters per-profesor/grupo de una convocatoria a partir del
+ * array de alumnos YA leido por warmCache (cero lecturas extra de hoja).
+ *
+ * Replica EXACTAMENTE la clave y el filtrado de handleGetAlumnos para que el
+ * primer getAlumnos del profesor pegue en caliente:
+ *   clave    = 'alu_' + convocatoriaId + '_' + profesorId + '_' + grupo
+ *   contenido = alumnos activos de esa convocatoria/profesor/grupo
+ *
+ * Se calientan los 4 grupos (G1-G4) de cada profesor presente en la
+ * convocatoria, incluidos los vacios: AttendancePage hace prefetch de G1-G4
+ * aunque algun grupo no tenga alumnos, y cachear [] evita que ese grupo pague
+ * frio. NO calienta la entrada del CEO 'alu_<conv>__' (el CEO no usa getAlumnos
+ * en el dashboard; usa getProfesores + getResumen).
+ *
+ * @param {string} convocatoriaId - id de la convocatoria activa.
+ * @param {Array<Object>} alumnos - filas de ALUMNOS ya leidas (sheetToObjects).
+ * @returns {Array<string>} claves 'alu_' calentadas (para el indice _warm_keys).
+ */
+function warmAlumnosRosters_(convocatoriaId, alumnos) {
+  const GRUPOS = ['G1', 'G2', 'G3', 'G4'];
+
+  // Mismo filtro base que handleGetAlumnos: activos de esta convocatoria.
+  const activos = alumnos.filter(function(a) {
+    return isTruthy(a.activo) && a.convocatoria_id === convocatoriaId;
+  });
+
+  // Profesores distintos con alumnos en la convocatoria.
+  const profesores = {};
+  activos.forEach(function(a) {
+    if (a.profesor_id) profesores[a.profesor_id] = true;
+  });
+
+  const warmed = [];
+  Object.keys(profesores).forEach(function(profesorId) {
+    GRUPOS.forEach(function(grupo) {
+      const slice = activos.filter(function(a) {
+        return a.profesor_id === profesorId && a.grupo === grupo;
+      });
+      const key = 'alu_' + convocatoriaId + '_' + profesorId + '_' + grupo;
+      // cacheGet (no cachedGet): se rastrea via _warm_keys, no via _keys, para
+      // no inflar el indice corto con decenas de claves de roster.
+      cacheGet(key, function() { return slice; }, WARM_TTL);
+      warmed.push(key);
+    });
+  });
+
+  return warmed;
 }
 
 // ============================================================
