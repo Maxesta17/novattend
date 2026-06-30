@@ -199,6 +199,34 @@ function generateId(prefix) {
   return prefix + '-' + Date.now().toString(36);
 }
 
+/**
+ * Coercion laxa de valores booleanos procedentes de Google Sheets.
+ *
+ * Cuando una celda no tiene checkbox (ej. filas 51+ en ALUMNOS antes de
+ * ejecutar setupSheets con el limite ampliado), el valor 'activo'/'activa'
+ * puede llegar como texto ('VERDADERO', 'TRUE', '1', 'SI', 'X') en vez del
+ * booleano nativo true. Un filtro estricto === true descartaria esas filas
+ * y el alumno desapareceria de la app.
+ *
+ * Este helper devuelve true para booleano nativo true, para el numero 1
+ * y para los textos canonicos de afirmacion de Sheets (ES/EN).
+ * En cualquier otro caso devuelve false.
+ *
+ * NO usar para 'presente' ni 'justificada': esos valores los escribe el
+ * codigo y deben seguir evaluandose de forma estricta (=== true).
+ *
+ * @param {*} v - Valor a evaluar (booleano, numero, string, null, undefined)
+ * @returns {boolean}
+ */
+function isTruthy(v) {
+  if (v === true) return true;
+  if (v === 1) return true;
+  if (typeof v === 'string') {
+    return ['TRUE', 'VERDADERO', 'SI', 'SÍ', 'X', '1'].indexOf(v.trim().toUpperCase()) !== -1;
+  }
+  return false;
+}
+
 // ============================================================
 // AUTENTICACION
 // ============================================================
@@ -270,7 +298,7 @@ function handleGetConvocatorias(e) {
   const data = cachedGet('conv', function() {
     const todas = sheetToObjects(SHEET_NAMES.CONVOCATORIAS);
     const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    return todas.filter(c => c.activa === true && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+    return todas.filter(c => isTruthy(c.activa) && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
   });
 
   return jsonResponse(data);
@@ -285,7 +313,7 @@ function handleGetProfesores(e) {
   }
 
   const data = cachedGet('prof', function() {
-    return sheetToObjects(SHEET_NAMES.PROFESORES).filter(p => p.activo === true);
+    return sheetToObjects(SHEET_NAMES.PROFESORES).filter(p => isTruthy(p.activo));
   });
 
   return jsonResponse(data);
@@ -310,7 +338,7 @@ function handleGetAlumnos(e) {
 
   const cacheKey = 'alu_' + convocatoriaId + '_' + profesorId + '_' + grupo;
   const data = cachedGet(cacheKey, function() {
-    let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS).filter(a => a.activo === true);
+    let alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS).filter(a => isTruthy(a.activo));
     if (convocatoriaId) alumnos = alumnos.filter(a => a.convocatoria_id === convocatoriaId);
     if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
     if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
@@ -413,7 +441,7 @@ function computeResumen(convocatoriaId, profesorId, grupo, preAlumnos, preRegist
   // en lugar de releer las hojas completas por cada convocatoria. Si no se pasan,
   // se leen aqui (comportamiento original para los callers en vivo).
   let alumnos = (preAlumnos || sheetToObjects(SHEET_NAMES.ALUMNOS))
-    .filter(a => a.activo === true && a.convocatoria_id === convocatoriaId);
+    .filter(a => isTruthy(a.activo) && a.convocatoria_id === convocatoriaId);
 
   if (profesorId) alumnos = alumnos.filter(a => a.profesor_id === profesorId);
   if (grupo) alumnos = alumnos.filter(a => a.grupo === grupo);
@@ -1048,7 +1076,7 @@ function handleActualizarAlumno(body) {
 function warmCache() {
   const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const convocatorias = sheetToObjects(SHEET_NAMES.CONVOCATORIAS)
-    .filter(c => c.activa === true && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
+    .filter(c => isTruthy(c.activa) && c.fecha_inicio <= hoy && hoy <= c.fecha_fin);
 
   if (convocatorias.length === 0) {
     writeLog('SISTEMA', 'WARM_CACHE', '0 convocatorias activas, nada que precalentar');
@@ -1128,9 +1156,10 @@ function setupSheets() {
   });
 
   // Formato especial: columna 'activa'/'activo' como checkbox
-  // Solo aplicar a pocas filas para evitar crear datos fantasma (FALSE)
-  // que confunden a getLastRow() y getDataRange()
-  const CHECKBOX_ROWS = 50;
+  // 400 filas cubre los 336 alumnos actuales con margen. Si se deja en 50,
+  // las filas 51+ reciben el valor activo como texto (VERDADERO/TRUE) en vez
+  // de booleano nativo, y un filtro estricto === true descartaria esos alumnos.
+  const CHECKBOX_ROWS = 400;
   const checkboxSheets = ['CONVOCATORIAS', 'PROFESORES', 'ALUMNOS'];
   checkboxSheets.forEach(nombre => {
     const sheet = ss.getSheetByName(nombre);
