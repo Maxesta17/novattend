@@ -55,6 +55,7 @@ Progress: [█████████░] 89%
 | 260630-dti | fix warmCache invalidacion (cacheInvalidate purga clave calentada) + lectura laxa de activo/activa | 2026-06-30 | 47a52c5 | [260630-dti-fix-warmcache-invalidacion-y-lectura-lax](./quick/260630-dti-fix-warmcache-invalidacion-y-lectura-lax/) |
 | 260630-epo | fix historico_semanas NaN-guard (no tumbar getResumen) + transferirHistorial LockService | 2026-06-30 | 3706495 | [260630-epo-fix-historico-semanas-nan-guard-y-transf](./quick/260630-epo-fix-historico-semanas-nan-guard-y-transf/) |
 | 260630-f75 | fix normaliza fechas dd/mm/yyyy a ISO en sheetToObjects (raiz F1/F2) | 2026-06-30 | 9dbb5ab | [260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en](./quick/260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en/) |
+| 260630-wrp | perf warmCache calienta rosters per-profesor + endurece invalidacion (lock + _warm_keys + crearAlumno res_) | 2026-06-30 | f50e1a8 | [260630-wrp-warm-rosters-profesor](./quick/260630-wrp-warm-rosters-profesor/) |
 
 ## Session Continuity
 
