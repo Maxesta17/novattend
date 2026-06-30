@@ -215,13 +215,28 @@ function jsonResponse(data, status) {
 
 /**
  * Respuesta de error.
+ *
+ * Ampliado (Fase 3) con un tercer argumento OPCIONAL `reason`: una etiqueta
+ * estable y legible por maquina (ej. 'credentials', 'token_invalid',
+ * 'forbidden') que el frontend usa para clasificar el error sin depender del
+ * texto del mensaje. Es retrocompatible: si no se pasa reason, el JSON no
+ * incluye la clave y las llamadas antiguas jsonError(msg, code) siguen igual.
+ *
+ * @param {string} message - Mensaje de error legible (en espanol).
+ * @param {number} [code]  - Codigo HTTP-like (por defecto 400).
+ * @param {string} [reason] - Etiqueta estable opcional para clasificacion.
  */
-function jsonError(message, code) {
-  const output = JSON.stringify({
+function jsonError(message, code, reason) {
+  const payload = {
     status: 'error',
     error: message,
     code: code || 400
-  });
+  };
+  // Solo se anade reason si viene definido (retrocompatibilidad estricta).
+  if (reason) {
+    payload.reason = reason;
+  }
+  const output = JSON.stringify(payload);
   return ContentService
     .createTextOutput(output)
     .setMimeType(ContentService.MimeType.JSON);
@@ -287,6 +302,11 @@ function isTruthy(v) {
  * Para GET: el token viene en e.parameter.api_key
  * Para POST: el token viene en body.api_key (body ya parseado)
  *
+ * NOTA (Fase 3): este helper YA NO es el gate principal. La autoridad real es
+ * requireAuth_ (token de sesion firmado). validateApiKey solo decide si una
+ * request LEGACY (api_key valido, sin token) puede pasar a la ventana de
+ * coexistencia de SOLO-LECTURA NO sensible. NUNCA concede identidad ni rol ceo.
+ *
  * @param {string} token - API key enviado en el request
  * @param {string} action - Nombre de la action solicitada
  * @returns {GoogleAppsScript.Content.TextOutput|null} jsonError si invalido, null si valido
@@ -298,9 +318,399 @@ function validateApiKey(token, action) {
       action: action || 'desconocida',
       timestamp: new Date().toISOString()
     })
-    return jsonError('No autorizado', 401)
+    return jsonError('No autorizado', 401, 'token_invalid')
   }
   return null
+}
+
+// ============================================================
+// AUTENTICACION — GATE Y LOGIN (Fase 3)
+// ============================================================
+//
+// Reemplaza el gate de api_key compartido por autenticacion real basada en
+// token de sesion firmado (HMAC-SHA256, primitivas de Fase 1). Cada handler
+// deriva identidad+rol del TOKEN, jamas del body/query. El api_key legacy
+// SOLO sobrevive como ventana de coexistencia de SOLO-LECTURA no sensible.
+
+// TTL del token de login, en SEGUNDOS. 8h cubre una jornada completa. Debe ser
+// <= MAX_TTL_SEG (24h) para que validateToken_ no lo rechace por exp lejano.
+const TTL_LOGIN_SEG = 8 * 60 * 60; // 8 horas
+
+// Rate-limit / lockout de login por usuario (anti-bruteforce, red-team #2/#5).
+// Tras LOGIN_MAX_FAILS fallos en la ventana, el usuario queda bloqueado
+// LOGIN_LOCKOUT_SEG segundos. El contador se incrementa SIEMPRE que el login
+// falle, exista o no el usuario (anti-enumeracion).
+const LOGIN_MAX_FAILS = 5;
+const LOGIN_LOCKOUT_SEG = 15 * 60; // 15 minutos
+// Prefijo de las claves de CacheService que cuentan fallos por usuario.
+const LOGIN_FAIL_PREFIX = 'loginfail_';
+
+// Salt DUMMY fijo para timing constante en login: si el usuario no existe, se
+// ejecuta igualmente verifyPassword_ contra este salt y un hash dummy para que
+// el coste temporal del login no revele si el usuario existe (red-team #5). El
+// salt es arbitrario y publico; ningun password real produce el hash dummy.
+const DUMMY_LOGIN_SALT = 'novattend-dummy-salt-0000';
+
+// El hash dummy se calcula LAZY (no a nivel de modulo): Apps Script re-evalua
+// el script en CADA request, y derivar PBKDF2 en la carga del modulo penalizaria
+// con ~10000 iteraciones HMAC a TODOS los endpoints (incluidas lecturas). Solo
+// se calcula la primera vez que el login lo necesita, dentro de un mismo run.
+let DUMMY_LOGIN_HASH_ = null;
+function dummyLoginHash_() {
+  if (DUMMY_LOGIN_HASH_ === null) {
+    DUMMY_LOGIN_HASH_ = pbkdf2_('contrasena-imposible-dummy', DUMMY_LOGIN_SALT, PBKDF2_ITER);
+  }
+  return DUMMY_LOGIN_HASH_;
+}
+
+// Conjunto de acciones de SOLO-LECTURA NO sensibles a las que un request
+// legacy (api_key valido, sin token) puede acceder durante la coexistencia.
+// Cualquier otra accion EXIGE token via requireAuth_. NUNCA escritura.
+const LEGACY_READONLY_ACTIONS = ['getConvocatorias'];
+
+/**
+ * Lee la hoja PROFESORES y devuelve el objeto del profesor con ese id, o null.
+ *
+ * Resuelve los indices de columna POR CABECERA (no por posicion fija), de modo
+ * que es robusto si el orden de columnas cambiara. Devuelve unicamente los
+ * campos relevantes para auth (incluye salt/password_hash/token_version, que
+ * NUNCA deben salir al cliente — este helper es de uso interno del backend).
+ *
+ * @param {string} profesorId - id del profesor (ej. 'prof-samuel', 'prof-admin').
+ * @returns {{id,nombre,email,activo,rol,salt,password_hash,must_change_password,token_version}|null}
+ */
+function lookupProfesor_(profesorId) {
+  if (!profesorId) return null;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.PROFESORES);
+  if (!sheet) return null;
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return null;
+
+  const headers = data[0].map(h => String(h).trim());
+  const colId = headers.indexOf('id');
+  const colNombre = headers.indexOf('nombre');
+  const colEmail = headers.indexOf('email');
+  const colActivo = headers.indexOf('activo');
+  const colHash = headers.indexOf('password_hash');
+  const colSalt = headers.indexOf('salt');
+  const colRol = headers.indexOf('rol');
+  const colMustChange = headers.indexOf('must_change_password');
+  const colTokenVer = headers.indexOf('token_version');
+  if (colId === -1) return null;
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][colId]).trim() !== profesorId) continue;
+    return {
+      id: profesorId,
+      nombre: colNombre !== -1 ? data[i][colNombre] : '',
+      email: colEmail !== -1 ? data[i][colEmail] : '',
+      activo: colActivo !== -1 ? data[i][colActivo] : false,
+      rol: colRol !== -1 ? data[i][colRol] : '',
+      salt: colSalt !== -1 ? data[i][colSalt] : '',
+      password_hash: colHash !== -1 ? data[i][colHash] : '',
+      must_change_password: colMustChange !== -1 ? data[i][colMustChange] : false,
+      token_version: colTokenVer !== -1 ? data[i][colTokenVer] : ''
+    };
+  }
+  return null;
+}
+
+/**
+ * Cuenta de fallos de login del usuario en la ventana de lockout.
+ * @param {string} usuario - usuario en claro (ej. 'samuel').
+ * @returns {number} numero de fallos acumulados.
+ */
+function loginFailCount_(usuario) {
+  const raw = cache_.get(LOGIN_FAIL_PREFIX + usuario);
+  return raw ? Number(raw) || 0 : 0;
+}
+
+/**
+ * Incrementa el contador de fallos de login del usuario, refrescando la
+ * ventana de lockout. Se llama en CADA fallo (exista o no el usuario).
+ * @param {string} usuario - usuario en claro.
+ */
+function loginRegisterFail_(usuario) {
+  const next = loginFailCount_(usuario) + 1;
+  cache_.put(LOGIN_FAIL_PREFIX + usuario, String(next), LOGIN_LOCKOUT_SEG);
+}
+
+/**
+ * Maneja el login (case 'login' en doPost). EXENTO del gate de auth.
+ *
+ * Seguridad:
+ *   - Rate-limit/lockout por usuario en CacheService: tras LOGIN_MAX_FAILS
+ *     fallos bloquea LOGIN_LOCKOUT_SEG. El contador sube en CADA fallo, exista
+ *     o no el usuario (anti-enumeracion, red-team #5).
+ *   - Timing constante: si el usuario no existe se ejecuta igualmente
+ *     verifyPassword_ contra un hash dummy fijo, para no revelar por latencia
+ *     si el usuario existe.
+ *   - Mensaje de error generico ('Usuario o contrasena incorrectos', 401,
+ *     reason 'credentials'): NUNCA distingue usuario inexistente de password
+ *     erroneo, ni profesor inactivo de credenciales malas.
+ *
+ * Contrato de exito (lo que espera el frontend):
+ *   { token, profesor_id, rol, nombre, exp, must_change_password }
+ *   con exp en SEGUNDOS Unix.
+ *
+ * @param {Object} body - { action:'login', username, password }.
+ * @returns {GoogleAppsScript.Content.TextOutput}
+ */
+function handleLogin(body) {
+  const usuario = String(body.username || '').trim().toLowerCase();
+  const password = String(body.password || '');
+
+  // Validacion minima de entrada: usuario/password vacios = credenciales malas
+  // (mismo mensaje generico, sin pista de cual falta).
+  if (!usuario || !password) {
+    if (usuario) loginRegisterFail_(usuario);
+    return jsonError('Usuario o contrasena incorrectos', 401, 'credentials');
+  }
+
+  // Lockout: si supera el umbral, rechazar sin siquiera tocar la hoja.
+  if (loginFailCount_(usuario) >= LOGIN_MAX_FAILS) {
+    return jsonError(
+      'Demasiados intentos. Espera unos minutos e intentalo de nuevo.',
+      429,
+      'lockout'
+    );
+  }
+
+  // Resolver id e identidad candidata. El CEO usa id 'prof-admin'.
+  const id = (usuario === 'admin') ? 'prof-admin' : 'prof-' + usuario;
+  const prof = lookupProfesor_(id);
+
+  // Timing constante: SIEMPRE se ejecuta una verificacion PBKDF2. Si el usuario
+  // no existe o esta inactivo, se verifica contra el hash dummy (resultado
+  // siempre false) para que el coste temporal no delate la existencia.
+  const okCredenciales = prof
+    ? verifyPassword_(password, prof.salt, prof.password_hash, PBKDF2_ITER)
+    : verifyPassword_(password, DUMMY_LOGIN_SALT, dummyLoginHash_(), PBKDF2_ITER);
+
+  const activo = prof ? isTruthy(prof.activo) : false;
+
+  if (!prof || !activo || !okCredenciales) {
+    // Cualquier fallo (usuario inexistente, inactivo o password malo) suma al
+    // contador y devuelve el MISMO mensaje generico (anti-enumeracion).
+    loginRegisterFail_(usuario);
+    return jsonError('Usuario o contrasena incorrectos', 401, 'credentials');
+  }
+
+  // Login correcto: limpiar el contador de fallos del usuario.
+  cache_.remove(LOGIN_FAIL_PREFIX + usuario);
+
+  const rol = String(prof.rol).trim().toLowerCase();
+  const exp = Math.floor(Date.now() / 1000) + TTL_LOGIN_SEG; // SEGUNDOS Unix
+  const token = signToken_({
+    v: 1,
+    profesor_id: id,
+    rol: rol,
+    exp: exp,
+    ver: Number(prof.token_version)
+  });
+
+  writeLog(id, 'LOGIN', 'rol=' + rol);
+
+  return jsonResponse({
+    token: token,
+    profesor_id: id,
+    rol: rol,
+    nombre: prof.nombre,
+    exp: exp,
+    must_change_password: isTruthy(prof.must_change_password)
+  });
+}
+
+/**
+ * Cambia la contrasena del profesor autenticado (case 'cambiarPassword').
+ * Requiere token: la identidad llega ya validada por requireAuth_.
+ *
+ * Politica de la nueva contrasena:
+ *   - longitud >= 10,
+ *   - no contiene el usuario (parte tras 'prof-'),
+ *   - no termina en '2026' (invalida los <username>2026 expuestos en git).
+ *
+ * Efectos: regenera salt + password_hash con PBKDF2_ITER, pone
+ * must_change_password=false e INCREMENTA token_version (revoca todos los
+ * tokens viejos: requireAuth_ rechazara cualquier token con ver antiguo).
+ *
+ * @param {Object} body - { action:'cambiarPassword', nueva_password }.
+ * @param {{profesor_id, rol}} identity - identidad validada por requireAuth_.
+ * @returns {GoogleAppsScript.Content.TextOutput}
+ */
+function handleCambiarPassword(body, identity) {
+  const nueva = String(body.nueva_password || body.password || '');
+  const profesorId = identity.profesor_id;
+  // El usuario es la parte tras 'prof-' (ej. 'prof-samuel' -> 'samuel').
+  const usuario = profesorId.indexOf('prof-') === 0
+    ? profesorId.slice('prof-'.length).toLowerCase()
+    : profesorId.toLowerCase();
+
+  // Validacion de politica (mensajes claros, en espanol).
+  if (nueva.length < 10) {
+    return jsonError('La contrasena debe tener al menos 10 caracteres', 400, 'weak_password');
+  }
+  if (usuario && nueva.toLowerCase().indexOf(usuario) !== -1) {
+    return jsonError('La contrasena no puede contener tu nombre de usuario', 400, 'weak_password');
+  }
+  if (/2026$/.test(nueva)) {
+    return jsonError('La contrasena no puede terminar en 2026', 400, 'weak_password');
+  }
+
+  // Lock para evitar escrituras concurrentes sobre la fila del profesor.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return jsonError('Servidor ocupado, reintenta en unos segundos', 503);
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAMES.PROFESORES);
+    if (!sheet) {
+      return jsonError('No existe la hoja PROFESORES', 500);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim());
+    const colId = headers.indexOf('id');
+    const colHash = headers.indexOf('password_hash');
+    const colSalt = headers.indexOf('salt');
+    const colMustChange = headers.indexOf('must_change_password');
+    const colTokenVer = headers.indexOf('token_version');
+    if (colId === -1 || colHash === -1 || colSalt === -1 || colTokenVer === -1) {
+      return jsonError('La hoja PROFESORES no tiene las columnas de auth requeridas', 500);
+    }
+
+    // Localizar la fila del profesor autenticado.
+    let filaIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][colId]).trim() === profesorId) {
+        filaIdx = i;
+        break;
+      }
+    }
+    if (filaIdx === -1) {
+      return jsonError('Profesor no encontrado', 404);
+    }
+
+    // Regenerar credenciales e incrementar token_version (revocacion).
+    const salt = Utilities.getUuid();
+    const hash = pbkdf2_(nueva, salt, PBKDF2_ITER);
+    const nuevaVersion = Number(data[filaIdx][colTokenVer] || 0) + 1;
+
+    data[filaIdx][colHash] = hash;
+    data[filaIdx][colSalt] = salt;
+    if (colMustChange !== -1) data[filaIdx][colMustChange] = false;
+    data[filaIdx][colTokenVer] = nuevaVersion;
+
+    // Escribir la fila completa de una vez (un solo setValues).
+    sheet.getRange(filaIdx + 1, 1, 1, headers.length).setValues([data[filaIdx]]);
+
+    // Invalidar el cache de re-check de auth para que el siguiente request lea
+    // el token_version nuevo (si no, hasta 60s seguirian valiendo tokens viejos).
+    cache_.remove('authprof_' + profesorId);
+
+    writeLog(profesorId, 'CAMBIAR_PASSWORD', 'token_version=' + nuevaVersion);
+
+    return jsonResponse({ message: 'Contrasena actualizada', must_change_password: false });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Gate de autorizacion real: valida el token de sesion y re-chequea la fuente
+ * de verdad (hoja PROFESORES). NO concede acceso por api_key bajo ningun
+ * concepto (red-team CRITICO: nada de fallback api_key->ceo).
+ *
+ * Pasos:
+ *   1) validateToken_ valida firma + tipos + exp. Si null -> 401 token_invalid.
+ *   2) Re-check con cache corto (60s) contra la hoja: el profesor debe existir
+ *      y estar activo, y su token_version VIGENTE debe coincidir con la del
+ *      token (revocacion tras cambiar password). Si no -> 401.
+ *   3) rol VIGENTE de la hoja (no el del token). Si se exigen `roles` y el rol
+ *      no esta -> 403 forbidden.
+ *
+ * @param {string} token - token de sesion (query en GET, body en POST).
+ * @param {string[]} [roles] - roles permitidos (ej. ['ceo']). Si se omite,
+ *        cualquier profesor activo con token valido pasa.
+ * @returns {{identity:{profesor_id,rol}}|{error:GoogleAppsScript.Content.TextOutput}}
+ */
+function requireAuth_(token, roles) {
+  const id = validateToken_(token);
+  if (!id) {
+    return { error: jsonError('No autorizado', 401, 'token_invalid') };
+  }
+
+  // Re-check de la fuente de verdad con cache corto (60s). NO usa cachedGet
+  // (su indice _keys no debe contaminarse con claves de auth); usa cacheGet
+  // directo, que ya respeta el TTL.
+  const prof = cacheGet('authprof_' + id.profesor_id, function() {
+    return lookupProfesor_(id.profesor_id);
+  }, 60);
+
+  if (!prof || !isTruthy(prof.activo)) {
+    return { error: jsonError('No autorizado', 401, 'token_invalid') };
+  }
+  // Revocacion: el token_version del token debe coincidir con el de la hoja.
+  if (Number(prof.token_version) !== Number(id.ver)) {
+    return { error: jsonError('No autorizado', 401, 'token_invalid') };
+  }
+
+  // Rol VIGENTE de la hoja, no el del token (por si cambio entre emisiones).
+  const rol = String(prof.rol).trim().toLowerCase();
+  if (roles && roles.indexOf(rol) === -1) {
+    return { error: jsonError('Permiso denegado', 403, 'forbidden') };
+  }
+
+  return { identity: { profesor_id: id.profesor_id, rol: rol } };
+}
+
+/**
+ * Resuelve el gate de una request (GET o POST) segun la accion solicitada.
+ *
+ * Reglas:
+ *   - 'ping' y 'login': EXENTAS (no requieren auth).
+ *   - Coexistencia legacy: un api_key valido SIN token solo accede a las
+ *     acciones de LEGACY_READONLY_ACTIONS (solo-lectura no sensible). NUNCA
+ *     concede identidad, rol ceo ni escritura.
+ *   - Cualquier otra accion: EXIGE token via requireAuth_.
+ *
+ * @param {string} action - accion solicitada.
+ * @param {string} token  - token de sesion (puede ser vacio).
+ * @param {string} apiKey - api_key legacy (puede ser vacio).
+ * @returns {{exempt?:boolean, legacy?:boolean, identity?:Object, error?:Object}}
+ *          - exempt: accion publica (ping/login).
+ *          - legacy: paso por api_key sin identidad (solo-lectura no sensible).
+ *          - identity: identidad real derivada del token.
+ *          - error: TextOutput de error a devolver.
+ */
+function resolveAuth_(action, token, apiKey) {
+  // Acciones publicas.
+  if (action === 'ping' || action === 'login') {
+    return { exempt: true };
+  }
+
+  // Si hay token, manda el token (autoridad real).
+  if (token) {
+    return requireAuth_(token, null);
+  }
+
+  // Sin token: solo se admite el camino legacy api_key para SOLO-LECTURA no
+  // sensible. Para CUALQUIER otra accion se exige token (requireAuth_ devolvera
+  // 401 token_invalid porque token es vacio).
+  if (LEGACY_READONLY_ACTIONS.indexOf(action) !== -1) {
+    const apiKeyError = validateApiKey(apiKey, action);
+    if (apiKeyError) return { error: apiKeyError };
+    return { legacy: true };
+  }
+
+  // Accion sensible o de escritura sin token: rechazo.
+  return { error: jsonError('No autorizado', 401, 'token_invalid') };
 }
 
 // ============================================================
@@ -309,22 +719,27 @@ function validateApiKey(token, action) {
 
 function doGet(e) {
   try {
-    const authError = validateApiKey(e.parameter.api_key, e.parameter.action)
-    if (authError) return authError
-
     const action = e.parameter.action;
+
+    // Gate Fase 3: ping/login exentos; token manda; api_key solo da acceso
+    // legacy de solo-lectura no sensible. requireAuth_ jamas concede ceo por
+    // api_key.
+    const auth = resolveAuth_(action, e.parameter.token || '', e.parameter.api_key);
+    if (auth.error) return auth.error;
+    // identity es la identidad real derivada del token (undefined en exempt/legacy).
+    const identity = auth.identity || null;
 
     switch (action) {
       case 'getConvocatorias':
         return handleGetConvocatorias(e);
       case 'getProfesores':
-        return handleGetProfesores(e);
+        return handleGetProfesores(e, identity);
       case 'getAlumnos':
-        return handleGetAlumnos(e);
+        return handleGetAlumnos(e, identity);
       case 'getAsistencia':
-        return handleGetAsistencia(e);
+        return handleGetAsistencia(e, identity);
       case 'getResumen':
-        return handleGetResumen(e);
+        return handleGetResumen(e, identity);
       case 'ping':
         return jsonResponse({ message: 'NovAttend API activa' });
       default:
@@ -687,23 +1102,31 @@ function computeResumen(convocatoriaId, profesorId, grupo, preAlumnos, preRegist
 // ============================================================
 
 function doPost(e) {
+  let body;
   try {
-    const body = JSON.parse(e.postData.contents);
-
-    const authError = validateApiKey(body.api_key, body.action)
-    if (authError) return authError
+    body = JSON.parse(e.postData.contents);
 
     const action = body.action;
 
+    // Gate Fase 3. 'login' es EXENTO: no requiere token (es quien lo emite).
+    // Todas las escrituras exigen token; el api_key legacy NO da escritura.
+    const auth = resolveAuth_(action, body.token || '', body.api_key);
+    if (auth.error) return auth.error;
+    const identity = auth.identity || null;
+
     switch (action) {
+      case 'login':
+        return handleLogin(body);
+      case 'cambiarPassword':
+        return handleCambiarPassword(body, identity);
       case 'guardarAsistencia':
-        return handleGuardarAsistencia(body);
+        return handleGuardarAsistencia(body, identity);
       case 'crearAlumno':
-        return handleCrearAlumno(body);
+        return handleCrearAlumno(body, identity);
       case 'actualizarAlumno':
-        return handleActualizarAlumno(body);
+        return handleActualizarAlumno(body, identity);
       case 'justificarFalta':
-        return handleJustificarFalta(body);
+        return handleJustificarFalta(body, identity);
       default:
         return jsonError('Accion POST no reconocida: ' + action, 400);
     }
