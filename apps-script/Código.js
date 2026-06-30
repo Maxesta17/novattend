@@ -1193,7 +1193,11 @@ function setupSheets() {
 
   const hojas = {
     'CONVOCATORIAS': ['id', 'nombre', 'fecha_inicio', 'fecha_fin', 'activa'],
-    'PROFESORES': ['id', 'nombre', 'email', 'activo'],
+    // Columnas E..I (password_hash, salt, rol, must_change_password,
+    // token_version) AÑADIDAS al final para la auth real: NO reordenar las 4
+    // primeras (id, nombre, email, activo). Gestion convocatorias.js indexa por
+    // posicion (data[i][0/1/3]) y reordenar romperia esos accesos.
+    'PROFESORES': ['id', 'nombre', 'email', 'activo', 'password_hash', 'salt', 'rol', 'must_change_password', 'token_version'],
     'ALUMNOS': ['id', 'nombre', 'convocatoria_id', 'profesor_id', 'grupo', 'email', 'telefono', 'activo'],
     'ASISTENCIA': ['fecha', 'alumno_id', 'convocatoria_id', 'profesor_id', 'grupo', 'presente', 'hora_registro', 'justificada', 'motivo'],
     'LOG': ['timestamp', 'usuario', 'accion', 'detalle']
@@ -1337,6 +1341,14 @@ const TOKEN_SIGN_PREFIX = 'novattend.v1.';
 // Valor placeholder de SESSION_SECRET: si la propiedad aun contiene esto,
 // se considera NO configurada (signToken_ lanza, setSessionSecret regenera).
 const SESSION_SECRET_PLACEHOLDER = 'REEMPLAZAR';
+
+// Numero UNICO de iteraciones PBKDF2 compartido por TODA la auth: la migracion
+// (migrarPasswordsProfesores) genera los hashes con este valor y el login
+// (Fase 3) debe verificar con EXACTAMENTE el mismo. Si divergen, ningun
+// password migrado validaria jamas. Ajustable midiendo latencia real en deploy
+// (Fase 0): el mayor N que mantenga el login por debajo de ~2-3s. Cambiar este
+// valor obliga a re-migrar todos los hashes existentes.
+const PBKDF2_ITER = 10000;
 
 /**
  * Comparacion en tiempo constante de dos valores (string o Byte[]).
@@ -1522,6 +1534,184 @@ function setSessionSecret() {
 //
 // Se deja COMENTADO a proposito: la Fase 1 no ejecuta nada, solo anade helpers.
 // -----------------------------------------------------------------------------
+
+// ============================================================
+// AUTENTICACION — MIGRACION DE CREDENCIALES (Fase 2)
+// ============================================================
+//
+// migrarPasswordsProfesores hashea las contrasenas iniciales de los profesores
+// y crea la fila del CEO. Se ejecuta UNA SOLA VEZ y de forma MANUAL desde el
+// editor de Apps Script (NUNCA via web): no esta cableada a doGet/doPost.
+//
+// SEGURIDAD: el codigo COMMITEADO no contiene NINGUNA contrasena real. Las
+// contrasenas temporales viven solo en el documento de credenciales del
+// Escritorio y se pasan como parametro en el momento de ejecutar. Esta funcion
+// NUNCA loguea contrasenas en claro: solo conteos.
+
+/**
+ * Migra las credenciales de los profesores a la hoja PROFESORES (Fase 2).
+ *
+ * Ejecutar MANUALMENTE desde el editor, una sola vez, en el deploy coordinado
+ * (Fase 8). Requisitos previos (los hace el owner a mano, red-team deploy #6):
+ *   - La hoja PROFESORES debe tener ya las cabeceras E..I
+ *     (password_hash, salt, rol, must_change_password, token_version). El ALTER
+ *     se hace a mano para no disparar el alert UI de setupSheets.
+ *
+ * Para cada usuario del objeto tempPasswords:
+ *   - id  = (usuario === 'admin') ? 'prof-admin' : 'prof-' + usuario
+ *   - rol = (usuario === 'admin') ? 'ceo'        : 'teacher'
+ *   - salt = UUID nuevo, hash = pbkdf2_(passwordEnClaro, salt, PBKDF2_ITER)
+ *   - must_change_password = true, token_version = 1
+ * Si la fila del id existe se actualizan sus columnas E..I; si no existe (caso
+ * tipico de prof-admin) se hace append de una fila nueva con el numero de
+ * columnas correcto. La escritura es en batch por fila (setValues), no celda a
+ * celda. Al final se valida la integridad: ninguna fila activa puede quedar con
+ * salt o password_hash vacios.
+ *
+ * @param {Object<string,string>} tempPasswords - Mapa { usuario: passwordEnClaro }.
+ *        Pegar el objeto TEMP_PASSWORDS del documento de credenciales del
+ *        Escritorio. NO existe valor por defecto: si falta, la funcion aborta.
+ * @returns {{migrados: number, creados: number, errores: string[]}} Resumen.
+ * @throws {Error} Si tempPasswords falta/esta vacio o si faltan las columnas E..I.
+ */
+function migrarPasswordsProfesores(tempPasswords) {
+  // 1) El codigo no trae contrasenas: exigir el parametro explicitamente.
+  if (!tempPasswords || typeof tempPasswords !== 'object' || Object.keys(tempPasswords).length === 0) {
+    throw new Error(
+      'Faltan las contrasenas. Pega el objeto TEMP_PASSWORDS del documento de ' +
+      'credenciales del Escritorio como argumento y vuelve a ejecutar ' +
+      'migrarPasswordsProfesores(TEMP_PASSWORDS).'
+    );
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.PROFESORES);
+  if (!sheet) {
+    throw new Error('No existe la hoja PROFESORES.');
+  }
+
+  // 2) Leer todo de una vez y resolver indices de columna POR CABECERA
+  //    (no por posicion fija), para no romperse si el orden cambiara.
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(h => String(h).trim());
+
+  const colId = headers.indexOf('id');
+  const colNombre = headers.indexOf('nombre');
+  const colActivo = headers.indexOf('activo');
+  const colHash = headers.indexOf('password_hash');
+  const colSalt = headers.indexOf('salt');
+  const colRol = headers.indexOf('rol');
+  const colMustChange = headers.indexOf('must_change_password');
+  const colTokenVer = headers.indexOf('token_version');
+
+  // 3) Abortar si faltan las columnas nuevas: el ALTER lo hace el owner a mano.
+  const faltantes = [];
+  if (colHash === -1) faltantes.push('password_hash');
+  if (colSalt === -1) faltantes.push('salt');
+  if (colRol === -1) faltantes.push('rol');
+  if (colMustChange === -1) faltantes.push('must_change_password');
+  if (colTokenVer === -1) faltantes.push('token_version');
+  if (faltantes.length > 0) {
+    throw new Error(
+      'Faltan columnas en PROFESORES: ' + faltantes.join(', ') + '. Anade primero ' +
+      'las cabeceras E..I en la hoja PROFESORES (ALTER manual del owner) y reintenta.'
+    );
+  }
+
+  const numCols = headers.length;
+  let migrados = 0;
+  let creados = 0;
+  const errores = [];
+
+  // 4) Procesar cada usuario del mapa de contrasenas temporales.
+  Object.keys(tempPasswords).forEach(usuario => {
+    const passwordEnClaro = tempPasswords[usuario];
+    if (!passwordEnClaro || typeof passwordEnClaro !== 'string') {
+      // No logueamos la contrasena; solo el usuario afectado.
+      errores.push('Usuario "' + usuario + '": contrasena vacia o invalida, omitido.');
+      return;
+    }
+
+    const esAdmin = (usuario === 'admin');
+    const id = esAdmin ? 'prof-admin' : 'prof-' + usuario;
+    const rol = esAdmin ? 'ceo' : 'teacher';
+    const salt = Utilities.getUuid();
+    const hash = pbkdf2_(passwordEnClaro, salt, PBKDF2_ITER);
+
+    // Buscar la fila por id (data incluye la cabecera en el indice 0).
+    let filaIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][colId]).trim() === id) {
+        filaIdx = i;
+        break;
+      }
+    }
+
+    if (filaIdx !== -1) {
+      // Fila existente: actualizar SOLO las columnas de credenciales. En la
+      // migracion inicial token_version=1.
+      data[filaIdx][colHash] = hash;
+      data[filaIdx][colSalt] = salt;
+      data[filaIdx][colRol] = rol;
+      data[filaIdx][colMustChange] = true;
+      data[filaIdx][colTokenVer] = 1;
+
+      // Escribir la fila completa de una vez (un solo setValues por fila, no
+      // celda a celda). Reescribir toda la fila preserva los valores existentes
+      // (id, nombre, email, activo) ya cargados en data y no asume contiguidad
+      // de las columnas nuevas, asi que es robusto si el ALTER manual las
+      // colocara en otro orden.
+      sheet.getRange(filaIdx + 1, 1, 1, numCols).setValues([data[filaIdx]]);
+      migrados++;
+    } else {
+      // Fila inexistente (caso prof-admin): append de una fila completa con el
+      // numero de columnas correcto. Solo el CEO se crea aqui; un teacher sin
+      // fila se reporta como error (deberia existir desde el alta).
+      if (!esAdmin) {
+        errores.push('Usuario "' + usuario + '" (id ' + id + '): sin fila en PROFESORES, no migrado.');
+        return;
+      }
+      const fila = new Array(numCols).fill('');
+      fila[colId] = id;
+      if (colNombre !== -1) fila[colNombre] = 'Rafa';
+      if (colActivo !== -1) fila[colActivo] = true;
+      fila[colHash] = hash;
+      fila[colSalt] = salt;
+      fila[colRol] = rol;
+      fila[colMustChange] = true;
+      fila[colTokenVer] = 1;
+      sheet.appendRow(fila);
+      // Reflejar la fila nueva en data para el check de integridad posterior.
+      data.push(fila);
+      creados++;
+    }
+  });
+
+  // 5) Check de integridad: ninguna fila activa puede quedar sin credenciales.
+  //    NO se loguea ninguna contrasena, solo el id de la fila incompleta.
+  for (let i = 1; i < data.length; i++) {
+    const activa = (colActivo !== -1) ? isTruthy(data[i][colActivo]) : false;
+    if (!activa) continue;
+    const sinSalt = !String(data[i][colSalt] || '').trim();
+    const sinHash = !String(data[i][colHash] || '').trim();
+    if (sinSalt || sinHash) {
+      errores.push('Integridad: fila activa "' + String(data[i][colId]).trim() + '" sin salt/password_hash.');
+    }
+  }
+
+  // 6) Log y resumen: SOLO conteos, jamas contrasenas en claro.
+  const resumen = { migrados: migrados, creados: creados, errores: errores };
+  writeLog(
+    'SISTEMA',
+    'MIGRAR_PASSWORDS',
+    migrados + ' profesores migrados, ' + creados + ' creados, ' + errores.length + ' errores'
+  );
+  if (errores.length > 0) {
+    Logger.log('migrarPasswordsProfesores: %s errores -> %s', errores.length, errores.join(' | '));
+  }
+  Logger.log('migrarPasswordsProfesores OK: %s migrados, %s creados', migrados, creados);
+  return resumen;
+}
 
 // ============================================================
 // API KEY — Ejecutar manualmente para configurar
