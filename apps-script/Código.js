@@ -2093,6 +2093,18 @@ function protegerEstructura() {
 
     const numCols = sheet.getMaxColumns();
 
+    // Idempotente: quitar NUESTRAS protecciones previas antes de recrear, para
+    // no apilar duplicados si se re-ejecuta. Solo tocamos las de descripcion
+    // conocida (no las que Aurora u otros hayan puesto a mano).
+    sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => {
+      const d = p.getDescription();
+      if (d && d.indexOf('Cabeceras ' + nombre) === 0) p.remove();
+    });
+    sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => {
+      const d = p.getDescription();
+      if (d && d.indexOf('Estructura ' + nombre) === 0) p.remove();
+    });
+
     // Proteger fila 1 (cabeceras) — solo el owner puede editarla
     const protCabecera = sheet.getRange(1, 1, 1, numCols).protect()
       .setDescription('Cabeceras ' + nombre + ' — no modificar');

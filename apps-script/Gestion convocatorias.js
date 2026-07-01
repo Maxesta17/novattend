@@ -1465,6 +1465,29 @@ function transferirHistorial() {
   }
 }
 
+/**
+ * B3 — Un solo paso para terminar de mover alumno(s).
+ * Tras cortar/pegar los nombres entre hojas de grupo, ejecuta en el ORDEN correcto:
+ *   1) sincronizarAlumnos  (reconstruye ALUMNOS desde las hojas de grupo),
+ *   2) transferirHistorial (corrige profesor_id/grupo en ASISTENCIA de los movidos).
+ * Asi Aurora no tiene que recordar ambos pasos ni su orden. Cada sub-paso muestra
+ * su propio resumen. NO reimplementa logica: reutiliza las funciones existentes,
+ * por lo que no hay riesgo de regresion en las operaciones pesadas.
+ */
+function moverAlumnosAplicar() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.alert(
+    'Aplicar cambios de alumnos movidos',
+    'Voy a sincronizar los alumnos con las hojas de grupo y luego corregir el ' +
+    'historial de asistencia de los que hayas movido.\n\n' +
+    'Hazlo cuando termines de cortar y pegar los nombres. Continuar?',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp !== ui.Button.OK) return;
+  sincronizarAlumnos();
+  transferirHistorial();
+}
+
 // ============================================================
 // TRIGGER AUTOMATICO — onEdit
 // ============================================================
@@ -1487,8 +1510,196 @@ function onEdit(e) {
   // Solo si editan columna A (nombres), fila 3+
   if (e.range.getColumn() !== 1 || e.range.getRow() < 3) return;
 
+  // B1 higiene de nombres: normaliza (nbsp -> espacio, colapsa espacios, trim)
+  // los nombres editados ANTES de sincronizar, para que un espacio sobrante o
+  // doble no cree un alumno/ID duplicado ("Antonio Perez " != "Antonio Perez").
+  // Nota: setValues NO re-dispara el trigger simple onEdit, por eso se sincroniza
+  // en la misma ejecucion tras limpiar.
+  const rango = sheet.getRange(e.range.getRow(), 1, e.range.getNumRows(), 1);
+  const valores = rango.getValues();
+  let huboLimpieza = false;
+  for (let i = 0; i < valores.length; i++) {
+    const v = valores[i][0];
+    if (typeof v === 'string') {
+      const limpio = v.replace(/\s+/g, ' ').trim();
+      if (limpio !== v) { valores[i][0] = limpio; huboLimpieza = true; }
+    }
+  }
+  if (huboLimpieza) rango.setValues(valores);
+
   // Sincronizar solo la hoja editada (no todas)
   sincronizarHoja(nombre);
+}
+
+// ============================================================
+// COMPROBAR DUPLICADOS (B2)
+// ============================================================
+
+/**
+ * Comprueba posibles alumnos duplicados en ALUMNOS y muestra un informe.
+ * Dentro de la MISMA convocatoria detecta:
+ *   1) Nombres identicos tras normalizar (minusculas, sin acentos, sin espacios
+ *      dobles): casi siempre el mismo alumno metido dos veces.
+ *   2) Un nombre cuyos tokens son subconjunto de otro (ej. "Antonio Perez"
+ *      dentro de "Antonio Perez Burrul"): typo que parte el historial en 2 IDs.
+ * Solo informa (no modifica nada); Aurora decide que corregir.
+ */
+function comprobarDuplicados() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName('ALUMNOS');
+    if (!hoja) { ui.alert('No existe la hoja ALUMNOS.'); return; }
+    const datos = hoja.getDataRange().getValues();
+    if (datos.length < 2) { ui.alert('No hay alumnos que comprobar.'); return; }
+
+    const cab = datos[0].map(c => String(c).trim().toLowerCase());
+    const colId = cab.indexOf('alumno_id');
+    const colNombre = cab.indexOf('nombre');
+    const colConv = cab.indexOf('convocatoria_id');
+    const colActivo = cab.indexOf('activo');
+    if (colNombre === -1 || colConv === -1) {
+      ui.alert('No encuentro las columnas nombre / convocatoria_id en ALUMNOS.');
+      return;
+    }
+
+    // Normaliza para comparar: minusculas, sin acentos, sin espacios dobles.
+    const norm = s => {
+      const base = String(s).toLowerCase().normalize('NFD');
+      let out = '';
+      for (let j = 0; j < base.length; j++) {
+        const code = base.charCodeAt(j);
+        // Salta las marcas de acento combinantes (U+0300..U+036F = 768..879).
+        if (code < 768 || code > 879) out += base.charAt(j);
+      }
+      return out.replace(/\s+/g, ' ').trim();
+    };
+
+    // Agrupar alumnos ACTIVOS por convocatoria.
+    const porConv = {};
+    for (let i = 1; i < datos.length; i++) {
+      const fila = datos[i];
+      const nombre = String(fila[colNombre] || '').trim();
+      if (!nombre) continue;
+      if (colActivo !== -1 && !isTruthy(fila[colActivo])) continue;
+      const conv = String(fila[colConv] || '').trim();
+      const id = colId !== -1 ? String(fila[colId] || '').trim() : '';
+      (porConv[conv] = porConv[conv] || []).push({ fila: i + 1, id: id, nombre: nombre, n: norm(nombre) });
+    }
+
+    const avisos = [];
+    Object.keys(porConv).forEach(conv => {
+      const lista = porConv[conv];
+      // 1) Identicos tras normalizar.
+      const porNorm = {};
+      lista.forEach(a => { (porNorm[a.n] = porNorm[a.n] || []).push(a); });
+      Object.keys(porNorm).forEach(k => {
+        if (porNorm[k].length > 1) {
+          const detalle = porNorm[k].map(a => '"' + a.nombre + '" (fila ' + a.fila + (a.id ? ', ' + a.id : '') + ')').join('  vs  ');
+          avisos.push('[' + conv + '] IDENTICO: ' + detalle);
+        }
+      });
+      // 2) Un nombre subconjunto de otro (tokens).
+      for (let x = 0; x < lista.length; x++) {
+        for (let y = x + 1; y < lista.length; y++) {
+          const a = lista[x], b = lista[y];
+          if (a.n === b.n) continue; // ya cubierto en (1)
+          const ta = a.n.split(' '), tb = b.n.split(' ');
+          const sub = ta.every(t => tb.indexOf(t) !== -1) || tb.every(t => ta.indexOf(t) !== -1);
+          if (sub) {
+            avisos.push('[' + conv + '] POSIBLE: "' + a.nombre + '" (fila ' + a.fila + ') ~ "' + b.nombre + '" (fila ' + b.fila + ')');
+          }
+        }
+      }
+    });
+
+    if (avisos.length === 0) {
+      ui.alert('Sin duplicados detectados. Todo limpio.');
+      return;
+    }
+    const MAX = 40;
+    let msg = avisos.length + ' posible(s) duplicado(s):\n\n' + avisos.slice(0, MAX).join('\n');
+    if (avisos.length > MAX) msg += '\n\n... y ' + (avisos.length - MAX) + ' mas. Revisa la hoja ALUMNOS.';
+    ui.alert(msg);
+  } catch (err) {
+    ui.alert('Error: ' + err.message);
+  }
+}
+
+// ============================================================
+// DIAGNOSTICO (B4)
+// ============================================================
+
+/**
+ * Chequeo de salud que Aurora puede lanzar cuando quiera. Informa de:
+ *   - si las 5 hojas de sistema tienen la proteccion de estructura,
+ *   - cuantos alumnos activos hay por convocatoria,
+ *   - cuantas convocatorias estan activas.
+ * Solo lee (no modifica nada).
+ */
+function diagnostico() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const lineas = [];
+
+    // 1) Proteccion de estructura de las hojas de sistema.
+    const sistema = ['CONVOCATORIAS', 'PROFESORES', 'ALUMNOS', 'ASISTENCIA', 'LOG'];
+    const sinProteger = [];
+    sistema.forEach(nombre => {
+      const sheet = ss.getSheetByName(nombre);
+      if (!sheet) { sinProteger.push(nombre + ' (no existe)'); return; }
+      const protegida = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)
+        .some(p => { const d = p.getDescription(); return d && d.indexOf('Estructura ' + nombre) === 0; });
+      if (!protegida) sinProteger.push(nombre);
+    });
+    lineas.push(sinProteger.length === 0
+      ? 'Proteccion de estructura: OK (5/5 hojas de sistema)'
+      : 'Proteccion de estructura: FALTA en -> ' + sinProteger.join(', ') + '\n  (ejecuta el menu "Proteger estructura de hojas")');
+
+    // 2) Alumnos activos por convocatoria.
+    const hoja = ss.getSheetByName('ALUMNOS');
+    if (hoja) {
+      const datos = hoja.getDataRange().getValues();
+      const cab = datos[0].map(c => String(c).trim().toLowerCase());
+      const colConv = cab.indexOf('convocatoria_id');
+      const colActivo = cab.indexOf('activo');
+      const colNombre = cab.indexOf('nombre');
+      const cuenta = {};
+      let totalActivos = 0;
+      for (let i = 1; i < datos.length; i++) {
+        if (colNombre !== -1 && !String(datos[i][colNombre] || '').trim()) continue;
+        if (colActivo !== -1 && !isTruthy(datos[i][colActivo])) continue;
+        const conv = (colConv !== -1 ? String(datos[i][colConv] || '').trim() : '') || '(sin convocatoria)';
+        cuenta[conv] = (cuenta[conv] || 0) + 1;
+        totalActivos++;
+      }
+      lineas.push('');
+      lineas.push('Alumnos activos: ' + totalActivos);
+      Object.keys(cuenta).sort().forEach(k => lineas.push('  ' + k + ': ' + cuenta[k]));
+    }
+
+    // 3) Convocatorias activas.
+    const convSheet = ss.getSheetByName('CONVOCATORIAS');
+    if (convSheet) {
+      const cd = convSheet.getDataRange().getValues();
+      const cab = cd[0].map(c => String(c).trim().toLowerCase());
+      const colActiva = cab.indexOf('activa');
+      let activas = 0;
+      for (let i = 1; i < cd.length; i++) {
+        if (!cd[i][0]) continue;
+        if (colActiva !== -1 && isTruthy(cd[i][colActiva])) activas++;
+      }
+      lineas.push('');
+      lineas.push('Convocatorias activas: ' + activas);
+    }
+
+    lineas.push('');
+    lineas.push('Para ver posibles nombres duplicados: menu "Comprobar duplicados de alumnos".');
+    ui.alert('Diagnostico NovAttend', lineas.join('\n'), ui.ButtonSet.OK);
+  } catch (err) {
+    ui.alert('Error: ' + err.message);
+  }
 }
 
 // ============================================================
@@ -1512,8 +1723,13 @@ function onOpen() {
     .addItem('Agregar profesor a convocatoria', 'agregarProfesorAConvocatoria')
     .addItem('Quitar profesor de convocatoria', 'quitarProfesorDeConvocatoria')
     .addSeparator()
+    .addItem('Aplicar cambios de alumnos movidos', 'moverAlumnosAplicar')
     .addItem('Transferir historial de alumnos movidos', 'transferirHistorial')
     .addItem('Sincronizar alumnos (manual)', 'sincronizarAlumnos')
+    .addItem('Comprobar duplicados de alumnos', 'comprobarDuplicados')
     .addItem('Actualizar estadisticas', 'actualizarEstadisticas')
+    .addSeparator()
+    .addItem('Diagnostico', 'diagnostico')
+    .addItem('Proteger estructura de hojas', 'protegerEstructura')
     .addToUi();
 }

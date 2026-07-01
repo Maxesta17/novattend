@@ -1,8 +1,17 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-06-30 (noche)
-- **Hito:** HOTFIX login — profesores no podian entrar ("Error al conectar con el servidor"). Causa: PBKDF2 a 10000 iters tardaba ~31s y el front abortaba a 10s. Resuelto: 1000 iters + re-migracion + timeout 20s. Backend @21, hojas re-hasheadas, frontend a Vercel.
+- **Fecha:** 2026-07-01
+- **Hito:** "Panel-lite" de Aurora (Opcion B) — alivio del lado Sheet sin panel React ni API nueva. Higiene de nombres automatica, comprobar duplicados, mover alumno en 1 paso, diagnostico + protecciones idempotentes. Todo Apps Script, desplegado a HEAD (clasp push).
+
+### 2026-07-01 — "Panel-lite" de Aurora (Opcion B): endurecer el lado Sheet
+- **Contexto:** se estimo el panel admin React completo (Opcion A) via auditoria multi-agente (backend/frontend/requisitos/seguridad). Conclusion: es un milestone (rol nuevo en auth + exponer handlers de menu por API + riesgo de desincronizacion ALUMNOS vs hojas de grupo). **Decision del usuario:** Aurora sera rol 'admin' PERO **usando las credenciales del CEO** (asume el trade-off de que ve todo lo del CEO); eso solo aplica al futuro panel A. Y **empezar por Opcion B**: aliviar el trabajo en la hoja cruda (80% del alivio por 20% del esfuerzo), sin frontend ni API nueva ni tocar auth.
+- **B1 — Higiene de nombres automatica (`onEdit`, Gestion convocatorias.js):** al escribir un nombre en una hoja de grupo (col A, fila 3+), normaliza (`\s+`->espacio + trim; `\s` en JS ya cubre el nbsp) ANTES de sincronizar. Mata el bug "Antonio Perez " != "Antonio Perez" que creaba 2 IDs. `setValues` no re-dispara el trigger simple, por eso se sincroniza en la misma ejecucion.
+- **B2 — Comprobar duplicados (menu + `comprobarDuplicados`):** escanea ALUMNOS y, por convocatoria, detecta (1) nombres identicos tras normalizar (minusculas, sin acentos via filtro charCode U+0300..U+036F, sin espacios dobles) y (2) un nombre cuyos tokens son subconjunto de otro ("Antonio Perez" ⊂ "Antonio Perez Burrul"). Solo informa (ui.alert), no modifica. Logica validada en Node (Jose≡José, doble espacio, subset, no cruza convocatorias).
+- **B3 — Mover alumno en 1 paso (menu + `moverAlumnosAplicar`):** un solo item que, tras cortar/pegar nombres, ejecuta en orden `sincronizarAlumnos()` + `transferirHistorial()`. Orquestador delgado que REUTILIZA las funciones existentes (cero riesgo de regresion en las operaciones pesadas que reescriben ALUMNOS/ASISTENCIA). Aurora ya no tiene que recordar los 2 pasos ni su orden.
+- **B4 — Diagnostico + protecciones (`diagnostico`, `protegerEstructura`):** `diagnostico()` (menu) informa: proteccion de estructura OK/falta en las 5 hojas de sistema, alumnos activos por convocatoria, convocatorias activas. `protegerEstructura` hecha **idempotente** (quita nuestras protecciones previas por descripcion antes de recrear) y **agregada al menu** para poder ejecutarla/re-ejecutarla sin riesgo.
+- **Estado:** los 4 (+ protegerEstructura idempotente en Código.js) desplegados a HEAD (`clasp push`, trigger simple onEdit vive al instante; el web app doGet/doPost NO cambia -> no requiere redeploy). node --check OK en ambos archivos.
+- **Pendiente del usuario:** (1) **recargar la hoja** para que aparezcan los items nuevos del menu (onOpen); (2) ejecutar UNA vez **menu NovAttend > Proteger estructura de hojas** (pide el email de Aurora) si aun no estaba aplicada — comprobar con **Diagnostico**; (3) probar: escribir un nombre con espacios sobrantes (se limpia solo), Comprobar duplicados, y Aplicar cambios tras mover un alumno.
 
 ### 2026-06-30 (noche) — HOTFIX: profesores no podian loguearse (login PBKDF2 timeout)
 - **Sintoma:** todos los profesores veian "Error al conectar con el servidor" al intentar entrar con su contrasena temporal. La app llevaba sin permitir logins desde el deploy de auth real.
