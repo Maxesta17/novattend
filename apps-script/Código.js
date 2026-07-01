@@ -2556,3 +2556,17 @@ function checkApiKey() {
   Logger.log('API_KEY presente: ' + Boolean(key))
   Logger.log('API_KEY longitud: ' + (key ? key.length : 0))
 }
+
+/**
+ * Limpieza puntual: BORRA la Script Property 'API_KEY' (secreto huerfano tras
+ * retirar el api_key legacy). Sin efecto en ningun gate: 'API_KEY' ya no se lee
+ * en el camino de auth (validateApiKey es codigo muerto). Ejecutar UNA vez desde
+ * el editor (Ejecutar) y revisar el registro: debe decir "borrada OK".
+ */
+function borrarApiKeyProperty() {
+  const props = PropertiesService.getScriptProperties()
+  const antes = props.getProperty('API_KEY')
+  props.deleteProperty('API_KEY')
+  Logger.log('API_KEY antes: ' + (antes ? 'presente (' + antes.length + ' chars)' : 'ausente'))
+  Logger.log('API_KEY despues: ' + (props.getProperty('API_KEY') ? 'AUN PRESENTE (revisar)' : 'borrada OK'))
+}
