@@ -20,7 +20,5 @@ export {
   getResumen,
   getAsistenciaAlumno,
   guardarAsistencia,
-  crearAlumno,
-  actualizarAlumno,
   justificarFalta
 } from './endpoints'

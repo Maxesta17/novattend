@@ -101,29 +101,6 @@ export async function guardarAsistencia(data) {
 }
 
 /**
- * Crear un alumno nuevo
- * @param {Object} data
- * @param {string} data.nombre
- * @param {string} data.convocatoria_id
- * @param {string} data.profesor_id
- * @param {string} data.grupo
- * @param {string} [data.email]
- * @param {string} [data.telefono]
- */
-export async function crearAlumno(data) {
-  return apiPost('crearAlumno', data)
-}
-
-/**
- * Actualizar datos de un alumno (mover grupo, cambiar profesor, baja)
- * @param {string} alumnoId
- * @param {Object} campos - campos a actualizar
- */
-export async function actualizarAlumno(alumnoId, campos) {
-  return apiPost('actualizarAlumno', { alumno_id: alumnoId, campos })
-}
-
-/**
  * Justificar (o quitar la justificacion de) una falta pasada concreta.
  * Una falta justificada se excluye del calculo de asistencia en el backend.
  * @param {Object} payload

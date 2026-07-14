@@ -80,6 +80,7 @@
 - Guardias de ruta implementadas en `ProtectedRoute.jsx` — valida sesion y rol.
 - `MobileContainer.jsx` esta en `src/components/` (raiz), no en `ui/` ni `features/`.
 - Quedan 5 `style={{}}` dinamicos admitidos (animationDelay, width de ProgressBar, maxWidth de Modal). Son inevitables.
+- En modo mock (sin `VITE_API_URL`), el login acepta cualquier credencial: `admin` entra como ceo y cualquier otro usuario como teacher. Es intencional para desarrollo — no es un bug de QA.
 
 ## Logica de Negocio (Convocatorias)
 - **Activa por fecha:** `fecha_inicio <= hoy <= fecha_fin` (automatico, sin checkbox manual).

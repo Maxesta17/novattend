@@ -14,8 +14,6 @@ import {
   getResumen,
   getAsistenciaAlumno,
   guardarAsistencia,
-  crearAlumno,
-  actualizarAlumno,
   justificarFalta,
 } from '../services/api'
 import { isApiEnabled } from '../config/api'
@@ -139,10 +137,10 @@ describe('api.js', () => {
   it('apiPost lanza error si status es error', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ status: 'error', error: 'Duplicado' }),
+      json: () => Promise.resolve({ status: 'error', error: 'Error al guardar' }),
     })
 
-    await expect(crearAlumno({ nombre: 'Test' })).rejects.toThrow('Duplicado')
+    await expect(guardarAsistencia({ fecha: '2026-03-05' })).rejects.toThrow('Error al guardar')
   })
 
   it('apiPost lanza error descriptivo cuando res.ok es false (HTTP 403)', async () => {
@@ -180,20 +178,6 @@ describe('api.js', () => {
     const calledUrl = new URL(global.fetch.mock.calls[0][0])
     expect(calledUrl.searchParams.get('action')).toBe('getAsistencia')
     expect(calledUrl.searchParams.get('alumno_id')).toBe('alum-5')
-  })
-
-  it('actualizarAlumno envia alumno_id y campos en body', async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
-    })
-
-    await actualizarAlumno('alum-3', { grupo: 'G2' })
-
-    const sentBody = JSON.parse(global.fetch.mock.calls[0][1].body)
-    expect(sentBody.action).toBe('actualizarAlumno')
-    expect(sentBody.alumno_id).toBe('alum-3')
-    expect(sentBody.campos).toEqual({ grupo: 'G2' })
   })
 
   // --- justificarFalta ---
@@ -303,11 +287,11 @@ describe('api.js', () => {
       json: () => Promise.resolve({ status: 'ok', data: { ok: true } }),
     })
 
-    await crearAlumno({ nombre: 'Test', convocatoria_id: 'c1', profesor_id: 'p1', grupo: 'G1' })
+    await guardarAsistencia({ fecha: '2026-04-05', convocatoria_id: 'c1', profesor_id: 'p1', grupo: 'G1', alumnos: [] })
 
     const sentBody = JSON.parse(global.fetch.mock.calls[0][1].body)
     expect(sentBody).not.toHaveProperty('api_key')
-    expect(sentBody).toHaveProperty('action', 'crearAlumno')
-    expect(sentBody).toHaveProperty('nombre', 'Test')
+    expect(sentBody).toHaveProperty('action', 'guardarAsistencia')
+    expect(sentBody).toHaveProperty('fecha', '2026-04-05')
   })
 })
