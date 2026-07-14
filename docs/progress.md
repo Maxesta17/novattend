@@ -15,7 +15,8 @@
 - **Suite E2E existente:** 10/10 PASS (no regresion).
 - **Hallazgos documentados en deuda-tecnica.md (nuevas entradas):** UpdateBanner codigo muerto (registerType autoUpdate nunca invoca onNeedRefresh; opcion: quitar o cambiar a 'prompt'); logova1.png duplicado en precache (cosmetico, sin efecto).
 - **Estado verificado:** lint 0, 293 tests unitarios (47 suites), build OK precache 17 entradas.
-- **Siguiente paso sugerido:** merge a main + deploy Vercel (automatico) + prueba manual en movil del flujo offline (app instalada, desactivar red, datos siguen).
+- **Verificado contra PRODUCCION (post-merge, Playwright movil 400x850):** 16/16 PASS del E2E sw-cache contra novattend.vercel.app con fantasma real (creado y borrado): offline pinta alumnos desde cache sin error + banner visible + cero tokens en claves. Sustituye a la prueba manual en movil. Hallazgo del run: `waitForCacheEntry` por action a secas lo satisfacia el prefetch de G2-G4 mientras G1 (paga el cold start ~15-20s de Apps Script) seguia en vuelo al cortar la red — corregido esperando las claves exactas de G1 (getAlumnos+getAsistencia) con retries a 20s, y check explicito nuevo (16 checks).
+- **Siguiente paso sugerido:** decision de producto sobre UpdateBanner (quitarlo vs registerType 'prompt', ver docs/deuda-tecnica.md).
 
 ### 2026-07-14 (tarde) — Tanda paralela con ruteo de modelos (rama fix/warmcache-y-flecos)
 - **Ruteo:** Fable orquesta; agentes con modelo por complejidad — sonnet (warmCache, marcas-401, tests+e2e) y haiku (limpieza, check deploy). Registro en swarm claude-flow con model explicito.

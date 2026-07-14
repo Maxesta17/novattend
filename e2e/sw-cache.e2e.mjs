@@ -111,22 +111,34 @@ async function readToken(page) {
   })
 }
 
-/** Busca en 'api-cache' entradas cuya URL contenga `action=<action>`. */
-async function findCacheEntries(page, action) {
-  return page.evaluate(async ({ action, cacheName }) => {
+/**
+ * Busca en 'api-cache' entradas cuya URL contenga TODOS los fragmentos dados.
+ * Acepta un string ('getConvocatorias') o un array de fragmentos
+ * (['action=getAlumnos', 'grupo=G1']) — importante para no confundir la carga
+ * principal de G1 con las entradas del prefetch de G2-G4.
+ */
+async function findCacheEntries(page, fragments) {
+  const parts = Array.isArray(fragments) ? fragments : [`action=${fragments}`]
+  return page.evaluate(async ({ parts, cacheName }) => {
     if (!('caches' in window)) return { urls: [] }
     const cache = await caches.open(cacheName)
     const requests = await cache.keys()
-    const urls = requests.map((r) => r.url).filter((u) => u.includes(`action=${action}`))
+    const urls = requests.map((r) => r.url).filter((u) => parts.every((p) => u.includes(p)))
     return { urls }
-  }, { action, cacheName: API_CACHE_NAME })
+  }, { parts, cacheName: API_CACHE_NAME })
 }
 
-/** Reintenta findCacheEntries hasta que aparezca al menos una entrada (la escritura en cache es asincrona). */
-async function waitForCacheEntry(page, action, { retries = 10, delayMs = 500 } = {}) {
+/**
+ * Reintenta findCacheEntries hasta que aparezca al menos una entrada (la
+ * escritura en cache es asincrona). Los retries por defecto aguantan el cold
+ * start de Apps Script (~15-20s la primera peticion del dia): cortar la red
+ * con una llamada aun en vuelo hace que esa respuesta nunca llegue a la cache
+ * y el offline posterior falle por una carrera del TEST, no del SW.
+ */
+async function waitForCacheEntry(page, fragments, { retries = 40, delayMs = 500 } = {}) {
   let last = { urls: [] }
   for (let i = 0; i < retries; i++) {
-    last = await findCacheEntries(page, action)
+    last = await findCacheEntries(page, fragments)
     if (last.urls.length > 0) return last
     await page.waitForTimeout(delayMs)
   }
@@ -208,14 +220,20 @@ async function main() {
       `urls=${JSON.stringify(cacheAfterB.urls.map(redact))}`
     )
 
-    // AttendancePage dispara getAlumnos y LUEGO (secuencial, no en paralelo)
-    // getAsistencia para G1 al montar. Si se corta la red antes de que esas
-    // dos llamadas terminen de escribir en cache, el reload offline de mas
-    // abajo fallaria por una carrera del TEST (llamada a mitad de vuelo), no
-    // por un fallo real de la cache del SW. Se espera a que ambas queden
-    // cacheadas mientras todavia hay red.
-    await waitForCacheEntry(page, 'getAlumnos', { retries: 20, delayMs: 500 })
-    await waitForCacheEntry(page, 'getAsistencia', { retries: 20, delayMs: 500 })
+    // AttendancePage dispara getAlumnos de G1 y getAsistencia de G1 al montar,
+    // y en paralelo el prefetch de G2-G4. Si se corta la red antes de que las
+    // DOS llamadas de G1 terminen de escribir en cache, el reload offline de
+    // mas abajo fallaria por una carrera del TEST (llamada a mitad de vuelo),
+    // no por un fallo real de la cache del SW. OJO: hay que esperar la clave
+    // EXACTA de G1 — un filtro por action a secas lo satisface el prefetch de
+    // G2-G4 antes de que G1 (que paga el cold start del backend) complete.
+    const alumnosG1 = await waitForCacheEntry(page, ['action=getAlumnos', 'grupo=G1'])
+    const asistenciaG1 = await waitForCacheEntry(page, ['action=getAsistencia', 'grupo=G1'])
+    check(
+      'api-cache tiene getAlumnos y getAsistencia de G1 antes del corte de red',
+      alumnosG1.urls.length > 0 && asistenciaG1.urls.length > 0,
+      `alumnosG1=${alumnosG1.urls.length} asistenciaG1=${asistenciaG1.urls.length}`
+    )
 
     // ---- f. OFFLINE ----
     await context.setOffline(true)
