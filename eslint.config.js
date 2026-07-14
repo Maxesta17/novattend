@@ -40,4 +40,13 @@ export default defineConfig([
       }],
     },
   },
+  {
+    // Service worker propio (injectManifest): corre en ServiceWorkerGlobalScope,
+    // no en el navegador, asi que necesita sus propios globals (self, caches,
+    // clients...) en vez de los de `globals.browser` de arriba.
+    files: ['src/sw.js'],
+    languageOptions: {
+      globals: globals.serviceworker,
+    },
+  },
 ])

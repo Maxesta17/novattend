@@ -16,6 +16,9 @@ export default defineConfig({
         'src/tests/**',
         'src/main.jsx',
         'src/App.jsx',
+        // Service worker propio: corre en ServiceWorkerGlobalScope, no en
+        // jsdom. No es testeable con Vitest y no debe hundir los thresholds.
+        'src/sw.js',
       ],
       thresholds: {
         lines: 60,
@@ -29,6 +32,15 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // injectManifest en vez de generateSW: necesitamos logica de cache
+      // propia (cacheKeyWillBeUsed) para que la API deje de clavear por el
+      // token de sesion. El service worker vive en src/sw.js; ya no hay un
+      // bloque `workbox` aqui porque toda esa logica esta escrita a mano ahi.
+      // Detalle del problema original en docs/deuda-tecnica.md ("Cache de
+      // API claveada por token").
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       manifest: {
         name: 'NovAttend',
         short_name: 'NovAttend',
@@ -43,44 +55,8 @@ export default defineConfig({
           { src: '/logova1.png', sizes: '512x512', type: 'image/png' }
         ]
       },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-css',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-woff2',
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/script\.(google|googleusercontent)\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              // Mitigacion temporal: la cache se clavea por URL con el token incluido,
-              // asi que los tokens de sesion quedan persistidos en Cache Storage y tras
-              // un re-login ninguna entrada matchea (offline roto). TTL reducido de 24h
-              // a 3h para acotar ambos problemas. Fix definitivo documentado en
-              // docs/deuda-tecnica.md ("Cache de API claveada por token").
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 3 },
-              networkTimeoutSeconds: 10
-            }
-          }
-        ]
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}']
       }
     })
   ],
