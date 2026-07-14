@@ -30,3 +30,23 @@ export function weekStatusLabel(faltas, clases) {
   if (faltas >= 2) return `Atencion — ${faltas} faltas esta semana`
   return 'Asistencia regular esta semana'
 }
+
+// --- Cache de faltas por alumno (a nivel de modulo) ---
+// Evita repetir el peaje de ~1,6s de Apps Script al reabrir el popup del
+// mismo alumno. Se invalida tras justificar/quitar una justificacion.
+const absencesCache = new Map()
+
+/** Clave de cache para las faltas de un alumno en una convocatoria. */
+export const absencesCacheKey = (convocatoriaId, alumnoId) => `${convocatoriaId}:${alumnoId}`
+
+/** Devuelve las faltas cacheadas para la clave, o null si no hay entrada. */
+export const getCachedAbsences = (key) => absencesCache.get(key) ?? null
+
+/** Guarda las faltas de un alumno en el cache. */
+export const setCachedAbsences = (key, items) => { absencesCache.set(key, items) }
+
+/** Invalida la entrada de cache de un alumno (tras justificar/desjustificar). */
+export const invalidateCachedAbsences = (key) => { absencesCache.delete(key) }
+
+/** Vacia el cache completo (util para tests). */
+export const clearAbsencesCache = () => { absencesCache.clear() }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import StudentDetailPopup from '../components/features/StudentDetailPopup'
+import { clearAbsencesCache } from '../components/features/studentDetailHelpers'
 import { isApiEnabled } from '../config/api'
 import { getAsistenciaAlumno, justificarFalta } from '../services/api'
 
@@ -38,6 +39,8 @@ const baseStudent = {
 describe('StudentDetailPopup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // El cache de faltas es a nivel de modulo: se limpia para aislar tests.
+    clearAbsencesCache()
     isApiEnabled.mockReturnValue(false)
   })
 

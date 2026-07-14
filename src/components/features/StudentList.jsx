@@ -22,6 +22,7 @@ function getInitials(name) {
  * @param {function} props.onToggle - Handler (idx) al alternar asistencia
  * @param {object|null} props.convocatoria - Convocatoria activa (aporta el id)
  * @param {string|null} props.profesorId - ID del profesor en sesion
+ * @param {function} [props.onDetailDirtyClose] - Se invoca al cerrar el detalle si hubo cambios (justificaciones)
  */
 export default function StudentList({
   students,
@@ -29,6 +30,7 @@ export default function StudentList({
   onToggle,
   convocatoria,
   profesorId,
+  onDetailDirtyClose,
 }) {
   const [detailStudent, setDetailStudent] = useState(null)
 
@@ -59,6 +61,7 @@ export default function StudentList({
         convocatoriaId={convocatoria?.id}
         allowJustify
         onClose={() => setDetailStudent(null)}
+        onDirtyClose={onDetailDirtyClose}
       />
     </>
   )

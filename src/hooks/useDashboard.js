@@ -24,6 +24,7 @@ import { aggregateAttendance } from '../utils/attendance.js'
  *   convocatorias: Array,
  *   convocatoria: Object|null,
  *   reload: () => Promise<void>,
+ *   refreshResumen: () => void,
  *   teachers: Array|null,
  *   loading: boolean,
  *   error: string|null,
@@ -59,6 +60,9 @@ export default function useDashboard() {
   const [expandedTeacher, setExpandedTeacher] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
+  // Version del resumen: incrementarla fuerza al effect de carga a repedir
+  // getResumen (p.ej. tras justificar faltas desde el popup de detalle).
+  const [resumenVersion, setResumenVersion] = useState(0)
   const debouncedSearch = useDebounce(searchQuery, 300)
 
   // Cache de profesores (no varian entre convocatorias) + promesa en vuelo
@@ -103,6 +107,10 @@ export default function useDashboard() {
   // Unica via de carga: cuando hay convocatoria seleccionada (inicial o por
   // cambio de selector), cargar profesores (cache) + resumen en paralelo.
   useEffect(() => {
+    // resumenVersion no se usa en el cuerpo: figura en las deps para forzar
+    // una recarga del resumen (refreshResumen) reutilizando esta unica via
+    // de carga y su token anti-race.
+    void resumenVersion
     if (convsLoading || convsError) return
     if (!isApiEnabled() || !convocatoria) return
 
@@ -129,7 +137,7 @@ export default function useDashboard() {
           error: err.message || 'Error al cargar datos',
         }))
       })
-  }, [convsLoading, convsError, convocatoria, fetchProfesores])
+  }, [convsLoading, convsError, convocatoria, fetchProfesores, resumenVersion])
 
   // Cambio de convocatoria desde el selector: solo actualiza la seleccion y
   // resetea la UI; la carga la dispara el effect (evita el doble fetch).
@@ -138,6 +146,12 @@ export default function useDashboard() {
     setSearchQuery('')
     setSelectedConvocatoria(conv)
   }, [setSelectedConvocatoria])
+
+  // Recarga en segundo plano el resumen de la convocatoria activa (p.ej. al
+  // cerrar el popup tras justificar faltas). Como loaded.conv sigue siendo la
+  // convocatoria seleccionada, no hay flash de skeleton: los datos se
+  // sustituyen cuando llega la respuesta.
+  const refreshResumen = useCallback(() => setResumenVersion(v => v + 1), [])
 
   // Estados derivados: la carga esta "al dia" si el resultado pertenece a la
   // convocatoria seleccionada (comparacion por identidad: reload crea objetos nuevos).
@@ -198,6 +212,7 @@ export default function useDashboard() {
     convocatorias,
     convocatoria,
     reload,
+    refreshResumen,
     teachers,
     loading,
     error,

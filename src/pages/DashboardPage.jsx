@@ -19,7 +19,7 @@ import DashboardSkeleton from '../components/features/DashboardSkeleton.jsx'
 export default function DashboardPage() {
   const navigate = useNavigate()
   const {
-    convocatorias, convocatoria, reload,
+    convocatorias, convocatoria, reload, refreshResumen,
     teachers, loading, error,
     expandedTeacher, searchQuery, setSearchQuery,
     selectedStudent, setSelectedStudent,
@@ -120,12 +120,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Popup detalle alumno (CEO solo lectura: no puede justificar faltas) */}
+      {/* Popup detalle alumno (CEO solo lectura: no puede justificar faltas).
+          Si aun asi hubiera cambios al cerrar, se recarga el resumen para
+          que los % del dashboard no queden desactualizados. */}
       <StudentDetailPopup
         student={selectedStudent}
         convocatoriaId={convocatoria?.id}
         allowJustify={false}
         onClose={handleStudentClose}
+        onDirtyClose={refreshResumen}
       />
     </>
   )

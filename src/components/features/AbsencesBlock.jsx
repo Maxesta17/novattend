@@ -11,18 +11,40 @@ const normalize = (absence) =>
  * Bloque de "Dias faltados" del detalle de alumno.
  * Distingue visualmente faltas justificadas (gold/warning) de no justificadas (rojo)
  * y, si se provee `onJustifyClick`, muestra un boton para justificar cada falta.
+ * Si la carga fallo (`error`), lo muestra con opcion de reintentar: un fallo
+ * de red no debe confundirse con "el alumno no tiene faltas".
  *
  * @param {object} props
  * @param {boolean} props.loading - Si se estan cargando las faltas desde la API
+ * @param {string|null} [props.error] - Mensaje si la carga de faltas fallo (null = sin error)
  * @param {Array<string|{fecha: string, justificada?: boolean, motivo?: string}>} props.absences - Faltas
  * @param {function} [props.onJustifyClick] - Handler con la falta normalizada al pulsar "Justificar"
+ * @param {function} [props.onRetry] - Handler del boton "Reintentar" cuando hay error
  */
-export default function AbsencesBlock({ loading, absences, onJustifyClick }) {
+export default function AbsencesBlock({ loading, error = null, absences, onJustifyClick, onRetry }) {
   if (loading) {
     return (
       <p className="mt-2 font-montserrat text-xs text-text-muted text-center">
         Cargando faltas...
       </p>
+    )
+  }
+  if (error) {
+    return (
+      <div className="mt-2 mb-2 flex flex-col items-center gap-1.5" role="alert">
+        <p className="font-montserrat text-xs font-medium text-error text-center text-pretty m-0">
+          {error}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="font-montserrat text-xs font-semibold text-burgundy underline"
+          >
+            Reintentar
+          </button>
+        )}
+      </div>
     )
   }
   if (!absences.length) return null
