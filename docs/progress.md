@@ -1,8 +1,21 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-07-14 (tarde)
-- **Hito:** Segunda tanda swarm con ruteo de modelos por complejidad (sonnet/haiku, Fable solo orquesta): marcas sobreviven al 401, suite useConvocatorias, E2E integrado en e2e/, endpoints muertos fuera. warmCache verificado como YA RESUELTO en prod (@17+). Deploy Vercel verificado actualizado. Pendiente: deuda cache-token (docs/deuda-tecnica.md) y prueba manual en movil.
+- **Fecha:** 2026-07-14 (noche)
+- **Hito:** Deuda cache-token RESUELTA (generateSW→injectManifest, rama fix/cache-token-sw): token quitado de claves de cache, anti-envenenamiento de errores de negocio, purga legacy, banner offline visible, TTL 7 dias, crossorigin fonts fix, E2E 15/15 PASS, suite vieja 10/10, 293 tests / 47 suites. Hallazgos: UpdateBanner codigo muerto (deuda nueva), logova1.png duplicado (cosmetico). Siguiente: merge a main + deploy Vercel + prueba manual movil offline.
+
+### 2026-07-14 (noche) — Deuda cache-token RESUELTA (rama fix/cache-token-sw)
+- **Orquestacion:** swarm claude-flow con ruteo de modelos por complejidad (Fable orquesta, sonnet para SW/banner/adversarial/E2E, haiku docs). Hook hooks_route marcado high; decision final del orquestador.
+- **4 commits consecutivos:**
+  - `ccbce05` feat: SW injectManifest + cacheKeyWillBeUsed quita token de clave de api-cache (parametros negocio intactos) + cacheWillUpdate guard anti-envenenamiento {status:'error'} no se cachea + cachedResponseWillBeUsed marca origen con X-Novattend-From-Cache + purga one-shot en activate de legacy keys con token anterior + TTL api-cache 7 dias (sigue NetworkFirst).
+  - `7c7a95d` feat: banner offline OfflineDataBanner (src/components/features/ + src/hooks/useOfflineData + src/services/cacheStatus) + deteccion header X-Novattend-From-Cache en apiGet + 18 tests nuevos.
+  - `74a1171` fix: crossorigin en link CSS de Google Fonts — respuestas opacas nunca se cacheaban (offline sin fuentes). Hallazgo adversarial.
+  - `4ff32e6` test: E2E sw-cache.e2e.mjs 15/15 contra build preview con usuario fantasma real creado y luego borrado de PROFESORES (cero escrituras a produccion).
+- **Verificacion adversarial 8/8 contra build real:** intercepcion de fetches del SW (Playwright 1.61 los intercepta nativo sin flag); escenarios: primera visita (cold cache OK), clave sin token sobrevive a token rotado, header presente en respuestas offline, anti-envenenamiento (error negocio HTTP 200 no queda en cache), purga legacy sin fallos, offline total OK (datos + fuentes), cero fuga de token en claves/cuerpos/headers, update del SW no rompe nada.
+- **Suite E2E existente:** 10/10 PASS (no regresion).
+- **Hallazgos documentados en deuda-tecnica.md (nuevas entradas):** UpdateBanner codigo muerto (registerType autoUpdate nunca invoca onNeedRefresh; opcion: quitar o cambiar a 'prompt'); logova1.png duplicado en precache (cosmetico, sin efecto).
+- **Estado verificado:** lint 0, 293 tests unitarios (47 suites), build OK precache 17 entradas.
+- **Siguiente paso sugerido:** merge a main + deploy Vercel (automatico) + prueba manual en movil del flujo offline (app instalada, desactivar red, datos siguen).
 
 ### 2026-07-14 (tarde) — Tanda paralela con ruteo de modelos (rama fix/warmcache-y-flecos)
 - **Ruteo:** Fable orquesta; agentes con modelo por complejidad — sonnet (warmCache, marcas-401, tests+e2e) y haiku (limpieza, check deploy). Registro en swarm claude-flow con model explicito.
