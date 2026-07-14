@@ -1,16 +1,24 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import useConvocatorias from './useConvocatorias.js'
 import useDebounce from './useDebounce.js'
 import { TEACHERS_DATA } from '../config/teachers.js'
 import { isApiEnabled } from '../config/api'
 import { getProfesores, getResumen, AuthError } from '../services/api'
 import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
+import { aggregateAttendance } from '../utils/attendance.js'
 
 /**
  * Hook custom que encapsula toda la logica de datos, estado y handlers del Dashboard CEO.
  *
  * Consume useConvocatorias internamente (no duplica su logica), gestiona la carga
  * de profesores/resumen via API, y provee todos los valores que DashboardPage necesita.
+ *
+ * Rendimiento (peaje Apps Script ~1,6s/llamada):
+ * - getProfesores se dispara al montar, en paralelo con getConvocatorias (sin waterfall).
+ * - Profesores se cachean en un ref: cambiar de convocatoria solo pide getResumen.
+ * - Una unica via de carga (el effect) + token anti-race: gana la ultima seleccion.
+ * - loading/error/teachers son derivados: el resultado se asocia a la convocatoria
+ *   cargada, asi que un cambio de seleccion invalida el estado sin setState sincrono.
  *
  * @returns {{
  *   convocatorias: Array,
@@ -27,7 +35,7 @@ import buildTeachersHierarchy from '../utils/buildTeachersHierarchy.js'
  *   handleStudentClose: () => void,
  *   handleClear: () => void,
  *   handleTeacherToggle: (id: string) => void,
- *   handleConvChange: (conv: Object) => Promise<void>,
+ *   handleConvChange: (conv: Object) => void,
  *   totalStudents: number,
  *   globalAttendance: number,
  *   alertStudents: Array,
@@ -45,105 +53,106 @@ export default function useDashboard() {
     reload,
   } = useConvocatorias()
 
-  const [teachers, setTeachers] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  // Resultado de la ultima carga completada: a que convocatoria pertenece,
+  // sus datos y su error. Solo se escribe en callbacks async (then/catch).
+  const [loaded, setLoaded] = useState({ conv: null, teachers: null, error: null })
   const [expandedTeacher, setExpandedTeacher] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const debouncedSearch = useDebounce(searchQuery, 300)
+
+  // Cache de profesores (no varian entre convocatorias) + promesa en vuelo
+  const profesoresCacheRef = useRef(null)
+  const profesoresPromiseRef = useRef(null)
+  // Token de carga: solo la carga mas reciente puede escribir el estado
+  const loadTokenRef = useRef(0)
 
   // Handlers estabilizados con useCallback para componentes memorizados
   const handleStudentClose = useCallback(() => setSelectedStudent(null), [])
   const handleClear = useCallback(() => setSearchQuery(''), [])
   const handleTeacherToggle = useCallback((id) => setExpandedTeacher(prev => prev === id ? null : id), [])
 
-  // Carga datos de una convocatoria concreta
-  const loadConvData = async (conv) => {
-    const [profesores, resumen] = await Promise.all([
-      getProfesores(),
-      getResumen(conv.id),
-    ])
-    setTeachers(buildTeachersHierarchy(profesores || [], resumen || []))
-  }
+  /**
+   * Devuelve los profesores cacheados, reutiliza la promesa en vuelo si existe,
+   * o dispara la peticion. Si falla, limpia la promesa para permitir reintento.
+   */
+  const fetchProfesores = useCallback(() => {
+    if (profesoresCacheRef.current) return Promise.resolve(profesoresCacheRef.current)
+    if (!profesoresPromiseRef.current) {
+      profesoresPromiseRef.current = getProfesores()
+        .then(profesores => {
+          profesoresCacheRef.current = profesores
+          return profesores
+        })
+        .catch(err => {
+          profesoresPromiseRef.current = null
+          throw err
+        })
+    }
+    return profesoresPromiseRef.current
+  }, [])
 
-  // Cuando el hook carga las convocatorias, cargar datos de la seleccionada
+  // Prefetch de profesores al montar, en paralelo con getConvocatorias
+  // (que dispara useConvocatorias). Evita el waterfall convocatorias->profesores.
   useEffect(() => {
-    if (convsLoading) return
+    if (!isApiEnabled()) return
+    // El error se ignora aqui: la carga real lo reintentara y lo mostrara.
+    fetchProfesores().catch(() => {})
+  }, [fetchProfesores])
 
-    if (convsError) {
-      setError(convsError)
-      setLoading(false)
-      return
-    }
+  // Unica via de carga: cuando hay convocatoria seleccionada (inicial o por
+  // cambio de selector), cargar profesores (cache) + resumen en paralelo.
+  useEffect(() => {
+    if (convsLoading || convsError) return
+    if (!isApiEnabled() || !convocatoria) return
 
-    if (!isApiEnabled()) {
-      setTeachers(TEACHERS_DATA)
-      setLoading(false)
-      return
-    }
+    const token = ++loadTokenRef.current
+    const isStale = () => token !== loadTokenRef.current
 
-    if (!convocatoria) {
-      setTeachers([])
-      setLoading(false)
-      return
-    }
-
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    loadConvData(convocatoria)
-      .then(() => { if (!cancelled) setLoading(false) })
+    Promise.all([fetchProfesores(), getResumen(convocatoria.id)])
+      .then(([profesores, resumen]) => {
+        if (isStale()) return // otra carga mas reciente ya gano
+        setLoaded({
+          conv: convocatoria,
+          teachers: buildTeachersHierarchy(profesores || [], resumen || []),
+          error: null,
+        })
+      })
       .catch(err => {
-        if (cancelled) return
+        if (isStale()) return
         // Un 401 es sesion expirada, NO "sin datos": api.js ya emitio
         // auth:expired (redirige al login). No mostramos pantalla de error.
         if (err instanceof AuthError) return
-        setError(err.message || 'Error al cargar datos')
-        setLoading(false)
+        setLoaded(prev => ({
+          conv: convocatoria,
+          teachers: prev.teachers,
+          error: err.message || 'Error al cargar datos',
+        }))
       })
-    return () => { cancelled = true }
-  }, [convsLoading, convsError, convocatoria]) // loadConvData es local sin useCallback, deps reales son convsLoading/convsError/convocatoria
+  }, [convsLoading, convsError, convocatoria, fetchProfesores])
 
-  // Cambio de convocatoria desde el selector
-  const handleConvChange = async (conv) => {
-    setSelectedConvocatoria(conv)
-    setLoading(true)
-    setError(null)
+  // Cambio de convocatoria desde el selector: solo actualiza la seleccion y
+  // resetea la UI; la carga la dispara el effect (evita el doble fetch).
+  const handleConvChange = useCallback((conv) => {
     setExpandedTeacher(null)
     setSearchQuery('')
-    try {
-      await loadConvData(conv)
-    } catch (err) {
-      // 401 = sesion expirada (auth:expired ya redirige), no mostrar error.
-      if (!(err instanceof AuthError)) {
-        setError(err.message || 'Error al cargar datos')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
+    setSelectedConvocatoria(conv)
+  }, [setSelectedConvocatoria])
+
+  // Estados derivados: la carga esta "al dia" si el resultado pertenece a la
+  // convocatoria seleccionada (comparacion por identidad: reload crea objetos nuevos).
+  const apiMode = isApiEnabled()
+  const upToDate = loaded.conv === convocatoria
+  const loading = convsLoading || (apiMode && !convsError && Boolean(convocatoria) && !upToDate)
+  const error = convsError || (upToDate ? loaded.error : null)
+  const teachers = useMemo(() => {
+    if (!apiMode) return TEACHERS_DATA
+    return convocatoria ? loaded.teachers : []
+  }, [apiMode, convocatoria, loaded.teachers])
 
   const totalStudents = useMemo(() => {
     if (!teachers) return 0
     return teachers.reduce((acc, t) => acc + t.groups.reduce((g, gr) => g + gr.students.length, 0), 0)
-  }, [teachers])
-
-  // Asistencia global: % presentes sobre total de clases registradas en la convocatoria
-  const globalAttendance = useMemo(() => {
-    if (!teachers || teachers.length === 0) return 0
-    let totalClases = 0
-    let totalFaltas = 0
-    teachers.forEach(t =>
-      t.groups.forEach(gr =>
-        gr.students.forEach(st => {
-          totalClases += st.clasesTotal ?? 0
-          totalFaltas += st.faltasTotal ?? 0
-        })
-      )
-    )
-    if (totalClases === 0) return 0
-    return Math.round(((totalClases - totalFaltas) / totalClases) * 100)
   }, [teachers])
 
   const allStudents = useMemo(() => {
@@ -159,6 +168,10 @@ export default function useDashboard() {
       )
     )
   }, [teachers])
+
+  // Asistencia global: % presentes sobre total de clases registradas
+  // (formula compartida en src/utils/attendance.js)
+  const globalAttendance = useMemo(() => aggregateAttendance(allStudents), [allStudents])
 
   // Alertas CEO: alumnos con 2+ faltas en la semana en curso (lun-jue)
   const alertStudents = useMemo(

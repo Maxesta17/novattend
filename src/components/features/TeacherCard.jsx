@@ -1,14 +1,15 @@
 import { useState, memo } from 'react'
 import Avatar from '../ui/Avatar.jsx'
 import Badge from '../ui/Badge.jsx'
-import { getAttendanceScheme } from '../../config/teachers.js'
+import { aggregateAttendance, singleAttendance, getAttendanceScheme } from '../../utils/attendance.js'
 
 /**
  * Card expandible de profesor con grupos y alumnos.
+ * Memorizada: recibe onToggle estable y le pasa teacher.id para no romper el memo.
  * @param {object} props
  * @param {object} props.teacher - Datos del profesor
  * @param {boolean} props.isExpanded - Si esta expandido
- * @param {function} props.onToggle - Handler al expandir/colapsar
+ * @param {function} props.onToggle - Handler al expandir/colapsar (recibe teacher.id)
  * @param {function} props.onStudentClick - Handler al pulsar un alumno
  */
 export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStudentClick }) {
@@ -21,13 +22,15 @@ export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStud
     setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))
   }
 
+  const handleToggle = () => onToggle(teacher.id)
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      onToggle()
+      handleToggle()
     } else if (e.key === 'Escape' && isExpanded) {
       e.preventDefault()
-      onToggle()
+      handleToggle()
     }
   }
 
@@ -38,7 +41,7 @@ export default memo(function TeacherCard({ teacher, isExpanded, onToggle, onStud
         role="button"
         tabIndex={0}
         aria-expanded={isExpanded}
-        onClick={onToggle}
+        onClick={handleToggle}
         onKeyDown={handleKeyDown}
         className="bg-white border-[1.5px] border-border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all duration-300 hover:bg-cream"
       >
@@ -140,35 +143,6 @@ function GroupSection({ group, teacherName, teacherId, isExpanded, onToggle, onS
       )}
     </div>
   )
-}
-
-// % asistencia de un alumno: presentes / clases totales (con fallback a monthly viejo)
-function singleAttendance(student) {
-  if (typeof student.clasesTotal === 'number' && student.clasesTotal > 0) {
-    const presentes = student.clasesTotal - (student.faltasTotal ?? 0)
-    return Math.round((presentes / student.clasesTotal) * 100)
-  }
-  return student.monthly ?? 0
-}
-
-// % asistencia agregado de una lista de alumnos: suma faltas/clases (no media de medias)
-function aggregateAttendance(students) {
-  if (students.length === 0) return 0
-  let totalClases = 0
-  let totalFaltas = 0
-  let hasNew = false
-  students.forEach(s => {
-    if (typeof s.clasesTotal === 'number') {
-      totalClases += s.clasesTotal
-      totalFaltas += s.faltasTotal ?? 0
-      if (s.clasesTotal > 0) hasNew = true
-    }
-  })
-  if (hasNew && totalClases > 0) {
-    return Math.round(((totalClases - totalFaltas) / totalClases) * 100)
-  }
-  // Fallback a monthly viejo (mocks que aun no tienen campos nuevos)
-  return Math.round(students.reduce((acc, s) => acc + (s.monthly ?? 0), 0) / students.length)
 }
 
 function ChevronIcon({ rotated, size = 16 }) {

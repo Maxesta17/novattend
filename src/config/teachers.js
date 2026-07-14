@@ -185,9 +185,4 @@ TEACHERS_DATA.forEach(teacher => {
   })
 })
 
-/** Devuelve clases Tailwind segun el porcentaje de asistencia */
-export const getAttendanceScheme = (pct) => {
-  if (pct >= 80) return { text: 'text-success', bg: 'bg-success-soft', status: 'Asistencia regular' }
-  if (pct >= 60) return { text: 'text-warning', bg: 'bg-warning-soft', status: 'Requiere atencion' }
-  return { text: 'text-error', bg: 'bg-error-soft', status: 'Alerta — contactar alumno' }
-}
+// getAttendanceScheme vive ahora en src/utils/attendance.js (fuera de los mocks)

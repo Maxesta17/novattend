@@ -113,7 +113,7 @@ export default function DashboardPage() {
               key={teacher.id}
               teacher={teacher}
               isExpanded={expandedTeacher === teacher.id}
-              onToggle={() => handleTeacherToggle(teacher.id)}
+              onToggle={handleTeacherToggle}
               onStudentClick={setSelectedStudent}
             />
           ))}
