@@ -52,4 +52,23 @@ describe('SavedPage', () => {
     render(<SavedPage />)
     expect(mockNavigate).toHaveBeenCalledWith('/attendance')
   })
+
+  it('variante queued: muestra "Guardado pendiente de sincronizar" en vez de exito', () => {
+    useLocation.mockReturnValue({
+      state: { present: 5, total: 10, group: 'G2', convocatoria: null, queued: true },
+    })
+    render(<SavedPage />)
+    expect(screen.getByText('Guardado pendiente de sincronizar')).toBeInTheDocument()
+    expect(screen.queryByText('Asistencia guardada')).not.toBeInTheDocument()
+    expect(screen.getByText(/Se enviará automáticamente al recuperar la conexión/)).toBeInTheDocument()
+  })
+
+  it('sin queued: muestra el titulo de exito normal', () => {
+    useLocation.mockReturnValue({
+      state: { present: 5, total: 10, group: 'G2', convocatoria: null },
+    })
+    render(<SavedPage />)
+    expect(screen.getByText('Asistencia guardada')).toBeInTheDocument()
+    expect(screen.queryByText(/pendiente de sincronizar/)).not.toBeInTheDocument()
+  })
 })

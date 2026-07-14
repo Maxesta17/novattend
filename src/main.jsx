@@ -6,6 +6,13 @@ import './styles/animations.css'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import App from './App.jsx'
 import UpdateBanner from './components/ui/UpdateBanner.jsx'
+import { isApiEnabled } from './config/api'
+import { guardarAsistencia } from './services/api'
+import { initOfflineSync } from './services/offlineQueue'
+
+// Cola offline (C2): reintenta los guardados pendientes al arrancar la app
+// y cada vez que se recupera la conexion (evento 'online'). Solo con API real.
+if (isApiEnabled()) initOfflineSync(guardarAsistencia)
 
 // eslint-disable-next-line react-refresh/only-export-components
 function Root() {

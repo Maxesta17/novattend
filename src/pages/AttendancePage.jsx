@@ -2,10 +2,11 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { isApiEnabled } from '../config/api'
 import { getSession, logout } from '../config/session'
-import { guardarAsistencia } from '../services/api'
 import { formatLocalDate, formatLongDate, labelFromIso } from '../utils/dateUtils'
 import useStudents, { GROUPS } from '../hooks/useStudents'
+import useSaveAttendance from '../hooks/useSaveAttendance'
 import PageHeader from '../components/features/PageHeader.jsx'
+import PendingSyncBanner from '../components/features/PendingSyncBanner.jsx'
 import GroupTabs from '../components/features/GroupTabs.jsx'
 import StudentList from '../components/features/StudentList.jsx'
 import DateHeaderControl from '../components/features/DateHeaderControl.jsx'
@@ -38,8 +39,6 @@ export default function AttendancePage() {
   // profesor_id viene del backend (auth real); compat con sesiones viejas via username.
   const profesorId = sessionUser?.profesor_id
     ?? (sessionUser?.username ? `prof-${sessionUser.username}` : null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState(null)
   // todayIso se fija una vez por sesion (igual que selectedDate) para que
   // cruzar medianoche con la pestana abierta no marque "dia pasado" en falso.
   const todayIso = useMemo(() => formatLocalDate(new Date()), [])
@@ -67,10 +66,24 @@ export default function AttendancePage() {
 
   const totalCount = students.length
 
-  // Guardar exige alumnos cargados (0 alumnos daria NaN% y registros vacios).
-  // Hoy: al menos 1 presente (evita guardados vacios por error). Dia pasado:
-  // 0 presentes vale, pero se bloquea si fallo la pre-carga (no machacar con ceros).
-  const canSave = totalCount > 0 && (isPastDay ? !presenceLoadFailed : presentCount > 0)
+  // Guardado con soporte offline: persistAttendance encola en IndexedDB si
+  // falla la red y navega a /saved con queued=true (ver useSaveAttendance).
+  const { saving, saveError, clearSaveError, canSave, persistAttendance } = useSaveAttendance({
+    convocatoria,
+    profesorId,
+    group: selectedGroup,
+    date: selectedDate,
+    students,
+    presentCount,
+    isPastDay,
+    presenceLoadFailed,
+  })
+
+  // Si el guardado fallo con el modal de dia pasado abierto, cerrarlo.
+  const confirmSave = async () => {
+    const ok = await persistAttendance()
+    if (!ok) setConfirmOpen(false)
+  }
 
   // Si es un dia pasado, pedir confirmacion antes de sobrescribir.
   const handleSaveClick = () => {
@@ -81,46 +94,6 @@ export default function AttendancePage() {
       return
     }
     persistAttendance()
-  }
-
-  const persistAttendance = async () => {
-    if (saving) return // guard anti doble submit (doble tap en Confirmar)
-    setSaving(true)
-    setSaveError(null)
-
-    // Con API activa NUNCA se simula un guardado: o guarda de verdad o falla.
-    if (isApiEnabled()) {
-      try {
-        await guardarAsistencia({
-          fecha: selectedDate,
-          convocatoria_id: convocatoria.id,
-          profesor_id: profesorId,
-          grupo: selectedGroup,
-          alumnos: students.map(s => ({
-            alumno_id: s.id || s.name,
-            presente: s.present,
-          })),
-        })
-      } catch (err) {
-        setSaving(false)
-        setConfirmOpen(false)
-        setSaveError(err.message || 'Error al guardar. Comprueba tu conexion e intentalo de nuevo.')
-        return
-      }
-    } else {
-      // Modo mock (sin API): simular delay
-      await new Promise(r => setTimeout(r, 1500))
-    }
-
-    navigate('/saved', {
-      state: {
-        present: presentCount,
-        total: totalCount,
-        group: selectedGroup,
-        convocatoria,
-        savedDate: selectedDate,
-      },
-    })
   }
 
   const today = formatLongDate(new Date())
@@ -164,6 +137,9 @@ export default function AttendancePage() {
       </div>
 
       <ProgressBar value={attendancePercent} className="mx-4 mb-5" />
+
+      {/* Indicador discreto de guardados en cola offline (desaparece al sincronizar) */}
+      <PendingSyncBanner />
 
       {(loadError || presenceLoadFailed) && (
         <div className="px-4 mb-3">
@@ -222,7 +198,7 @@ export default function AttendancePage() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pt-3 pb-[max(22px,env(safe-area-inset-bottom))] bg-off-white shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
-        <ErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
+        <ErrorBanner message={saveError} onDismiss={clearSaveError} />
         <Button
           variant={canSave ? 'primary' : 'disabled'}
           loading={saving}
@@ -240,7 +216,7 @@ export default function AttendancePage() {
         group={selectedGroup}
         loading={saving}
         onCancel={() => { if (!saving) setConfirmOpen(false) }}
-        onConfirm={persistAttendance}
+        onConfirm={confirmSave}
       />
 
       {/* Novedad "justificar faltas": se muestra una vez por dispositivo. */}
