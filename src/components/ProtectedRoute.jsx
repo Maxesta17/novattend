@@ -17,9 +17,11 @@ export default function ProtectedRoute({ allowedRole, children }) {
   const session = getSession()
   if (!session) return <Navigate to="/" replace />
 
-  // Si hay token (modo auth real) y esta expirado, expulsar al login.
-  // En modo mock sin token, no se exige exp.
-  if (session.token && isExpired()) return <Navigate to="/" replace />
+  // Si hay token (modo auth real) y esta expirado, expulsar al login con
+  // state.expired para que LoginPage muestre "Tu sesión expiró".
+  if (session.token && isExpired()) {
+    return <Navigate to="/" state={{ expired: true }} replace />
+  }
 
   const rol = session.rol ?? session.role
   if (rol !== allowedRole) return <Navigate to="/" replace />

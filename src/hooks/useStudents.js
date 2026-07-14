@@ -5,7 +5,7 @@ import { formatLocalDate } from '../utils/dateUtils'
 
 const GROUPS = ['G1', 'G2', 'G3', 'G4']
 
-// Datos mock para modo sin API
+// Datos mock SOLO para modo sin API (con API activa nunca se usan como fallback)
 const MOCK_GROUPS = {
   G1: ['Laura Garcia', 'Carlos Ruiz', 'Maria Lopez', 'Pedro Sanchez', 'Ana Martin', 'David Fernandez', 'Elena Torres', 'Jorge Navarro', 'Lucia Romero', 'Pablo Jimenez', 'Sofia Alvarez', 'Hugo Moreno'],
   G2: ['Valentina Cruz', 'Mateo Herrera', 'Isabella Diaz', 'Sebastian Ortiz', 'Camila Reyes', 'Nicolas Vargas', 'Martina Castro', 'Emiliano Ramos', 'Renata Flores', 'Tomas Mendoza', 'Antonella Pena', 'Alejandro Silva'],
@@ -36,11 +36,15 @@ function applyAttendance(base, registros) {
 /**
  * Hook custom para gestionar la carga y estado de alumnos por grupo.
  *
- * Maneja cache por grupo con useRef, prefetch paralelo de G2-G4,
- * y modo mock cuando la API no esta habilitada.
+ * Maneja cache de roster por grupo con useRef, prefetch paralelo de G2-G4,
+ * y modo mock SOLO cuando la API no esta habilitada (con API activa y sin
+ * convocatoria no carga nada: la pagina debe redirigir al login).
  *
- * Si selectedDate no es hoy, pre-carga la asistencia ya guardada de ese dia
- * para permitir edicion (los toggles reflejan lo registrado, no parten en blanco).
+ * Pre-carga la asistencia ya guardada del dia activo (hoy incluido) para que
+ * los toggles reflejen lo registrado y no se sobrescriba sin querer. Si esa
+ * pre-carga falla, lo expone en presenceLoadFailed para que la pagina avise
+ * y bloquee el guardado de un dia pasado. Las marcas de la sesion se
+ * conservan por dia+grupo al cambiar de tab (no se pierden al volver).
  *
  * @param {Object|null} convocatoria - Convocatoria activa (con .id)
  * @param {string|null} profesorId - ID del profesor (ej: "prof-samuel")
@@ -49,6 +53,8 @@ function applyAttendance(base, registros) {
  *   students: Array<{id?: string, name: string, present: boolean}>,
  *   loadingStudents: boolean,
  *   loadError: string|null,
+ *   presenceLoadFailed: boolean,
+ *   retryLoad: () => void,
  *   selectedGroup: string,
  *   setSelectedGroup: (grupo: string) => void,
  *   toggleStudent: (index: number) => void,
@@ -63,41 +69,79 @@ export default function useStudents(convocatoria, profesorId, selectedDate) {
   const [students, setStudents] = useState([])
   const [loadingStudents, setLoadingStudents] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  // Fallo al pre-cargar la asistencia ya guardada del dia activo
+  const [presenceLoadFailed, setPresenceLoadFailed] = useState(false)
 
-  // Cache de alumnos por grupo (evita recargas al cambiar de tab)
+  // Cache del roster por grupo (evita recargas al cambiar de tab)
   const cacheRef = useRef({})
+  // Marcas de la sesion por "dia|grupo" (se restauran al volver a un tab)
+  const sessionPresenceRef = useRef({})
   // Token de carga: solo la carga mas reciente puede escribir el estado
   // (descarta respuestas obsoletas si el usuario cambia de grupo/dia rapido).
   const loadTokenRef = useRef(0)
-  // Grupo vigente accesible desde callbacks diferidos (evita stale closure).
+  // Refs espejo para callbacks diferidos (evitan stale closures)
   const selectedGroupRef = useRef(GROUPS[0])
   selectedGroupRef.current = selectedGroup
+  const studentsRef = useRef([])
+  studentsRef.current = students
+  const presenceFailedRef = useRef(false)
 
   const todayIso = formatLocalDate(new Date())
-  const isPastDay = Boolean(selectedDate) && selectedDate !== todayIso
+  const activeDate = selectedDate || todayIso
 
   /**
-   * Aplica la presencia inicial a la lista base segun el dia activo.
-   * Para hoy, todos parten en false. Para un dia pasado, carga la asistencia real.
+   * Guarda las marcas visibles del grupo/dia indicado para restaurarlas al
+   * volver a ese tab durante la sesion de marcado (fix marcas perdidas).
+   */
+  const snapshotPresence = useCallback((dateIso, grupo) => {
+    // No congelar los ceros de una pre-carga fallida como si fueran marcas
+    if (presenceFailedRef.current || studentsRef.current.length === 0) return
+    const map = {}
+    studentsRef.current.forEach(s => { map[s.id || s.name] = s.present })
+    sessionPresenceRef.current[`${dateIso}|${grupo}`] = map
+  }, [])
+
+  /**
+   * Presencia inicial del grupo para el dia activo: marcas de esta sesion si
+   * existen; si no, la asistencia ya guardada en el backend (hoy incluido).
    */
   const withInitialPresence = useCallback(async (base, grupo) => {
-    if (!isPastDay) return base.map(a => ({ ...a, present: false }))
+    const saved = sessionPresenceRef.current[`${activeDate}|${grupo}`]
+    if (saved) {
+      presenceFailedRef.current = false
+      setPresenceLoadFailed(false)
+      return base.map(a => ({ ...a, present: saved[a.id || a.name] === true }))
+    }
     try {
-      const registros = await getAsistencia(convocatoria.id, profesorId, grupo, selectedDate)
+      const registros = await getAsistencia(convocatoria.id, profesorId, grupo, activeDate)
+      presenceFailedRef.current = false
+      setPresenceLoadFailed(false)
       return applyAttendance(base, registros)
     } catch {
-      // Si falla la carga del dia pasado, partir en blanco (no bloquear el flujo)
+      // Propagar el fallo: la pagina avisa y bloquea guardar un dia pasado
+      // (evita sobrescribir asistencia real con todo ceros sin saberlo).
+      presenceFailedRef.current = true
+      setPresenceLoadFailed(true)
       return base.map(a => ({ ...a, present: false }))
     }
-  }, [convocatoria, profesorId, selectedDate, isPastDay])
+  }, [convocatoria, profesorId, activeDate])
 
   const loadStudents = useCallback(async (grupo) => {
     const token = ++loadTokenRef.current
     const isStale = () => token !== loadTokenRef.current
 
-    if (!isApiEnabled() || !convocatoria) {
+    // Fallback a mocks SOLO sin API (conservando marcas de la sesion).
+    if (!isApiEnabled()) {
+      const saved = sessionPresenceRef.current[`${activeDate}|${grupo}`]
       const mockNames = MOCK_GROUPS[grupo] || []
-      setStudents(mockNames.map(name => ({ name, present: false })))
+      setStudents(mockNames.map(name => ({ name, present: saved ? saved[name] === true : false })))
+      setLoadingStudents(false)
+      return
+    }
+    // Con API activa y sin convocatoria NO se simula nada: lista vacia
+    // (la pagina redirige al login para recalcular convocatorias activas).
+    if (!convocatoria) {
+      setStudents([])
       setLoadingStudents(false)
       return
     }
@@ -105,7 +149,7 @@ export default function useStudents(convocatoria, profesorId, selectedDate) {
     setLoadError(null)
     setLoadingStudents(true)
     try {
-      // La lista base de cada grupo se cachea; la presencia se aplica por dia.
+      // El roster de cada grupo se cachea; la presencia se aplica por dia.
       let base = cacheRef.current[grupo]
       if (!base) {
         base = mapAlumnos(await getAlumnos(convocatoria.id, profesorId, grupo))
@@ -120,71 +164,42 @@ export default function useStudents(convocatoria, profesorId, selectedDate) {
       setLoadError(err.message || 'No se pudieron cargar los alumnos. Revisa tu conexion.')
     }
     if (!isStale()) setLoadingStudents(false)
-  }, [convocatoria, profesorId, withInitialPresence])
+  }, [convocatoria, profesorId, activeDate, withInitialPresence])
 
-  // Carga inicial + prefetch de los demas grupos
+  // Carga inicial + prefetch silencioso de G2-G4 para cambio de tab instantaneo
   useEffect(() => {
-    let cancelled = false
-
-    const init = async () => {
-      if (!isApiEnabled() || !convocatoria) {
-        const mockNames = MOCK_GROUPS[GROUPS[0]] || []
-        if (!cancelled) {
-          setStudents(mockNames.map(name => ({ name, present: false })))
-          setLoadingStudents(false)
-        }
-        return
-      }
-
-      try {
-        const alumnos = await getAlumnos(convocatoria.id, profesorId, GROUPS[0])
-        const mapped = mapAlumnos(alumnos)
-        cacheRef.current[GROUPS[0]] = mapped
-        if (!cancelled) {
-          setStudents(await withInitialPresence(mapped, GROUPS[0]))
-          setLoadingStudents(false)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setStudents([])
-          setLoadError(err.message || 'No se pudieron cargar los alumnos. Revisa tu conexion.')
-          setLoadingStudents(false)
-        }
-      }
-
-      // Prefetch silencioso de G2, G3, G4 para cambio de tab instantaneo
+    loadStudents(GROUPS[0])
+    if (isApiEnabled() && convocatoria) {
       GROUPS.slice(1).forEach(g => {
         getAlumnos(convocatoria.id, profesorId, g)
-          .then(alumnos => {
-            cacheRef.current[g] = mapAlumnos(alumnos)
-          })
+          .then(alumnos => { cacheRef.current[g] = mapAlumnos(alumnos) })
           .catch(() => {})
       })
     }
-
-    init()
-    return () => { cancelled = true }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Al cambiar el dia activo, recargar el grupo seleccionado con la presencia
-  // correspondiente (vacia para hoy, asistencia real para un dia pasado).
-  // Comparamos contra el dia previo (robusto en StrictMode); la carga inicial
-  // ya cubre el primer render, asi que solo recargamos en cambios reales.
+  // de ese dia, conservando antes las marcas del dia previo.
   const prevDateRef = useRef(selectedDate)
   useEffect(() => {
     if (prevDateRef.current === selectedDate) return
+    snapshotPresence(prevDateRef.current || todayIso, selectedGroupRef.current)
     prevDateRef.current = selectedDate
     // Diferido a microtarea para evitar setState sincrono dentro del effect.
-    // Lee el grupo desde el ref para usar siempre el vigente (no el capturado).
     queueMicrotask(() => loadStudents(selectedGroupRef.current))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate])
 
-  /** Cambiar de grupo y cargar sus alumnos */
+  /** Cambiar de grupo conservando las marcas del grupo actual */
   const handleGroupChange = (grupo) => {
+    snapshotPresence(activeDate, selectedGroup)
     setSelectedGroup(grupo)
     loadStudents(grupo)
   }
+
+  /** Reintentar la carga del grupo activo (roster y/o pre-carga de asistencia) */
+  const retryLoad = () => loadStudents(selectedGroupRef.current)
 
   /** Alternar asistencia de un alumno por indice (inmutable) */
   const toggleStudent = (index) => {
@@ -211,6 +226,8 @@ export default function useStudents(convocatoria, profesorId, selectedDate) {
     students,
     loadingStudents,
     loadError,
+    presenceLoadFailed,
+    retryLoad,
     selectedGroup,
     setSelectedGroup: handleGroupChange,
     toggleStudent,

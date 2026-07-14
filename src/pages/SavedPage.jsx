@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import StatCard from '../components/ui/StatCard.jsx'
 import Button from '../components/ui/Button.jsx'
-import { formatLocalDate, labelFromIso } from '../utils/dateUtils'
+import { formatLocalDate, formatLongDate, labelFromIso } from '../utils/dateUtils'
 
 /**
  * Pagina de confirmacion post-guardado de asistencia.
@@ -24,12 +24,11 @@ export default function SavedPage() {
 
   const { present, total, group, convocatoria, savedDate } = state
   const absent = total - present
-  const percentage = Math.round((present / total) * 100)
+  // Proteger la division: con total 0 mostrariamos "NaN%"
+  const percentage = total > 0 ? Math.round((present / total) * 100) : 0
   const todayIso = formatLocalDate(new Date())
   const isPastDay = Boolean(savedDate) && savedDate !== todayIso
-  const dateText = savedDate
-    ? labelFromIso(savedDate)
-    : new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+  const dateText = savedDate ? labelFromIso(savedDate) : formatLongDate(new Date())
 
   return (
     <div className="min-h-dvh min-h-screen w-full max-w-[430px] mx-auto bg-off-white flex flex-col items-center justify-center p-5 box-border relative">

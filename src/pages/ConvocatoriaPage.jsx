@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import Badge from '../components/ui/Badge.jsx'
+import { formatShortDate } from '../utils/dateUtils'
 
 /**
  * Selector de convocatoria activa.
@@ -14,13 +15,6 @@ export default function ConvocatoriaPage() {
 
   const handleSelect = (conv) => {
     navigate('/attendance', { state: { convocatoria: conv } })
-  }
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return ''
-    const [y, m, d] = dateStr.split('-')
-    const date = new Date(y, m - 1, d)
-    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
   }
 
   return (
@@ -62,7 +56,7 @@ export default function ConvocatoriaPage() {
               </Badge>
             </div>
             <p className="font-montserrat text-[12px] text-text-muted text-pretty">
-              {formatDate(conv.fecha_inicio)} — {formatDate(conv.fecha_fin)}
+              {formatShortDate(conv.fecha_inicio)} — {formatShortDate(conv.fecha_fin)}
             </p>
           </button>
         ))}

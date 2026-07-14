@@ -4,16 +4,19 @@ import Button from '../ui/Button.jsx'
 /**
  * Modal de confirmacion antes de guardar asistencia de un dia que no es hoy.
  * Avisa de que se sobrescribira cualquier registro previo de ese dia.
+ * Mientras loading=true, Confirmar muestra spinner y ambos botones quedan
+ * deshabilitados (evita doble submit por doble tap).
  *
  * @param {object} props
  * @param {boolean} props.isOpen - Si el modal esta visible
  * @param {string} props.dateLabel - Etiqueta legible del dia a registrar
  * @param {string} props.group - Grupo afectado (ej. "G1")
+ * @param {boolean} [props.loading=false] - Guardado en curso
  * @param {() => void} props.onCancel - Cerrar sin guardar
  * @param {() => void} props.onConfirm - Confirmar y guardar
  * @returns {JSX.Element}
  */
-export default function ConfirmPastDayModal({ isOpen, dateLabel, group, onCancel, onConfirm }) {
+export default function ConfirmPastDayModal({ isOpen, dateLabel, group, loading = false, onCancel, onConfirm }) {
   return (
     <Modal isOpen={isOpen} onClose={onCancel} ariaLabel="Confirmar registro de dia pasado">
       <h3 className="font-cinzel text-lg font-semibold text-text-dark m-0 mb-2 capitalize">
@@ -25,13 +28,14 @@ export default function ConfirmPastDayModal({ isOpen, dateLabel, group, onCancel
       </p>
       <div className="flex gap-2">
         <button
-          onClick={onCancel}
-          className="flex-1 font-montserrat text-sm font-semibold text-text-body bg-cream border border-border rounded-xl py-3 cursor-pointer hover:bg-border-light transition-colors duration-150"
+          onClick={loading ? undefined : onCancel}
+          disabled={loading}
+          className="flex-1 font-montserrat text-sm font-semibold text-text-body bg-cream border border-border rounded-xl py-3 cursor-pointer hover:bg-border-light transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancelar
         </button>
-        <Button variant="primary" fullWidth onClick={onConfirm}>
-          Confirmar
+        <Button variant="primary" fullWidth loading={loading} onClick={onConfirm}>
+          {loading ? 'Guardando...' : 'Confirmar'}
         </Button>
       </div>
     </Modal>

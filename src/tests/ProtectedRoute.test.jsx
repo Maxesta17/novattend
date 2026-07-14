@@ -1,13 +1,19 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import ProtectedRoute from '../components/ProtectedRoute'
+
+// Sonda de login: distingue si la redireccion llego con state.expired
+function LoginProbe() {
+  const location = useLocation()
+  return <div>{location.state?.expired ? 'Login expirado' : 'Login'}</div>
+}
 
 function renderWithRouter(allowedRole) {
   return render(
     <MemoryRouter initialEntries={['/protected']}>
       <Routes>
-        <Route path="/" element={<div>Login</div>} />
+        <Route path="/" element={<LoginProbe />} />
         <Route path="/protected" element={
           <ProtectedRoute allowedRole={allowedRole}>
             <div>Contenido protegido</div>
@@ -63,10 +69,16 @@ describe('ProtectedRoute', () => {
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument()
   })
 
-  it('redirige a login si el token esta expirado', () => {
+  it('redirige a login con state.expired si el token esta expirado', () => {
     sessionStorage.setItem('user', JSON.stringify({ rol: 'teacher', token: 'tok', exp: pastExp }))
     renderWithRouter('teacher')
-    expect(screen.getByText('Login')).toBeInTheDocument()
+    expect(screen.getByText('Login expirado')).toBeInTheDocument()
     expect(screen.queryByText('Contenido protegido')).not.toBeInTheDocument()
+  })
+
+  it('la redireccion por falta de sesion NO lleva state.expired', () => {
+    renderWithRouter('teacher')
+    expect(screen.getByText('Login')).toBeInTheDocument()
+    expect(screen.queryByText('Login expirado')).not.toBeInTheDocument()
   })
 })

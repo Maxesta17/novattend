@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatLocalDate, getLast7Days, labelFromIso } from '../utils/dateUtils.js'
+import { formatLocalDate, formatLongDate, formatShortDate, getLast7Days, labelFromIso } from '../utils/dateUtils.js'
 
 describe('dateUtils', () => {
   describe('formatLocalDate', () => {
@@ -42,6 +42,33 @@ describe('dateUtils', () => {
       const days = getLast7Days()
       const hoy = formatLocalDate(new Date())
       days.forEach(d => expect(d.iso <= hoy).toBe(true))
+    })
+  })
+
+  describe('formatLongDate', () => {
+    it('produce dia + mes abreviado + anyo en es-ES', () => {
+      const label = formatLongDate(new Date(2026, 2, 8, 12, 0, 0))
+      expect(label).toContain('8')
+      expect(label).toContain('mar')
+      expect(label).toContain('2026')
+    })
+  })
+
+  describe('formatShortDate', () => {
+    it('produce dia + mes abreviado sin anyo a partir de un iso', () => {
+      const label = formatShortDate('2026-03-08')
+      expect(label).toContain('8')
+      expect(label).toContain('mar')
+      expect(label).not.toContain('2026')
+    })
+
+    it('devuelve cadena vacia si el iso es falsy', () => {
+      expect(formatShortDate('')).toBe('')
+      expect(formatShortDate(null)).toBe('')
+    })
+
+    it('no desplaza el dia al construir el Date', () => {
+      expect(formatShortDate('2026-01-01')).toContain('1')
     })
   })
 

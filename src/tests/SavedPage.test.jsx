@@ -30,6 +30,15 @@ describe('SavedPage', () => {
     expect(screen.getByText('Asistencia guardada')).toBeInTheDocument()
   })
 
+  it('no muestra "NaN%" cuando total es 0 (division protegida)', () => {
+    useLocation.mockReturnValue({
+      state: { present: 0, total: 0, group: 'G1', convocatoria: null },
+    })
+    render(<SavedPage />)
+    expect(screen.getByText('0%')).toBeInTheDocument()
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument()
+  })
+
   it('redirige a /attendance cuando state es null', () => {
     useLocation.mockReturnValue({ state: null })
     render(<SavedPage />)
