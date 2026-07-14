@@ -135,3 +135,59 @@ entra a la hoja y verifica manualmente antes de darlo por cerrado.
 7. Un profesor (`rol: teacher`) no puede entrar a `/dashboard`.
 8. Con sesion viva, una URL directa a `/attendance` sin convocatoria en
    memoria no muestra datos mock y redirige.
+
+## Suite 2 — cache del Service Worker (`sw-cache.e2e.mjs`)
+
+Caso E2E independiente que cubre la migracion del SW a `injectManifest`
+(`src/sw.js`): la cache runtime `api-cache` clavea las respuestas de la API
+**sin** el query param `token` (plugin `cacheKeyWillBeUsed`), asi que una
+lectura cacheada sobrevive a un re-login con token distinto y se sigue
+sirviendo en offline (con el header `X-Novattend-From-Cache: 1` y el banner
+global "Datos sin conexion — pueden no estar actualizados",
+`OfflineDataBanner.jsx`, montado en `App.jsx`).
+
+**Corre contra `npm run preview`, NO contra `npm run dev`.** El Service
+Worker propio solo existe en el build de produccion; en dev no se registra
+ningun SW y este test no tendria nada que comprobar.
+
+```bash
+npm run build
+npm run preview -- --port 4173 --strictPort   # en otra terminal, dejalo corriendo
+
+E2E_USER=fantasma E2E_PASS='...' npm run test:e2e:sw
+```
+
+En Windows PowerShell:
+
+```powershell
+$env:E2E_USER = 'fantasma'
+$env:E2E_PASS = '...'
+npm run test:e2e:sw
+```
+
+Usa las **mismas** variables de entorno (`E2E_BASE_URL`, por defecto
+`http://localhost:4173` en vez de `5173`; `E2E_USER`; `E2E_PASS`) y el mismo
+usuario fantasma que la Suite 1 — ver el procedimiento de alta/limpieza mas
+arriba. La misma red de seguridad aplica: cualquier POST cuyo `action` no sea
+`login` (incluye `guardarAsistencia` y `justificarFalta`) se aborta en el
+navegador antes de salir hacia `script.google(usercontent).com`; los GET
+(incluidos `getAlumnos`/`getAsistencia` del fantasma, que no tiene alumnos
+propios) pasan sin tocar. No levanta ni mata el servidor de preview: eso es
+responsabilidad de quien ejecuta el test (igual que con `npm run dev` en la
+Suite 1).
+
+Que verifica, en orden:
+
+1. El Service Worker controla la pagina antes de loguear.
+2. Login real -> `getConvocatorias` queda en `api-cache` sin `token=` en la
+   clave (con reintentos: la escritura en cache es asincrona).
+3. Re-login real (logout + login) -> token B distinto de token A, y la
+   MISMA entrada de cache sigue siendo valida.
+4. Offline (`context.setOffline(true)`): un reload real de `/attendance`
+   sigue pintando datos (sin error de red) y muestra el banner "Datos sin
+   conexion".
+5. Prueba directa: un `fetch()` con un token FABRICADO (nunca emitido)
+   tambien recibe la respuesta cacheada con `X-Novattend-From-Cache: 1` —
+   prueba de que la clave de cache ignora el token por completo.
+6. Al terminar, ningun key de `api-cache` contiene el query param `token`
+   (ni el valor de A ni el de B).
