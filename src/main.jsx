@@ -1,11 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { useRegisterSW } from 'virtual:pwa-register/react'
+import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import './styles/animations.css'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import App from './App.jsx'
-import UpdateBanner from './components/ui/UpdateBanner.jsx'
 import { isApiEnabled } from './config/api'
 import { guardarAsistencia } from './services/api'
 import { initOfflineSync } from './services/offlineQueue'
@@ -14,24 +13,17 @@ import { initOfflineSync } from './services/offlineQueue'
 // y cada vez que se recupera la conexion (evento 'online'). Solo con API real.
 if (isApiEnabled()) initOfflineSync(guardarAsistencia)
 
-// eslint-disable-next-line react-refresh/only-export-components
-function Root() {
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW()
+// Registro del Service Worker: con registerType 'autoUpdate' (vite.config.js)
+// la app se auto-actualiza en silencio, sin pedir confirmacion. El banner de
+// aviso de actualizacion se elimino por decision de producto (era codigo
+// muerto: autoUpdate nunca invoca el callback que lo activaba). Ver detalle
+// en docs/deuda-tecnica.md.
+registerSW()
 
-  return (
-    <StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-      <UpdateBanner
-        needRefresh={needRefresh}
-        onUpdate={() => updateServiceWorker(true)}
-      />
-    </StrictMode>
-  )
-}
-
-createRoot(document.getElementById('root')).render(<Root />)
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </StrictMode>
+)

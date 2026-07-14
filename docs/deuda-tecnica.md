@@ -101,19 +101,19 @@ de Google Apps Script llevan el token de sesion en la query string. Consecuencia
 
 ## UpdateBanner es codigo muerto con registerType autoUpdate
 
-**Estado:** Pendiente de decision de producto. Deuda menor sin urgencia.
+**Estado:** RESUELTA (2026-07-14).
 
 **Hallazgo (verificacion adversarial 2026-07-14, confirmado contra el bundle de
 produccion):** vite-plugin-pwa en modo `registerType: 'autoUpdate'` nunca invoca el
 callback `onNeedRefresh`, que es lo unico que pone `needRefresh` a true. El
-`UpdateBanner` que monta `src/main.jsx` (via `useRegisterSW`) es por tanto codigo
+`UpdateBanner` que montaba `src/main.jsx` (via `useRegisterSW`) era por tanto codigo
 muerto: toda actualizacion se aplica por recarga automatica silenciosa. Verificado
 que esa recarga deja la pagina 100% funcional (skipWaiting + clientsClaim +
-lazyWithRetry), asi que no hay riesgo para el usuario — solo inconsistencia entre
+lazyWithRetry), asi que no habia riesgo para el usuario — solo inconsistencia entre
 configuracion e intencion de UI.
 
 **Componente afectado:** `src/components/ui/UpdateBanner.jsx` (el boton "Actualizar"
-jamas aparece en produccion; compila sin error, pero es inerte).
+jamas aparecia en produccion; compilaba sin error, pero era inerte).
 
 **Opciones de fix:**
 
@@ -122,6 +122,13 @@ jamas aparece en produccion; compila sin error, pero es inerte).
 2. **Cambiar a `registerType: 'prompt'`:** el usuario decide cuando actualizar via
    el banner (que pasaria a funcionar de verdad). Cambia el comportamiento de
    deploy: las pestanas abiertas dejarian de auto-actualizarse.
+
+**Como se resolvio:** decision de producto por opcion 1. Se borraron
+`src/components/ui/UpdateBanner.jsx` y su test `src/tests/UpdateBanner.test.jsx`.
+El registro del Service Worker en `src/main.jsx` ahora es explicito y minimo con
+`registerSW()` de `virtual:pwa-register` (en vez del hook `useRegisterSW` de
+`virtual:pwa-register/react`) — la auto-actualizacion silenciosa se mantiene tal
+cual, solo cambia el mecanismo de registro.
 
 **Nota cosmetica relacionada:** `logova1.png` aparece 2 veces en el precache
 manifest (17 entradas declaradas, 16 recursos unicos) porque lo recogen tanto los
