@@ -5,8 +5,10 @@ import { getSession, logout } from '../config/session'
 import { formatLocalDate, formatLongDate, labelFromIso } from '../utils/dateUtils'
 import useStudents, { GROUPS } from '../hooks/useStudents'
 import useSaveAttendance from '../hooks/useSaveAttendance'
+import useRevalidateOnVisible from '../hooks/useRevalidateOnVisible'
 import PageHeader from '../components/features/PageHeader.jsx'
 import PendingSyncBanner from '../components/features/PendingSyncBanner.jsx'
+import RestoredMarksBanner from '../components/features/RestoredMarksBanner.jsx'
 import GroupTabs from '../components/features/GroupTabs.jsx'
 import StudentList from '../components/features/StudentList.jsx'
 import DateHeaderControl from '../components/features/DateHeaderControl.jsx'
@@ -54,6 +56,8 @@ export default function AttendancePage() {
     loadingStudents,
     loadError,
     presenceLoadFailed,
+    restoredMarks,
+    dismissRestoredMarks,
     retryLoad,
     selectedGroup,
     setSelectedGroup,
@@ -65,6 +69,10 @@ export default function AttendancePage() {
   } = useStudents(convocatoria, profesorId, selectedDate)
 
   const totalCount = students.length
+
+  // Fix M5: revalida client-side al volver del background que la convocatoria
+  // siga vigente y que el dia no haya cambiado de fondo (sin llamar a la API).
+  const { stale: sessionStale, message: staleMessage } = useRevalidateOnVisible(convocatoria, todayIso)
 
   // Guardado con soporte offline: persistAttendance encola en IndexedDB si
   // falla la red y navega a /saved con queued=true (ver useSaveAttendance).
@@ -87,7 +95,7 @@ export default function AttendancePage() {
 
   // Si es un dia pasado, pedir confirmacion antes de sobrescribir.
   const handleSaveClick = () => {
-    if (!canSave) return
+    if (!canSave || sessionStale) return
     if (isPastDay) {
       setSelectorOpen(false)
       setConfirmOpen(true)
@@ -140,6 +148,16 @@ export default function AttendancePage() {
 
       {/* Indicador discreto de guardados en cola offline (desaparece al sincronizar) */}
       <PendingSyncBanner />
+
+      {/* Fix M5: aviso discreto tras restaurar marcas perdidas por un 401 a mitad de lista */}
+      <RestoredMarksBanner show={restoredMarks} onDismiss={dismissRestoredMarks} />
+
+      {/* Fix M5: convocatoria/dia ya no vigentes al volver del background */}
+      {staleMessage && (
+        <div className="px-4 mb-3">
+          <ErrorBanner message={staleMessage} />
+        </div>
+      )}
 
       {(loadError || presenceLoadFailed) && (
         <div className="px-4 mb-3">
@@ -200,7 +218,7 @@ export default function AttendancePage() {
       <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto px-4 pt-3 pb-[max(22px,env(safe-area-inset-bottom))] bg-off-white shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
         <ErrorBanner message={saveError} onDismiss={clearSaveError} />
         <Button
-          variant={canSave ? 'primary' : 'disabled'}
+          variant={canSave && !sessionStale ? 'primary' : 'disabled'}
           loading={saving}
           icon={saveIcon}
           fullWidth

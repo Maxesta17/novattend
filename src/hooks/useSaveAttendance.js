@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { isApiEnabled } from '../config/api'
 import { guardarAsistencia } from '../services/api'
 import { enqueue, removeMatching, isNetworkError } from '../services/offlineQueue'
+import { clearPendingMarks } from '../utils/pendingMarksStorage'
 
 /**
  * Hook de guardado de asistencia con soporte offline.
@@ -11,6 +12,10 @@ import { enqueue, removeMatching, isNetworkError } from '../services/offlineQueu
  * la cola offline: si el POST falla por red/timeout (o no hay conexion), el
  * payload se encola en IndexedDB y se navega a /saved como "pendiente".
  * Un error de negocio del backend NO se encola: se muestra como siempre.
+ *
+ * Fix M5: todo guardado con exito (online o encolado offline) limpia el
+ * snapshot de marcas sin guardar de pendingMarksStorage -- ya no hace falta
+ * restaurarlas si una sesion expira despues.
  *
  * @param {Object} args
  * @param {Object|null} args.convocatoria - convocatoria activa (con id y nombre)
@@ -83,6 +88,8 @@ export default function useSaveAttendance({
         // Sin conexion detectada: encolar directamente sin gastar el timeout de 20s.
         if (typeof navigator !== 'undefined' && navigator.onLine === false) {
           await enqueue(payload)
+          // Fix M5: guardado (aunque sea encolado) ya no hay marcas "sin guardar" que restaurar.
+          clearPendingMarks(convocatoria.id, group, date)
           goToSaved(true)
           return true
         }
@@ -94,6 +101,7 @@ export default function useSaveAttendance({
         if (isNetworkError(err)) {
           try {
             await enqueue(payload)
+            clearPendingMarks(convocatoria.id, group, date)
             goToSaved(true)
             return true
           } catch {
@@ -109,6 +117,8 @@ export default function useSaveAttendance({
       await new Promise(r => setTimeout(r, 1500))
     }
 
+    // Guardado con exito (online): limpiar el snapshot de marcas sin guardar.
+    clearPendingMarks(convocatoria?.id, group, date)
     goToSaved(false)
     return true
   }

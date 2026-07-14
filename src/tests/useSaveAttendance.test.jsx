@@ -26,8 +26,13 @@ vi.mock('../services/offlineQueue', () => ({
     Boolean(err?.cause && (err.cause.name === 'AbortError' || err.cause instanceof TypeError)),
 }))
 
+vi.mock('../utils/pendingMarksStorage', () => ({
+  clearPendingMarks: vi.fn(),
+}))
+
 import { guardarAsistencia } from '../services/api'
 import { enqueue, removeMatching } from '../services/offlineQueue'
+import { clearPendingMarks } from '../utils/pendingMarksStorage'
 import useSaveAttendance from '../hooks/useSaveAttendance'
 
 // --- Helpers ---
@@ -81,6 +86,8 @@ describe('useSaveAttendance', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/saved', {
       state: expect.objectContaining({ queued: false, present: 1, total: 2 }),
     })
+    // Fix M5: guardado con exito limpia el snapshot de marcas sin guardar
+    expect(clearPendingMarks).toHaveBeenCalledWith('conv-1', 'G1', '2026-07-14')
   })
 
   it('error de red: encola el payload y navega a /saved con queued: true', async () => {
@@ -104,6 +111,26 @@ describe('useSaveAttendance', () => {
       state: expect.objectContaining({ queued: true }),
     })
     expect(result.current.saveError).toBeNull()
+    // Fix M5: guardado encolado offline tambien limpia el snapshot pendiente
+    expect(clearPendingMarks).toHaveBeenCalledWith('conv-1', 'G1', '2026-07-14')
+  })
+
+  it('sin conexion (navigator.onLine=false): tambien limpia el snapshot pendiente al encolar', async () => {
+    setOnLine(false)
+    const { result } = renderHook(() => useSaveAttendance(baseArgs))
+
+    await act(async () => { await result.current.persistAttendance() })
+
+    expect(clearPendingMarks).toHaveBeenCalledWith('conv-1', 'G1', '2026-07-14')
+  })
+
+  it('error de negocio del backend: NO limpia el snapshot pendiente (las marcas siguen sin guardar)', async () => {
+    guardarAsistencia.mockRejectedValue(new Error('Convocatoria no encontrada'))
+    const { result } = renderHook(() => useSaveAttendance(baseArgs))
+
+    await act(async () => { await result.current.persistAttendance() })
+
+    expect(clearPendingMarks).not.toHaveBeenCalled()
   })
 
   it('error de negocio del backend: NO encola y muestra el error como siempre', async () => {
