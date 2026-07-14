@@ -56,7 +56,10 @@ export default defineConfig({
         ]
       },
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}']
+        // Sin png: el unico png (logova1, icono) ya lo precachea el plugin via
+        // los iconos del manifest; tenerlo tambien en el glob lo duplicaba en
+        // el manifest de precache (17 entradas declaradas, 16 unicas reales).
+        globPatterns: ['**/*.{js,css,html,svg,ico,woff2}']
       }
     })
   ],
