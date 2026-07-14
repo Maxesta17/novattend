@@ -12,7 +12,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Solo los pesos realmente usados en la app (auditoria: Cinzel siempre va con semibold/bold; Montserrat usa normal/medium/semibold/bold). -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- crossorigin es imprescindible: sin el, el CSS llega como respuesta opaca (no-cors) y el service worker no puede cachearlo -> sin fuentes en modo offline. -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
   </head>
   <body>
     <div id="root"></div>
