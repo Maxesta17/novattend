@@ -207,6 +207,54 @@ export async function loginRequest(username, password) {
 }
 
 // ============================================================
+// Endpoint de reset de password por email ("olvide mi contrasena")
+// ============================================================
+
+/**
+ * Solicita un reset de password por email. NO requiere sesion.
+ * El backend responde SIEMPRE con un mensaje generico (anti-enumeracion): no
+ * revela si el usuario existe. Si existe y tiene email, le envia una temporal.
+ * Timeout propio porque el backend hashea (PBKDF2) y envia el correo.
+ *
+ * @param {string} username
+ * @param {string} email - email del profesor (segundo factor: debe coincidir con el de la hoja)
+ * @returns {Promise<{message: string}|null>}
+ */
+export async function solicitarReset(username, email) {
+  if (!isApiEnabled()) {
+    return { message: 'Si los datos son correctos, te hemos enviado un correo con una contraseña temporal.' }
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 20000)
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'solicitarReset', username, email }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if (!res.ok) {
+      throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
+    }
+    const json = await res.json()
+    if (json.status === 'error') {
+      throw new Error(json.error || 'Error desconocido de la API')
+    }
+    return json.data
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err.name === 'AbortError') {
+      throw new Error('La solicitud tardó demasiado. Comprueba tu conexión.')
+    }
+    throw err
+  }
+}
+
+// ============================================================
 // Endpoint de cambio de password
 // ============================================================
 

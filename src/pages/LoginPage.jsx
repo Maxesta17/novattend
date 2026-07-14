@@ -4,6 +4,7 @@ import { isApiEnabled } from '../config/api'
 import { getConvocatorias, AuthError, PermissionError } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import ChangePasswordForm from '../components/features/ChangePasswordForm.jsx'
+import ForgotPasswordForm from '../components/features/ForgotPasswordForm.jsx'
 import PasswordInput from '../components/ui/PasswordInput.jsx'
 import Button from '../components/ui/Button.jsx'
 
@@ -28,6 +29,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   // Sesion pendiente de cambio de password forzado (no navegamos hasta cambiarla).
   const [mustChange, setMustChange] = useState(null)
+  // Pantalla de "olvide mi contrasena" (reset por email).
+  const [forgot, setForgot] = useState(false)
 
   // Tras login OK: ramificar navegacion por rol. teacher consulta convocatorias
   // (con timeout 8s); ceo va directo al dashboard.
@@ -124,6 +127,8 @@ export default function LoginPage() {
             username={mustChange.nombre || username}
             onSuccess={handlePasswordChanged}
           />
+        ) : forgot ? (
+          <ForgotPasswordForm onBack={() => { setForgot(false); setError('') }} />
         ) : (
           <div className={`animate-fade-up delay-4 w-full flex flex-col gap-3 ${shake ? 'animate-shake' : ''}`}>
             {info && (
@@ -142,6 +147,14 @@ export default function LoginPage() {
             <Button onClick={handleLogin} fullWidth loading={loading}>
               {loading ? 'Cargando...' : 'Iniciar sesión'}
             </Button>
+
+            <button
+              type="button"
+              onClick={() => { setForgot(true); setError('') }}
+              className="font-montserrat text-xs text-white/45 hover:text-gold/90 transition-colors text-center bg-transparent border-0 cursor-pointer mt-1"
+            >
+              ¿No recuerdas tu contraseña?
+            </button>
 
             {error && (
               <div className={`text-error mt-3 font-montserrat text-[13px] text-center text-pretty ${shake ? 'animate-shake' : ''}`}>

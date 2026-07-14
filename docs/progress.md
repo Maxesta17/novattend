@@ -1,8 +1,21 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-07-01
-- **Hito:** "Panel-lite" de Aurora (Opcion B) — alivio del lado Sheet sin panel React ni API nueva. Higiene de nombres automatica, comprobar duplicados, mover alumno en 1 paso, diagnostico + protecciones idempotentes. Todo Apps Script, desplegado a HEAD (clasp push).
+- **Fecha:** 2026-07-02
+- **Hito:** Self-service "¿No recuerdas tu contraseña?" (reset por email) — endpoint solicitarReset + botón en el login. Revisado adversarialmente (4 lentes) y endurecido. Backend @22. Requiere emails reales en PROFESORES + autorizar MailApp.
+
+### 2026-07-02 — Reset de password por email ("olvide mi contrasena") + reset Christian
+- **Christian bloqueado** ("usuario o contrasena incorrectos"): reseteado a temporal nueva sin guiones (ptqcdx2e4kub, hash @1000 en PROFESORES!E11, must_change=true). Verificado. Su hash previo era el de la temporal con guiones que tecleaba mal.
+- **Feature reset por email** (self-service). Decision del usuario: via email (recomendado) frente a admin-notify. Requiere emails reales en PROFESORES (hoy placeholders "(su email)").
+- **Backend (`Código.js`, deploy @22):** nuevo `handleSolicitarReset(body)` (case 'solicitarReset' en doPost, EXENTO de auth en resolveAuth_). Genera temporal (`generarPasswordTemporal_`), hashea @1000, must_change=true, envia la temporal SOLO por email (`enviarEmailReset_` con MailApp). Helpers `esEmailValido_` (rechaza placeholders/CRLF) y `autorizarEmail()` (one-shot para el consentimiento del scope de Gmail). Constantes `RESET_THROTTLE_PREFIX`/`RESET_THROTTLE_SEG=600`.
+- **Frontend (Vercel):** `api.solicitarReset(username, email)`; `ForgotPasswordForm.jsx` (usuario + email, mensaje generico anti-enumeracion); link "¿No recuerdas tu contraseña?" en `LoginPage`. 4 tests nuevos (202 total, lint 0).
+- **Revision adversarial (workflow, 4 lentes: enumeracion/DoS/inyeccion/auth) — 4 hallazgos MEDIO, todos arreglados antes de desplegar:**
+  1. **Carrera del throttle** (check-and-set fuera del lock -> rafaga de resets). Fix: TODO (throttle + escritura) dentro del LockService.
+  2. **Email falla tras rotar la password** -> profe bloqueado sin temporal + oraculo 500. Fix: enviar email ANTES de escribir la hoja; cualquier excepcion -> generico 200 (nunca 500 distinguible); si el envio falla, la cuenta queda intacta.
+  3. **Oraculo por timing** (PBKDF2 solo en la rama valida). Fix: `quemarTiempo` (PBKDF2 dummy) en toda rama que no resetee -> latencia ~constante (~3-4s), como handleLogin. Verificado: usuario-inexistente 4,3s / sin-email 3,0s.
+  4. **Reset forzado sin auth = DoS** (cualquiera con un usuario resetea al CEO). Mitigado: exigir tambien el EMAIL (segundo factor, debe coincidir con la hoja) + NO bumpear token_version (no mata la sesion activa de la victima; el bump ocurre al cambiar la password de verdad). Lo verificaron seguros: sin toma de cuenta, sin inyeccion de email, sin fuga de la temporal, sin XSS.
+- **Estado real de los profes (PROFESORES):** ya hicieron onboarding (must_change=false, cambiaron su pass) samuel, nadine, marta, elisabeth, myriam, sonja, stephanie. Pendientes de entrar: maria, sven, christian, admin. (Un 401 con la temporal = ese profe ya la cambio, NO es bug.)
+- **Pendiente del usuario (para que el reset envie de verdad):** (1) meter los EMAILS reales en PROFESORES col C (hoy "(su email)"); (2) ejecutar UNA vez `autorizarEmail` desde el editor (concede el permiso de Gmail). Sin ambos, el boton funciona pero el email no sale (MailApp lanza -> se captura -> respuesta generica; degradacion segura).
 
 ### 2026-07-01 — "Panel-lite" de Aurora (Opcion B): endurecer el lado Sheet
 - **Contexto:** se estimo el panel admin React completo (Opcion A) via auditoria multi-agente (backend/frontend/requisitos/seguridad). Conclusion: es un milestone (rol nuevo en auth + exponer handlers de menu por API + riesgo de desincronizacion ALUMNOS vs hojas de grupo). **Decision del usuario:** Aurora sera rol 'admin' PERO **usando las credenciales del CEO** (asume el trade-off de que ve todo lo del CEO); eso solo aplica al futuro panel A. Y **empezar por Opcion B**: aliviar el trabajo en la hoja cruda (80% del alivio por 20% del esfuerzo), sin frontend ni API nueva ni tocar auth.

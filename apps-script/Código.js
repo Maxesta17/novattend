@@ -370,6 +370,14 @@ const LOGIN_LOCKOUT_SEG = 15 * 60; // 15 minutos
 // ScriptProperties (durable, no evictable); el cache es solo lectura rapida.
 const LOGIN_FAIL_PREFIX = 'loginfail_';
 
+// Throttle del reset de password por email (case 'solicitarReset'). Dentro de
+// esta ventana no se vuelve a resetear ni reenviar para el mismo usuario: evita
+// email-bombing y el DoS de dejar al profesor fuera repitiendo resets. Fuente de
+// verdad: ScriptProperties (durable). Clave: RESET_THROTTLE_PREFIX + usuario ->
+// epoch ms del ultimo reset efectivo.
+const RESET_THROTTLE_PREFIX = 'reset_';
+const RESET_THROTTLE_SEG = 10 * 60; // 10 minutos
+
 // Salt DUMMY fijo para timing constante en login: si el usuario no existe, se
 // ejecuta igualmente verifyPassword_ contra este salt y un hash dummy para que
 // el coste temporal del login no revele si el usuario existe (red-team #5). El
@@ -702,6 +710,168 @@ function handleCambiarPassword(body, identity) {
 }
 
 /**
+ * Solicitud de reset de password por email (case 'solicitarReset', EXENTA de auth).
+ *
+ * Flujo "olvide mi contrasena": el profesor introduce su usuario. Si existe, esta
+ * activo y tiene un email valido en PROFESORES, se genera una password temporal
+ * nueva, se hashea (PBKDF2+salt), se pone must_change_password=true, se incrementa
+ * token_version (revoca sesiones) y se envia la temporal por email.
+ *
+ * Defensas:
+ *  - Anti-enumeracion: SIEMPRE devuelve el MISMO mensaje generico, exista o no el
+ *    usuario / tenga o no email. Nunca revela si un usuario existe.
+ *  - Throttle durable por usuario (RESET_THROTTLE_SEG): dentro de la ventana no se
+ *    vuelve a resetear ni reenviar (evita email-bombing y el DoS de dejar al profe
+ *    fuera repitiendo resets).
+ *  - La temporal viaja SOLO por email; nunca en la respuesta HTTP ni en el LOG.
+ *  - token_version++ revoca cualquier sesion activa del profesor.
+ *
+ * @param {Object} body - { action:'solicitarReset', username }.
+ * @returns {GoogleAppsScript.Content.TextOutput} respuesta generica.
+ */
+function handleSolicitarReset(body) {
+  const usuario = String(body.username || '').trim().toLowerCase();
+  const emailReq = String(body.email || '').trim().toLowerCase();
+  const generico = jsonResponse({
+    message: 'Si los datos son correctos, te hemos enviado un correo con una contrasena temporal. Revisa tu bandeja (y la carpeta de spam).'
+  });
+
+  // Coste temporal CONSTANTE (anti-enumeracion por timing, como handleLogin): se
+  // quema un PBKDF2 del mismo iter count en toda rama que NO resetee, para que un
+  // usuario inexistente/mal-emparejado no responda mas rapido que uno valido.
+  const quemarTiempo = function () { pbkdf2_('x', DUMMY_LOGIN_SALT, PBKDF2_ITER); };
+
+  if (!usuario || !emailReq) { quemarTiempo(); return generico; }
+
+  // TODO el check-and-set del throttle + la escritura ocurren DENTRO del lock:
+  // asi las peticiones concurrentes se serializan (sin bypass del throttle por
+  // carrera) y un fallo de lock no consume la ventana de 10 min.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    quemarTiempo();
+    return generico;
+  }
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const throttleKey = RESET_THROTTLE_PREFIX + usuario;
+    const last = Number(props.getProperty(throttleKey) || 0);
+    if (last && (Date.now() - last) < RESET_THROTTLE_SEG * 1000) {
+      quemarTiempo();
+      return generico;
+    }
+
+    const id = (usuario === 'admin') ? 'prof-admin' : 'prof-' + usuario;
+    const prof = lookupProfesor_(id);
+    const emailHoja = prof ? String(prof.email || '').trim() : '';
+
+    // Debe existir, estar activo, tener email valido en la hoja, y que el email
+    // de la PETICION coincida con el de la hoja. Ese segundo factor sube el coste
+    // de forzar el reset de una cuenta ajena solo con el usuario (mitiga el DoS).
+    const ok = prof && isTruthy(prof.activo) && esEmailValido_(emailHoja) &&
+               emailHoja.toLowerCase() === emailReq;
+    if (!ok) { quemarTiempo(); return generico; }
+
+    const temp = generarPasswordTemporal_();
+    const salt = Utilities.getUuid();
+    const hash = pbkdf2_(temp, salt, PBKDF2_ITER);
+
+    // Enviar el email ANTES de tocar la hoja: si el envio falla, la cuenta queda
+    // INTACTA (la password vigente sigue valiendo) y no se marca el throttle, en
+    // vez de dejar al profesor bloqueado sin recibir la temporal. Cualquier fallo
+    // devuelve el MISMO generico (nunca un 500 distinguible -> no rompe la
+    // anti-enumeracion).
+    try {
+      enviarEmailReset_(emailHoja, prof.nombre, usuario, temp);
+    } catch (e) {
+      return generico;
+    }
+
+    // Persistir: nuevo hash/salt + forzar cambio. NO se toca token_version: una
+    // solicitud (posiblemente maliciosa) NO debe expulsar la sesion activa de la
+    // victima; el token_version se incrementa cuando el profesor cambie la
+    // password (handleCambiarPassword), que es cuando se usa de verdad la temporal.
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.PROFESORES);
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).trim());
+      const colId = headers.indexOf('id');
+      const colHash = headers.indexOf('password_hash');
+      const colSalt = headers.indexOf('salt');
+      const colMustChange = headers.indexOf('must_change_password');
+      if (colId !== -1 && colHash !== -1 && colSalt !== -1) {
+        let filaIdx = -1;
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][colId]).trim() === id) { filaIdx = i; break; }
+        }
+        if (filaIdx !== -1) {
+          data[filaIdx][colHash] = hash;
+          data[filaIdx][colSalt] = salt;
+          if (colMustChange !== -1) data[filaIdx][colMustChange] = true;
+          sheet.getRange(filaIdx + 1, 1, 1, headers.length).setValues([data[filaIdx]]);
+          cache_.remove('authprof_' + id);
+          props.setProperty(throttleKey, String(Date.now()));
+          writeLog(id, 'RESET_PASSWORD', 'email enviado');
+        }
+      }
+    }
+    return generico;
+  } catch (e) {
+    // Cualquier excepcion inesperada -> generico (nunca un 500 distinguible que
+    // rompa la anti-enumeracion).
+    return generico;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Validacion superficial de email: descarta vacios y placeholders tipo
+ * "(su email)", y exige un patron basico usuario@dominio.tld sin espacios.
+ * @param {string} email
+ * @returns {boolean}
+ */
+function esEmailValido_(email) {
+  const e = String(email || '').trim();
+  if (!e || e.charAt(0) === '(') return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+/**
+ * Envia por email la password temporal de reset. La temporal NUNCA se loguea.
+ * El destinatario es el email VALIDADO de la hoja (sin saltos de linea), asi que
+ * no hay inyeccion de cabeceras.
+ * @param {string} email - destinatario (ya validado).
+ * @param {string} nombre - nombre del profesor (de la hoja).
+ * @param {string} usuario - usuario de login.
+ * @param {string} temp - password temporal en claro.
+ */
+function enviarEmailReset_(email, nombre, usuario, temp) {
+  const appUrl = 'https://novattend.vercel.app';
+  const asunto = 'NovAttend - Contrasena temporal';
+  const cuerpo =
+    'Hola ' + (nombre || usuario) + ',\n\n' +
+    'Has solicitado recuperar el acceso a NovAttend. Tu contrasena temporal es:\n\n' +
+    '  Usuario: ' + usuario + '\n' +
+    '  Contrasena temporal: ' + temp + '\n\n' +
+    'Entra en ' + appUrl + ' con esa contrasena. La app te pedira cambiarla por una tuya.\n\n' +
+    'Si no has sido tu, ignora este correo: tu cuenta sigue segura mientras no uses esta contrasena temporal.\n';
+  MailApp.sendEmail(email, asunto, cuerpo);
+}
+
+/**
+ * Autorizacion puntual del permiso de envio de email (MailApp). Ejecutar UNA VEZ
+ * desde el editor de Apps Script tras anadir el reset por email: dispara el
+ * consentimiento del scope de Gmail y manda un correo de prueba al owner.
+ */
+function autorizarEmail() {
+  const yo = Session.getEffectiveUser().getEmail();
+  MailApp.sendEmail(yo, 'NovAttend - prueba de email', 'Si recibes esto, el envio de correos ya funciona.');
+  Logger.log('Email de prueba enviado a ' + yo);
+}
+
+/**
  * Gate de autorizacion real: valida el token de sesion y re-chequea la fuente
  * de verdad (hoja PROFESORES). NO concede acceso por api_key bajo ningun
  * concepto (red-team CRITICO: nada de fallback api_key->ceo).
@@ -789,8 +959,10 @@ function requireAuth_(token, roles) {
  *          - error: TextOutput de error a devolver.
  */
 function resolveAuth_(action, token) {
-  // Acciones publicas.
-  if (action === 'ping' || action === 'login') {
+  // Acciones publicas. 'solicitarReset' (olvide mi contrasena) no puede exigir
+  // token: quien lo pide precisamente NO tiene sesion. Sus defensas (throttle
+  // durable, anti-enumeracion, envio SOLO por email) estan en handleSolicitarReset.
+  if (action === 'ping' || action === 'login' || action === 'solicitarReset') {
     return { exempt: true };
   }
 
@@ -1347,6 +1519,8 @@ function doPost(e) {
     switch (action) {
       case 'login':
         return handleLogin(body);
+      case 'solicitarReset':
+        return handleSolicitarReset(body);
       case 'cambiarPassword':
         return handleCambiarPassword(body, identity);
       case 'guardarAsistencia':
