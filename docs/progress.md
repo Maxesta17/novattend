@@ -1,8 +1,22 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-07-02
-- **Hito:** Self-service "¿No recuerdas tu contraseña?" (reset por email) — endpoint solicitarReset + botón en el login. Revisado adversarialmente (4 lentes) y endurecido. Backend @22. Requiere emails reales en PROFESORES + autorizar MailApp.
+- **Fecha:** 2026-07-14
+- **Hito:** Auditoria swarm (3 agentes) + 2 olas de fixes (6 agentes) en rama `fix/auditoria-swarm` — 6 commits. Criticos resueltos: guardado fantasma y cola offline IndexedDB. Dashboard 2x mas rapido. Pendiente: merge a main y deuda cache-token (docs/deuda-tecnica.md).
+
+### 2026-07-14 — Auditoria completa + fixes en 2 olas (swarm Claude Flow, rama fix/auditoria-swarm)
+- **Auditoria (3 agentes paralelos: rendimiento/funcional/calidad):** base sana (lint 0, build 87KB gzip inicial, code-splitting ya hecho) pero 2 criticos y 7 altos. Informe consolidado en claude-flow memory (`novattend-audits/auditoria-2026-07-14-consolidada`).
+- **Ola 1 (4 agentes, commits 59486a2..2a1658f):**
+  - `fix` integridad: sin convocatoria con API activa ya NO cae a mocks ni simula guardado exitoso (redirige a login); precarga de dia pasado fallida bloquea guardado con banner+Reintentar (antes: catch{} silencioso -> riesgo de pisar asistencia real con ceros); marcas conservadas al cambiar de tab; HOY precarga lo ya guardado; anti doble-tap en modal; NaN% fuera; aviso "sesion expirada" en login; formatLongDate/formatShortDate en dateUtils.
+  - `perf` dashboard ~3,2s -> ~1,6s: getProfesores en paralelo con getConvocatorias (no depende de la convocatoria) + cache en ref; cambiar convocatoria = 1 peticion (antes 4, doble via effect+handler); token anti-race; utils/attendance.js unifica aggregateAttendance/getAttendanceScheme (antes duplicadas en 3 sitios).
+  - `refactor` api.js 405 lineas -> services/api/{errors,http,auth,endpoints,index} todos <250; api.js re-export puro (ningun import externo cambio, api.test.jsx paso sin tocar); timeout 20s AbortController en apiGet/apiPost (los POST ya no cuelgan); errores de red mapeados a espanol con cause.
+  - `chore` PWA/carga: Google Fonts 12 pesos -> 6 usados; public/ purgado (logova.png, offline.html, vite.svg — 55KB de precache muerto; el xlsx con datos se movio al Escritorio, estaba desplegado publico); lazyWithRetry (deploy con skipWaiting ya no rompe rutas lazy en pestanas abiertas); api-cache TTL 24h -> 3h como mitigacion de la cache claveada por token (fix definitivo aplazado, ver docs/deuda-tecnica.md); CLAUDE.md corregido (fallback, n tests, estilos inline).
+- **Ola 2 (2 agentes, commits dd367c5 y 4e830b6):**
+  - `feat` cola offline IndexedDB (critico C2): guardar sin red encola (solo fallo de red/timeout, negocio no), replay al evento online y al arrancar, dedupe por convocatoria+grupo+fecha (ultimo gana), anti-pisado (guardado online purga pendientes de la misma clave), SavedPage variante "pendiente de sincronizar" + banner contador. useSaveAttendance extraido de AttendancePage (250 -> 226 lineas).
+  - `fix` popup detalle alumno: error al cargar faltas visible con Reintentar (antes indistinguible de "sin faltas"); sin metricas 0/0 inventadas al abrir desde pase de lista; cache de faltas por convocatoria+alumno (2a apertura instantanea, invalidada al justificar); onDirtyClose refresca el resumen del dashboard tras justificar.
+- **Estado final verificado:** lint 0 errores 0 warnings, **248 tests / 38 suites verdes** (base 202/32), build OK (precache 17 entradas, 402KB).
+- **Bloqueos/decisiones:** cache-token de Workbox APLAZADA a fix propio (requiere generateSW -> injectManifest; documentada en docs/deuda-tecnica.md con mitigacion TTL 3h aplicada). Incidencia menor: un agente uso git stash durante la ola 1 violando su encargo; verificado archivo a archivo que no se perdio trabajo.
+- **Siguiente paso sugerido:** probar en dev los 2 flujos criticos (entrar a /attendance por URL directa -> redirige a login; guardar en modo avion -> queda pendiente y sincroniza al volver la red), merge de `fix/auditoria-swarm` a main (recordar `gh auth switch --user Maxesta17` para push) y deploy Vercel. Despues: fix propio de la cache-token (injectManifest).
 
 ### 2026-07-02 — Reset de password por email ("olvide mi contrasena") + reset Christian
 - **Christian bloqueado** ("usuario o contrasena incorrectos"): reseteado a temporal nueva sin guiones (ptqcdx2e4kub, hash @1000 en PROFESORES!E11, must_change=true). Verificado. Su hash previo era el de la temporal con guiones que tecleaba mal.
