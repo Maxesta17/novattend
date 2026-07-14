@@ -5,6 +5,7 @@ import MobileContainer from './components/MobileContainer'
 import ProtectedRoute from './components/ProtectedRoute'
 import AuthExpiredListener from './components/AuthExpiredListener.jsx'
 import LoadingSpinner from './components/ui/LoadingSpinner.jsx'
+import OfflineDataBanner from './components/features/OfflineDataBanner.jsx'
 import lazyWithRetry from './utils/lazyWithRetry'
 // Eager (sin lazy — se incluyen en el chunk principal):
 import LoginPage from './pages/LoginPage'
@@ -22,6 +23,7 @@ function App() {
     <BrowserRouter>
       <AuthExpiredListener />
       <MobileContainer>
+        <OfflineDataBanner />
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/" element={<LoginPage />} />

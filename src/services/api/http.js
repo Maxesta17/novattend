@@ -13,12 +13,19 @@
  *     traducen a mensajes en espanol preservando la causa original (cause).
  *   - Los errores de negocio del backend (ya en espanol) NO se tocan.
  *
+ * Origen de los datos (solo apiGet):
+ *   - Tras una respuesta HTTP exitosa se notifica a cacheStatus.js si vino de
+ *     Cache Storage (fallback del Service Worker) o de red fresca, para que
+ *     OfflineDataBanner pueda avisar de datos potencialmente desactualizados.
+ *   - apiPost NO notifica: los POST nunca se sirven desde cache.
+ *
  * @module services/api/http
  */
 
 import { API_URL, isApiEnabled } from '../../config/api'
 import { getToken } from '../../config/session'
 import { throwApiError } from './errors'
+import { notifyDataSource } from '../cacheStatus'
 
 /** Timeout por defecto para llamadas estandar (ms). Login/reset usan el suyo propio. */
 const FETCH_TIMEOUT_MS = 20000
@@ -100,6 +107,13 @@ export async function apiGet(action, params = {}) {
   if (!res.ok) {
     throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
   }
+
+  // Contrato con el Service Worker: una respuesta servida desde Cache Storage
+  // (fallback de NetworkFirst) llega con este header. `res.headers` puede no
+  // existir en mocks de test que no lo definen; el optional chaining lo trata
+  // igual que una respuesta de red normal.
+  notifyDataSource(res.headers?.get('X-Novattend-From-Cache') === '1' ? 'cache' : 'network')
+
   const json = await res.json()
 
   if (json.status === 'error') {
