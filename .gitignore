@@ -48,3 +48,8 @@ coverage/
 
 # Workspaces de VS Code (rutas absolutas locales)
 *.code-workspace
+
+# Artefactos runtime de claude-flow
+.claude-flow/
+.swarm/
+ruvector.db

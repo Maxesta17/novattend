@@ -1,18 +1,20 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './App.css'
 import MobileContainer from './components/MobileContainer'
 import ProtectedRoute from './components/ProtectedRoute'
 import AuthExpiredListener from './components/AuthExpiredListener.jsx'
 import LoadingSpinner from './components/ui/LoadingSpinner.jsx'
+import lazyWithRetry from './utils/lazyWithRetry'
 // Eager (sin lazy — se incluyen en el chunk principal):
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
-// Lazy — se cargan bajo demanda al navegar a cada ruta:
-const ConvocatoriaPage = lazy(() => import('./pages/ConvocatoriaPage'))
-const AttendancePage = lazy(() => import('./pages/AttendancePage'))
-const SavedPage = lazy(() => import('./pages/SavedPage'))
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+// Lazy con reintento — tras un deploy (skipWaiting) los chunks viejos se purgan
+// del precache; si el import() falla, lazyWithRetry recarga la pagina una vez:
+const ConvocatoriaPage = lazyWithRetry(() => import('./pages/ConvocatoriaPage'))
+const AttendancePage = lazyWithRetry(() => import('./pages/AttendancePage'))
+const SavedPage = lazyWithRetry(() => import('./pages/SavedPage'))
+const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'))
 
 /** Componente raiz — configura rutas, lazy loading y guardias de rol */
 function App() {

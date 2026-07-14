@@ -14,17 +14,9 @@
 import { useState, useCallback } from 'react'
 import { isApiEnabled } from '../config/api'
 import { setSession } from '../config/session'
-
-// Importacion dinamica de loginRequest para evitar ciclo en modo mock.
-// En modo API real se importa; en mock nunca se invoca.
-let _loginRequestCache = null
-async function getLoginRequest() {
-  if (!_loginRequestCache) {
-    const mod = await import('../services/api')
-    _loginRequestCache = mod.loginRequest
-  }
-  return _loginRequestCache
-}
+// Import estatico: api.js ya se importa estaticamente en el resto de la app,
+// el import() dinamico no ahorraba nada y generaba un aviso en el build.
+import { loginRequest } from '../services/api'
 
 /**
  * Construye un objeto de sesion mock para desarrollo sin backend.
@@ -74,7 +66,6 @@ export function useAuth() {
       }
 
       // Modo API real
-      const loginRequest = await getLoginRequest()
       const data = await loginRequest(username, password)
 
       // data contiene: { token, profesor_id, rol, nombre, exp, must_change_password }

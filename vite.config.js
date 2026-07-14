@@ -71,7 +71,12 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
+              // Mitigacion temporal: la cache se clavea por URL con el token incluido,
+              // asi que los tokens de sesion quedan persistidos en Cache Storage y tras
+              // un re-login ninguna entrada matchea (offline roto). TTL reducido de 24h
+              // a 3h para acotar ambos problemas. Fix definitivo documentado en
+              // docs/deuda-tecnica.md ("Cache de API claveada por token").
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 3 },
               networkTimeoutSeconds: 10
             }
           }
