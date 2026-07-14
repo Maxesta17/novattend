@@ -1,8 +1,18 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-07-14
-- **Hito:** Auditoria swarm (3 agentes) + 2 olas de fixes (6 agentes) en rama `fix/auditoria-swarm` — 6 commits. Criticos resueltos: guardado fantasma y cola offline IndexedDB. Dashboard 2x mas rapido. Pendiente: merge a main y deuda cache-token (docs/deuda-tecnica.md).
+- **Fecha:** 2026-07-14 (tarde)
+- **Hito:** Segunda tanda swarm con ruteo de modelos por complejidad (sonnet/haiku, Fable solo orquesta): marcas sobreviven al 401, suite useConvocatorias, E2E integrado en e2e/, endpoints muertos fuera. warmCache verificado como YA RESUELTO en prod (@17+). Deploy Vercel verificado actualizado. Pendiente: deuda cache-token (docs/deuda-tecnica.md) y prueba manual en movil.
+
+### 2026-07-14 (tarde) — Tanda paralela con ruteo de modelos (rama fix/warmcache-y-flecos)
+- **Ruteo:** Fable orquesta; agentes con modelo por complejidad — sonnet (warmCache, marcas-401, tests+e2e) y haiku (limpieza, check deploy). Registro en swarm claude-flow con model explicito.
+- **warmCache (sonnet):** NO habia nada que arreglar — el fix ya estaba en prod desde @17 (commit c026969 + PR #5, purga determinista de `res_<conv>__` + indice `_warm_keys` con TTL=WARM_TTL). Re-verificado con replica Node (3 escenarios de invalidacion verdes). El indice de memoria estaba desactualizado; corregido. Dejo secuencia curl de re-verificacion en el output del agente.
+- **Marcas ante 401 (sonnet, commit 038bc80):** snapshot en sessionStorage (solo ids+booleans, debounce 300ms, purga 12h; clearSession solo borra 'user' asi que sobrevive); restauracion con banner al remontar; limpieza tras guardado exitoso (no en errores de negocio); useRevalidateOnVisible avisa y bloquea Guardar si el dia/convocatoria caducaron al volver del background. useStudents ahora orquestador fino (197 lineas) sobre usePresencePreload + usePendingMarksSync.
+- **Tests+E2E (sonnet, commit 01ee422):** suite useConvocatorias (9 casos); e2e/attendance.e2e.mjs con credenciales SOLO por env (E2E_USER/E2E_PASS) + README del procedimiento usuario fantasma (hash PBKDF2 replicado, fila PROFESORES, limpieza obligatoria) + npm run test:e2e + playwright devDependency.
+- **Limpieza (haiku, commit a67cb9f):** crearAlumno/actualizarAlumno eliminados (0 callers); gotcha login mock en CLAUDE.md.
+- **Check deploy (haiku):** Vercel prod sirve el build nuevo (fonts recortadas, sw.js sin logova/offline.html, manifest OK).
+- **Estado verificado:** lint 0, 275 tests / 43 suites verdes, build OK.
+- **Siguiente paso sugerido:** deuda cache-token (generateSW→injectManifest) como sesion propia con E2E; prueba manual en movil del flujo offline en produccion.
 
 ### 2026-07-14 — Auditoria completa + fixes en 2 olas (swarm Claude Flow, rama fix/auditoria-swarm)
 - **Auditoria (3 agentes paralelos: rendimiento/funcional/calidad):** base sana (lint 0, build 87KB gzip inicial, code-splitting ya hecho) pero 2 criticos y 7 altos. Informe consolidado en claude-flow memory (`novattend-audits/auditoria-2026-07-14-consolidada`).
