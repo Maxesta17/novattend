@@ -53,3 +53,7 @@ coverage/
 .claude-flow/
 .swarm/
 ruvector.db
+
+# Artefactos runtime de claude-flow/ruflo (swarm local)
+agentdb.rvf
+agentdb.rvf.lock
