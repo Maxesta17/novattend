@@ -9,7 +9,9 @@
  * Reutiliza computeResumen() y mondayOf_() de Código.js: NO duplica ese calculo.
  * Depende de los helpers globales de OperacionesBase.js (OPS_DEV_EMAIL,
  * opsIsDryRun_, opsEnviarEmail_, opsHoyStr_, opsYaEjecutadoHoy_,
- * opsMarcarEjecutadoHoy_); ninguno se redefine aqui.
+ * opsMarcarEjecutadoHoy_) y de PlantillasEmail.js (construirCuerpoResumen_,
+ * construirHtmlResumenCEO_) para toda la presentacion del email; ninguno se
+ * redefine aqui.
  */
 
 /**
@@ -127,11 +129,21 @@ function triggerResumenSemanalCEO() {
       });
     });
 
-    const cuerpo = (nf === 0 && nr === 0)
+    const sinAlertas = nf === 0 && nr === 0;
+    const cuerpo = sinAlertas
       ? 'Sin alertas la semana pasada. Todo en orden.' + destinatario.nota
       : construirCuerpoResumen_(lunesAnteriorStr, juevesAnteriorStr, secciones, profesoresPorId) + destinatario.nota;
+    // La plantilla decide la tarjeta verde vs. las tablas por convocatoria
+    // segun si hay alertas; en el caso "sin alertas" se le pasa [] a proposito
+    // (mismo criterio que el cuerpo de texto, sin recalcular nada).
+    const html = construirHtmlResumenCEO_(
+      lunesAnteriorStr, juevesAnteriorStr,
+      sinAlertas ? [] : secciones,
+      profesoresPorId,
+      destinatario.nota
+    );
 
-    opsEnviarEmail_(destinatario.email, asunto, cuerpo);
+    opsEnviarEmail_(destinatario.email, asunto, cuerpo, html);
 
     writeLog('OPERATIVA', 'RESUMEN_CEO',
       'alertasFaltas=' + nf + ' alertasRacha=' + nr + ' destinatario=' + destinatario.tipo);
@@ -182,78 +194,4 @@ function mapaProfesoresPorId_() {
     mapa[p.id] = p.nombre;
   });
   return mapa;
-}
-
-/**
- * Construye el cuerpo de texto plano del email, por convocatoria y con las
- * dos secciones de alerta agrupadas por profesor y grupo.
- *
- * @param {string} lunesStr - 'yyyy-MM-dd' del lunes de la semana anterior.
- * @param {string} juevesStr - 'yyyy-MM-dd' del jueves de la semana anterior.
- * @param {Array<{nombre:string, alertasFaltas:Array, alertasRacha:Array}>} secciones
- * @param {Object<string,string>} profesoresPorId
- * @returns {string}
- */
-function construirCuerpoResumen_(lunesStr, juevesStr, secciones, profesoresPorId) {
-  let cuerpo = 'Resumen semanal de asistencia — semana del ' + lunesStr + ' al ' + juevesStr + '\n';
-
-  secciones.forEach(function(sec) {
-    cuerpo += '\n=== ' + sec.nombre + ' ===\n';
-
-    cuerpo += '\n2+ faltas la semana pasada:\n';
-    cuerpo += formatearSeccion_(sec.alertasFaltas, profesoresPorId, function(item) {
-      return item.faltas + ' faltas';
-    });
-
-    cuerpo += '\nRachas de faltas activas (situación actual a día de hoy, no solo la semana pasada):\n';
-    cuerpo += formatearSeccion_(sec.alertasRacha, profesoresPorId, function(item) {
-      return 'racha de ' + item.racha;
-    });
-  });
-
-  return cuerpo;
-}
-
-/**
- * Formatea una lista de alertas (faltas o racha) agrupada por profesor y,
- * dentro de cada profesor, ordenada por grupo y nombre. Cada linea sigue el
- * formato '  - Nombre (Grupo): <sufijo>'.
- *
- * @param {Array<{nombre:string, grupo:string, profesor_id:string}>} alertas
- * @param {Object<string,string>} profesoresPorId - fallback: id crudo si el
- *   profesor fue dado de baja y ya no aparece en PROFESORES.
- * @param {function(Object):string} sufijo - genera el texto tras los ':'.
- * @returns {string}
- */
-function formatearSeccion_(alertas, profesoresPorId, sufijo) {
-  if (!alertas || alertas.length === 0) {
-    return '  (sin alertas)\n';
-  }
-
-  const porProfesor = {};
-  alertas.forEach(function(a) {
-    const key = a.profesor_id || '(sin profesor)';
-    if (!porProfesor[key]) porProfesor[key] = [];
-    porProfesor[key].push(a);
-  });
-
-  const profesorIds = Object.keys(porProfesor).sort(function(idA, idB) {
-    const nombreA = String(profesoresPorId[idA] || idA);
-    const nombreB = String(profesoresPorId[idB] || idB);
-    return nombreA.localeCompare(nombreB);
-  });
-
-  let out = '';
-  profesorIds.forEach(function(pid) {
-    const nombreProf = profesoresPorId[pid] || pid;
-    out += '  ' + nombreProf + ':\n';
-    const items = porProfesor[pid].slice().sort(function(x, y) {
-      if (x.grupo !== y.grupo) return x.grupo < y.grupo ? -1 : 1;
-      return String(x.nombre || '').localeCompare(String(y.nombre || ''));
-    });
-    items.forEach(function(item) {
-      out += '    - ' + item.nombre + ' (' + item.grupo + '): ' + sufijo(item) + '\n';
-    });
-  });
-  return out;
 }
