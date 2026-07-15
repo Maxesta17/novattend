@@ -45,9 +45,15 @@ function opsIsDryRun_() {
  * @param {string} destinatario - email real del profesor/CEO.
  * @param {string} asunto - asunto del correo.
  * @param {string} cuerpo - cuerpo en texto plano.
+ * @param {string} [htmlBody] - cuerpo HTML opcional (ver PlantillasEmail.js:
+ *   construirHtmlResumenCEO_). Si se omite o es cadena vacia, el
+ *   comportamiento es EXACTAMENTE igual que antes de este parametro (solo
+ *   texto plano). Si se pasa, MailApp.sendEmail recibe tambien
+ *   { htmlBody }; en dry-run se le superpone un banner naranja que deja
+ *   claro que es una simulacion y cual seria el destinatario real.
  * @returns {boolean} true si el envio (real o dry-run) se realizo con exito.
  */
-function opsEnviarEmail_(destinatario, asunto, cuerpo) {
+function opsEnviarEmail_(destinatario, asunto, cuerpo, htmlBody) {
   if (!esEmailValido_(destinatario)) {
     writeLog('OPERATIVA', 'EMAIL_INVALIDO', destinatario + ' | ' + asunto);
     return false;
@@ -55,10 +61,21 @@ function opsEnviarEmail_(destinatario, asunto, cuerpo) {
 
   try {
     if (opsIsDryRun_()) {
-      MailApp.sendEmail(OPS_DEV_EMAIL, '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo);
+      if (htmlBody) {
+        const bannerHtml = '<div style="background:#FFF3E0;border:1px solid #E65100;padding:8px 12px;' +
+          'font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#E65100;">DRY-RUN — Destinatario real: ' +
+          escaparHtml_(destinatario) + '</div>';
+        MailApp.sendEmail(OPS_DEV_EMAIL, '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo, { htmlBody: bannerHtml + htmlBody });
+      } else {
+        MailApp.sendEmail(OPS_DEV_EMAIL, '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo);
+      }
       writeLog('OPERATIVA', 'EMAIL_DRYRUN', destinatario + ' | ' + asunto);
     } else {
-      MailApp.sendEmail(destinatario, asunto, cuerpo);
+      if (htmlBody) {
+        MailApp.sendEmail(destinatario, asunto, cuerpo, { htmlBody: htmlBody });
+      } else {
+        MailApp.sendEmail(destinatario, asunto, cuerpo);
+      }
       writeLog('OPERATIVA', 'EMAIL', destinatario + ' | ' + asunto);
     }
     return true;
