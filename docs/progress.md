@@ -1,8 +1,17 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-07-14 (noche)
-- **Hito:** Mejoras operativas backend: 4 triggers automaticos (rama feat/mejoras-operativas-backend). Orquestacion swarm claude-flow con ruteo de modelos, ola adversarial (10 hallazgos confirmados, 6 raices) + arbitraje opus (hallazgos: TypeError localeCompare, guard TOCTOU sin lock, convocatoria cerrada viernes desaparecia del resumen, carpetas Drive homonimas, CANARIO_URL hardcodeada, copy rachas enganoso, tildes en emails, relectura O(convocatorias x hoja), gate dia via UTC). 5 archivos nuevos: OperacionesBase (DRY_RUN fail-safe + opsEnviarEmail_ + opsGuardDiario_ + installTriggers idempotente), BackupSemanal (domingo 22h, rotacion 8 backups), CanarioDiario (7h, ping + alerta >15s), RecordatorioLista (20h lun-jue, email profesores sin registros hoy), ResumenSemanalCEO (lunes 8h, alertas semana anterior). clasp push hecho. Siguiente: (1) installTriggers() desde editor (nuevos scopes Drive/UrlFetch), (2) validar triggers en semana (DRY_RUN activo por defecto), (3) email Rafa en PROFESORES, (4) DRY_RUN='false' tras validacion.
+- **Fecha:** 2026-07-28
+- **Hito:** Maria Wolf (prof-maria) excluida del recordatorio diario de lista. Cambio de 1 archivo en `apps-script/RecordatorioLista.js`: constante `RECORDATORIO_EXCLUIDOS_` (lista de ids de PROFESORES que no reciben ese email) + contador `excluidos=` en el LOG. Mergeado a main (`6fec661`) y pusheado; `clasp push` hecho, sin redeploy (los triggers ejecutan HEAD). Siguiente: nada bloqueante.
+
+### 2026-07-28 — Exclusion de profesores del recordatorio de lista (rama fix/excluir-maria-recordatorio)
+- **Peticion:** Maria Wolf deja de recibir el email de las 20h cuando no ha pasado lista. Sigue activa y usando la app con normalidad; solo cambia el envio.
+- **Implementacion (`apps-script/RecordatorioLista.js`, commit d7baaba):** constante `RECORDATORIO_EXCLUIDOS_ = ['prof-maria']` filtrada en la carga de PROFESORES junto a `activo` y `rol !== 'ceo'`. Se filtra por **id**, no por nombre ni email, porque esos campos cambian en la hoja. El `writeLog` del cierre incluye `excluidos=N` para dejar rastro. Para excluir a otro profesor: anadir su id al array y `clasp push`.
+- **Verificado contra la hoja de produccion:** `prof-maria` = Maria Wolf, wolfmaria@web.de, activo TRUE, rol teacher.
+- **Falsa alarma descartada:** se sospecho que `p.rol !== 'ceo'` era codigo muerto (columna inexistente). Es falso: PROFESORES tiene `rol` en la **columna G** (`prof-admin` = `ceo`); la lectura inicial cortaba en la col F. El filtro funciona, no se toco.
+- **Despliegue seguro:** antes del push se hizo `clasp pull` a un directorio temporal y `diff -rq` contra `apps-script/` — el unico archivo distinto era el modificado, sin ediciones hechas en el editor online que machacar. Recomendado repetir esa comprobacion en futuros push.
+- **Estado:** `clasp push` OK (9 archivos), merge no-ff a main (`6fec661`) y push a Maxesta17/novattend. Efectivo en la siguiente ejecucion lun-jue 20h.
+- **Siguiente paso sugerido:** ninguno pendiente de este cambio.
 
 ### 2026-07-14 (noche) — Mejoras operativas backend: 4 triggers automaticos (rama feat/mejoras-operativas-backend)
 - **Orquestacion:** swarm claude-flow, ruteo explicito de modelos por complejidad — sonnet x3 implementacion (territorios disjuntos con contrato de helpers fijado por el orquestador), workflow adversarial sonnet (4 lentes + refutacion doble, 26 agentes: 10 hallazgos confirmados, 6 raices), arbitraje fino con opus (veredicto ejecutable: 7 aplicar + 2 hallazgos nuevos propios + 1 rechazo), fixer sonnet (15 ediciones E1-E15), replica Node sonnet (113/113 PASS), docs haiku.
