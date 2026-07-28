@@ -17,6 +17,11 @@
  * isTruthy, writeLog.
  */
 
+// Profesores excluidos del recordatorio por decision de negocio: siguen
+// activos y usando la app con normalidad, pero NO reciben este email. Se
+// filtran por id de PROFESORES (no por nombre ni email, que pueden cambiar).
+const RECORDATORIO_EXCLUIDOS_ = ['prof-maria']; // Maria Wolf
+
 // Nombres en espanol para construir la fecha legible del email sin depender
 // del locale del proyecto de Apps Script (que puede no ser es_ES). Se derivan
 // SIEMPRE de los componentes yyyy-MM-dd de opsHoyStr_ via Date.UTC, nunca de
@@ -112,7 +117,8 @@ function construirCuerpoRecordatorioLista_(profesor, pendientes, fechaLegible) {
  * por installTriggers() (OperacionesBase.js).
  *
  * Flujo: valida dia lun-jue -> guard anti doble-ejecucion diaria -> lee cada
- * hoja UNA vez -> para cada (convocatoria activa x profesor activo no-ceo)
+ * hoja UNA vez -> para cada (convocatoria activa x profesor activo no-ceo y
+ * no excluido en RECORDATORIO_EXCLUIDOS_)
  * con alumnos activos asignados, comprueba si ya paso lista hoy -> agrega en
  * UN email por profesor (max) listando convocatorias pendientes -> cierra con
  * un resumen en LOG. Cualquier fallo se captura, se loguea y se avisa al dev.
@@ -143,7 +149,10 @@ function triggerRecordatorioLista() {
     // Lectura de cada hoja UNA sola vez. Hojas vacias -> sheetToObjects ya
     // devuelve [] (no lanza), el flujo degrada solo sin recordatorios.
     const profesores = sheetToObjects(SHEET_NAMES.PROFESORES)
-      .filter(function(p) { return isTruthy(p.activo) && p.rol !== 'ceo'; });
+      .filter(function(p) {
+        if (!isTruthy(p.activo) || p.rol === 'ceo') return false;
+        return RECORDATORIO_EXCLUIDOS_.indexOf(p.id) === -1;
+      });
     const alumnos = sheetToObjects(SHEET_NAMES.ALUMNOS);
     const asistencia = sheetToObjects(SHEET_NAMES.ASISTENCIA);
 
@@ -179,7 +188,8 @@ function triggerRecordatorioLista() {
       }
     });
 
-    writeLog('OPERATIVA', 'RECORDATORIO', 'avisados=' + avisados + ' sinEmail=' + sinEmail + ' alDia=' + alDia);
+    writeLog('OPERATIVA', 'RECORDATORIO', 'avisados=' + avisados + ' sinEmail=' + sinEmail +
+      ' alDia=' + alDia + ' excluidos=' + RECORDATORIO_EXCLUIDOS_.length);
   } catch (err) {
     const detalle = err && err.message ? err.message : String(err);
     writeLog('OPERATIVA', 'ERROR_RECORDATORIO', detalle);
