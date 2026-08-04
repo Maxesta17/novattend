@@ -43,6 +43,9 @@ resumen_*.json
 .vite/
 coverage/
 
+# Salida del skill graphify (grafo de conocimiento regenerable)
+graphify-out/
+
 # Configuracion local de servidores MCP (especifica de cada maquina)
 .mcp.json
 
