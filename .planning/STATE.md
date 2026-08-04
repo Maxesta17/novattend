@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 Phase: 06
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-06-30 - Completed quick task 260630-f75: normaliza fechas dd/mm/yyyy a ISO en sheetToObjects
+Last activity: 2026-08-04 - Completed quick task 260804-eyg: registrar en docs/progress.md el incidente de convocatoria de abril caducada
 
 Progress: [█████████░] 89%
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 89%
 | 260630-epo | fix historico_semanas NaN-guard (no tumbar getResumen) + transferirHistorial LockService | 2026-06-30 | 3706495 | [260630-epo-fix-historico-semanas-nan-guard-y-transf](./quick/260630-epo-fix-historico-semanas-nan-guard-y-transf/) |
 | 260630-f75 | fix normaliza fechas dd/mm/yyyy a ISO en sheetToObjects (raiz F1/F2) | 2026-06-30 | 9dbb5ab | [260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en](./quick/260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en/) |
 | 260630-wrp | perf warmCache calienta rosters per-profesor + endurece invalidacion (lock + _warm_keys + crearAlumno res_) | 2026-06-30 | f50e1a8 | [260630-wrp-warm-rosters-profesor](./quick/260630-wrp-warm-rosters-profesor/) |
+| 260804-eyg | docs registrar incidente 2026-08-04 de convocatoria de abril caducada | 2026-08-04 | d1cd227 | [260804-eyg-registrar-en-docs-progress-md-el-inciden](./quick/260804-eyg-registrar-en-docs-progress-md-el-inciden/) |
 
 ## Session Continuity
 
