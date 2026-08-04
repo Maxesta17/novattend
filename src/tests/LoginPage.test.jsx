@@ -91,7 +91,7 @@ describe('LoginPage', () => {
     await submitLogin(user)
 
     await waitFor(() => {
-      expect(screen.getByText(/Error al conectar con el servidor/i)).toBeInTheDocument()
+      expect(screen.getByText(/El servidor está tardando en responder/i)).toBeInTheDocument()
     })
   })
 
@@ -165,7 +165,7 @@ describe('LoginPage', () => {
     await submitLogin(user)
 
     await waitFor(() => {
-      expect(screen.getByText('Error al conectar con el servidor. Reintenta.')).toBeInTheDocument()
+      expect(screen.getByText('El servidor está tardando en responder. Si el problema continúa, inténtalo de nuevo en unos minutos.')).toBeInTheDocument()
     })
   })
 

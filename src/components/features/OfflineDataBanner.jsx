@@ -6,6 +6,11 @@ import useOfflineData from '../../hooks/useOfflineData'
  * la red). Se monta una unica vez de forma global (ver App.jsx) para cubrir
  * todas las vistas por igual.
  *
+ * Texto honesto: la causa dominante medida no es falta de red sino el
+ * backend respondiendo lento (peaje del borde de Google), asi que el texto
+ * distingue "el servidor va lento" (navigator.onLine=true) de "sin conexion"
+ * (navigator.onLine=false) en vez de asumir siempre lo segundo.
+ *
  * Posicionamiento: flujo normal, como primer elemento dentro de
  * MobileContainer (no fixed/sticky). Se eligio asi para no arriesgar
  * solapamiento con el header de cada pagina (PageHeader.jsx es sticky top-0
@@ -22,9 +27,16 @@ import useOfflineData from '../../hooks/useOfflineData'
  * @returns {JSX.Element|null}
  */
 export default function OfflineDataBanner() {
-  const isOfflineData = useOfflineData()
+  const { isStale, online } = useOfflineData()
 
-  if (!isOfflineData) return null
+  if (!isStale) return null
+
+  // El banner solo aparece cuando el SW ya cayo a cache. La causa dominante
+  // medida en el incidente es lentitud del backend, no falta de red: por eso
+  // se distingue el texto en vez de asumir siempre "sin conexion".
+  const message = online
+    ? 'El servidor va lento — mostrando los últimos datos guardados'
+    : 'Sin conexión — mostrando los últimos datos guardados'
 
   return (
     <div
@@ -33,7 +45,7 @@ export default function OfflineDataBanner() {
       className="bg-warning-soft border-b border-warning/30 px-4 py-1.5 text-center"
     >
       <p className="font-montserrat text-xs text-warning m-0">
-        Datos sin conexión — pueden no estar actualizados
+        {message}
       </p>
     </div>
   )

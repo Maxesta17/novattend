@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { isApiEnabled } from '../config/api'
 import { getConvocatorias, AuthError, PermissionError } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -8,13 +8,15 @@ import ForgotPasswordForm from '../components/features/ForgotPasswordForm.jsx'
 import PasswordInput from '../components/ui/PasswordInput.jsx'
 import Button from '../components/ui/Button.jsx'
 
+// Mensaje honesto compartido (login y getConvocatorias): no culpa a la
+// conexion del profesor -- la causa es el borde de red de Google, no el
+// cliente -- ni promete resolucion rapida (episodios medidos: 60-95 min).
+const SERVER_SLOW_MESSAGE = 'El servidor está tardando en responder. Si el problema continúa, inténtalo de nuevo en unos minutos.'
+
 /**
- * Pagina de autenticacion. Valida credenciales contra el backend real
- * (useAuth().login) y redirige segun el rol de la sesion.
- *
- * Si el login devuelve must_change_password, en vez de navegar muestra el
- * formulario de cambio de password forzado. Tras el cambio, vuelve al login.
- *
+ * Pagina de autenticacion. Valida credenciales contra el backend real y
+ * redirige segun el rol. Si el login devuelve must_change_password, muestra
+ * el formulario de cambio de password forzado en vez de navegar.
  * @returns {JSX.Element}
  */
 export default function LoginPage() {
@@ -27,26 +29,40 @@ export default function LoginPage() {
   const [info, setInfo] = useState(initialInfo(location.state))
   const [shake, setShake] = useState(false)
   const [loading, setLoading] = useState(false)
+  // Aviso progresivo tras 6s. Latencia real bimodal (1-4s o 14-45s): en un
+  // episodio degradado el aviso aparece en la mayoria de los intentos, no como excepcion.
+  const [slow, setSlow] = useState(false)
+  const slowTimerRef = useRef(null)
   // Sesion pendiente de cambio de password forzado (no navegamos hasta cambiarla).
   const [mustChange, setMustChange] = useState(null)
   // Pantalla de "olvide mi contrasena" (reset por email).
   const [forgot, setForgot] = useState(false)
 
-  // Tras login OK: ramificar navegacion por rol. teacher consulta convocatorias
-  // (con timeout 8s); ceo va directo al dashboard.
+  // Limpieza del aviso progresivo al desmontar (timer todavia en marcha).
+  useEffect(() => () => clearTimeout(slowTimerRef.current), [])
+
+  const clearSlowTimer = () => {
+    clearTimeout(slowTimerRef.current)
+    setSlow(false)
+  }
+
+  // Tras login OK: ramificar por rol. getConvocatorias() ya reintenta (dos
+  // intentos de 12s, ver src/services/api/http.js). ceo va directo al dashboard.
   const routeBySession = async (sess) => {
     const rol = sess.rol ?? sess.role
     if (rol === 'ceo') {
+      clearSlowTimer()
       navigate('/dashboard')
       return
     }
     if (!isApiEnabled()) {
+      clearSlowTimer()
       navigate('/attendance')
       return
     }
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
     try {
-      const convocatorias = await Promise.race([getConvocatorias(), timeout])
+      const convocatorias = await getConvocatorias()
+      clearSlowTimer()
       if (!convocatorias || convocatorias.length === 0) {
         setError('No hay convocatorias activas')
         setLoading(false)
@@ -58,7 +74,8 @@ export default function LoginPage() {
         navigate('/convocatorias', { state: { convocatorias } })
       }
     } catch {
-      setError('Error al conectar con el servidor. Reintenta.')
+      clearSlowTimer()
+      setError(SERVER_SLOW_MESSAGE)
       setLoading(false)
     }
   }
@@ -67,10 +84,12 @@ export default function LoginPage() {
     setError('')
     setInfo('')
     setLoading(true)
+    slowTimerRef.current = setTimeout(() => setSlow(true), 6000)
     let sess
     try {
       sess = await login((username || '').trim(), password)
     } catch (err) {
+      clearSlowTimer()
       setLoading(false)
       setError(loginErrorMessage(err))
       setShake(true)
@@ -78,9 +97,9 @@ export default function LoginPage() {
       return
     }
 
-    // Con must_change_password el token solo sirve para cambiarPassword:
-    // no navegamos a la app, mostramos el formulario de cambio.
+    // Con must_change_password el token solo sirve para cambiarPassword.
     if (sess?.must_change_password) {
+      clearSlowTimer()
       setLoading(false)
       setMustChange(sess)
       return
@@ -89,8 +108,7 @@ export default function LoginPage() {
     await routeBySession(sess)
   }
 
-  // Tras cambiar la password (sesion ya limpiada por ChangePasswordForm),
-  // volver al login limpio con mensaje de exito.
+  // Tras cambiar la password, volver al login limpio con mensaje de exito.
   const handlePasswordChanged = () => {
     setMustChange(null)
     setPassword('')
@@ -145,8 +163,12 @@ export default function LoginPage() {
             />
 
             <Button onClick={handleLogin} fullWidth loading={loading}>
-              {loading ? 'Cargando...' : 'Iniciar sesión'}
+              {loading
+                ? (slow ? 'El servidor va lento, seguimos...' : 'Cargando...')
+                : 'Iniciar sesión'}
             </Button>
+            {/* Region viva: un boton deshabilitado no re-anuncia su texto al lector de pantalla. */}
+            {slow && <span className="sr-only" role="status" aria-live="polite">El servidor va lento, seguimos intentando</span>}
 
             <button
               type="button"
@@ -198,8 +220,8 @@ function loginErrorMessage(err) {
   if (err instanceof PermissionError) {
     return 'Acceso no permitido para este usuario'
   }
-  // Error de red / timeout: mensaje distinto al de credenciales.
-  return 'Error al conectar con el servidor. Comprueba tu conexión y reintenta.'
+  // Error de red / timeout: mismo mensaje honesto que routeBySession.
+  return SERVER_SLOW_MESSAGE
 }
 
 /**
