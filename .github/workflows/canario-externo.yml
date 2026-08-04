@@ -1,0 +1,180 @@
+# Canario externo de NovAttend
+#
+# Por que existe: el canario interno (apps-script/CanarioDiario.js) mide con
+# UrlFetchApp DESDE DENTRO de la red de Google, asi que nunca ve el peaje del
+# borde script.google.com -> script.googleusercontent.com, que es justo donde
+# se pierden los 30-45s que sufren las profesoras. Un runner de GitHub Actions
+# esta fuera de esa red y ve el mismo camino que ellas.
+#
+# SECRET REQUERIDO (crearlo en Settings > Secrets and variables > Actions):
+#   CANARIO_PING_URL = URL completa del endpoint de ping de produccion
+#   (la misma que se fija en la Script Property CANARIO_URL del backend,
+#   con ?action=ping al final). NUNCA poner esta URL en este archivo ni en
+#   ningun otro archivo versionado.
+#
+# Cadencia: cada 15 minutos. Los episodios de latencia observados en el
+# incidente duran 60-95 minutos (ver LOG), asi que 15 min da deteccion
+# sobrada sin cargar mas de la cuenta un endpoint ya fragil. El repo es
+# publico, los minutos de runners estandar de GitHub no son un limite aqui.
+#
+# Umbral: 10000 ms, igual a networkTimeoutSeconds del Service Worker
+# (src/sw.js). No es un numero arbitrario: es el instante exacto en que la
+# profesora deja de ver datos frescos y empieza a ver el banner de "sin
+# conexion". Se exige mediana > 10000 ms (equivale a >=3 de 5 muestras por
+# encima del umbral) para que un pico aislado del runner no dispare una
+# alerta por si solo.
+#
+# Este workflow NUNCA cierra ni comenta issues automaticamente, y NUNCA falla
+# el job por degradacion (solo por falta del secret). Motivo: con la tasa de
+# degradacion medida durante el incidente, un cierre/fallo automatico
+# produciria varios ciclos de abrir/cerrar o de rojo/verde al dia, y esa
+# senal se acabaria ignorando. Una unica issue persistente hasta que un
+# humano la revise, mas el resumen de cada ejecucion, es lo que da una serie
+# temporal continua y util del camino externo.
+#
+# Nota operativa: GitHub desactiva los cron de repos publicos tras 60 dias
+# sin commits. Si el canario deja de correr, revisar eso antes que nada.
+
+name: Canario externo NovAttend
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: canario-externo-novattend
+  cancel-in-progress: false
+
+jobs:
+  canario:
+    runs-on: ubuntu-latest
+    steps:
+      # (1) MEDIR — 5 muestras separadas 3s contra el endpoint de ping.
+      # Prohibido `set -x` y `curl -v`: filtrarian la URL de produccion al
+      # log publico del workflow.
+      - name: Medir (5 muestras del endpoint de ping externo)
+        id: medir
+        env:
+          CANARIO_URL: ${{ secrets.CANARIO_PING_URL }}
+        run: |
+          set -eo pipefail
+
+          if [ -z "$CANARIO_URL" ]; then
+            echo "::error::Falta el secret CANARIO_PING_URL"
+            exit 1
+          fi
+
+          : > samples.txt
+
+          # NO anadir echo/print de $CANARIO_URL ni del contenido de cuerpo.tmp en
+          # este bucle: GITHUB_STEP_SUMMARY y los logs del job son publicos (repo publico).
+          for i in 1 2 3 4 5; do
+            resultado=$(curl -s -L -o cuerpo.tmp -w '%{http_code} %{time_total}' --max-time 30 "$CANARIO_URL" || echo "000 30.000")
+            codigo=$(echo "$resultado" | cut -d' ' -f1)
+            tiempo=$(echo "$resultado" | cut -d' ' -f2)
+            latencia_ms=$(awk -v t="$tiempo" 'BEGIN { printf "%d", (t * 1000) }')
+
+            sano="false"
+            if [ "$codigo" = "200" ] && jq -e '.status == "ok"' cuerpo.tmp >/dev/null 2>&1; then
+              sano="true"
+            fi
+
+            echo "$codigo $latencia_ms $sano" >> samples.txt
+            rm -f cuerpo.tmp
+
+            if [ "$i" -lt 5 ]; then
+              sleep 3
+            fi
+          done
+
+      # (2) REGISTRAR SIEMPRE — se ejecuta este step tanto si el run resulta
+      # sano como degradado; solo se salta si MEDIR aborto por falta del
+      # secret (entonces todo el job aborta, que es el comportamiento
+      # deseado).
+      - name: Registrar (volcar las 5 muestras al resumen del job)
+        run: |
+          {
+            echo "### Canario externo NovAttend — muestras de esta ejecucion"
+            echo ""
+            echo "| # | Codigo HTTP | Latencia (ms) | Sana |"
+            echo "|---|---|---|---|"
+            n=1
+            while read -r codigo latencia sano; do
+              echo "| $n | $codigo | $latencia | $sano |"
+              n=$((n + 1))
+            done < samples.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # (3) EVALUAR — degradado = mediana de las 5 latencias > 10000 ms, O
+      # >=2 de 5 muestras no sanas.
+      - name: Evaluar (calcular degradacion)
+        id: evaluar
+        run: |
+          set -eo pipefail
+
+          mediana=$(awk '{ print $2 }' samples.txt | sort -n | awk 'NR==3')
+          no_sanas=$(awk '$3=="false" { c++ } END { print c + 0 }' samples.txt)
+
+          degradado="false"
+          if [ "$mediana" -gt 10000 ] || [ "$no_sanas" -ge 2 ]; then
+            degradado="true"
+          fi
+
+          {
+            echo ""
+            echo "Mediana de latencia: ${mediana} ms. Muestras no sanas: ${no_sanas}/5. Degradado: ${degradado}."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "degradado=$degradado" >> "$GITHUB_OUTPUT"
+
+      # (4) ALERTAR — solo si degradado. Si ya hay una issue abierta con la
+      # etiqueta, no se hace nada (nunca se cierra ni se comenta sola). Los
+      # datos se pasan a `gh` via variables de entorno, nunca interpolando
+      # `${{ }}` dentro del texto del script.
+      - name: Alertar (crear issue si degradado y no hay una abierta)
+        if: steps.evaluar.outputs.degradado == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eo pipefail
+
+          # La etiqueta debe existir ANTES de listar o crear la issue: si no
+          # existe, `gh issue create --label` falla y la alerta se pierde justo
+          # cuando hace falta. `--force` hace este paso idempotente.
+          gh label create canario-degradado \
+            --color 'd93f0b' \
+            --description 'Canario externo: latencia degradada del backend' \
+            --force
+
+          abiertas=$(gh issue list --label canario-degradado --state open --json number --jq 'length')
+          if [ "$abiertas" -gt 0 ]; then
+            echo "Ya hay una issue abierta con la etiqueta canario-degradado. No se crea otra."
+            exit 0
+          fi
+
+          {
+            echo "El canario externo detecto degradacion en la latencia del backend de NovAttend visto desde fuera de la red de Google."
+            echo ""
+            echo "Ejecucion: $RUN_URL"
+            echo ""
+            echo "Muestras de esta ejecucion (codigo HTTP, latencia en ms, sana):"
+            echo ""
+            echo '```'
+            cat samples.txt
+            echo '```'
+            echo ""
+            echo "Criterio de degradacion: mediana de las 5 latencias > 10000 ms, o al menos 2 de 5 muestras no sanas."
+            echo ""
+            echo "Esta issue no se cierra ni se comenta automaticamente. Revisarla y cerrarla a mano cuando el problema este resuelto o entendido."
+          } > cuerpo-issue.md
+
+          gh issue create \
+            --title "Canario externo: degradacion detectada en el backend de NovAttend" \
+            --label canario-degradado \
+            --body-file cuerpo-issue.md
