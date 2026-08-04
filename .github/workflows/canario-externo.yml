@@ -140,6 +140,10 @@ jobs:
         if: steps.evaluar.outputs.degradado == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Obligatorio: este job no hace checkout (no le hace falta el codigo
+          # para medir), asi que `gh` no puede deducir el repo desde el
+          # directorio git y falla con "not a git repository".
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -eo pipefail
