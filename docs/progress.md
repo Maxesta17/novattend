@@ -1,8 +1,19 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-07-28
-- **Hito:** Maria Wolf (prof-maria) excluida del recordatorio diario de lista. Cambio de 1 archivo en `apps-script/RecordatorioLista.js`: constante `RECORDATORIO_EXCLUIDOS_` (lista de ids de PROFESORES que no reciben ese email) + contador `excluidos=` en el LOG. Mergeado a main (`6fec661`) y pusheado; `clasp push` hecho, sin redeploy (los triggers ejecutan HEAD). Siguiente: nada bloqueante.
+- **Fecha:** 2026-08-04
+- **Hito:** Incidente resuelto (dato, sin codigo): la convocatoria "abril 2026" (`conv-abr26`) caduco por `fecha_fin` el 2026-07-31 y, al quedar solo "LING. ACDMY" activa, 6 de 7 profesores con alumnos en abril entraban directos sin ver grupos ni alumnos. Fix aplicado via MCP google-sheets sobre `CONVOCATORIAS!D2` y `D3` (nuevas `fecha_fin` 2026-10-31 en ambas). Siguiente: confirmar con Aurora la fecha_fin real de LING. ACDMY.
+
+### 2026-08-04 — Incidente: convocatoria de abril caducada dejo a 6 profesores sin alumnos (fix de dato, sin codigo)
+- **Sintoma:** reportado por Aurora via mensaje de un profesor. Profesores que antes elegian entre dos convocatorias ("abril 2026" y "LING. ACDMY") entraban directos a LING. ACDMY y no veian ni grupos ni alumnos.
+- **Causa raiz (DATO, no codigo):** la hoja CONVOCATORIAS tenia `conv-abr26` con `fecha_fin = 2026-07-31`; siendo hoy 2026-08-04 dejo de cumplir la regla de activa `isTruthy(c.activa) && c.fecha_inicio <= hoy && hoy <= c.fecha_fin` (`apps-script/Código.js:1038`, `handleGetConvocatorias`). Al quedar UNA sola convocatoria activa, el frontend salta el selector y entra directo. Los 59 alumnos de abril seguian intactos en ALUMNOS: solo invisibles porque su `convocatoria_id` no coincidia con la unica activa. No se toco ni una linea de codigo.
+- **Alcance real (mayor que el reportado):** afectaba a 6 de los 7 profesores con alumnos en abril — Samuel 11, Nadine 10, Elisabeth Shick 10, Sonja 8, Stephanie 7, Christian 7, Myriam Marcia 6. Solo Elisabeth tenia alumnos en ambas convocatorias. El reporte inicial solo mencionaba a dos profesores.
+- **Fix aplicado (solo datos, via MCP google-sheets, escritura RAW del serial 46326 para preservar el formato de celda de fecha):** `CONVOCATORIAS!D2` (conv-abr26 "abril 2026") 2026-07-31 -> 2026-10-31; `CONVOCATORIAS!D3` (conv-lingnova "LING. ACDMY") 2026-08-21 -> 2026-10-31, esta ultima porque caducaba en 17 dias y la recaida estaba garantizada.
+- **Verificacion (y sus limites):** endpoint desplegado vivo (`?action=ping` -> 200 `{"status":"ok",...}`). `getConvocatorias` NO es verificable por curl: exige token de sesion HMAC y el camino legacy api_key fue retirado (`resolveAuth_`, `Código.js:997`); solo `ping` y `login` estan exentos. Un 401 `token_invalid` ahi es el gate funcionando, no un fallo. No se probaron passwords a ciegas porque el lockout durable anti-bruteforce habria bloqueado a un profesor real. Lo verificado es el dato en la hoja contra la regla de activa.
+- **Gotcha operativo:** escribir en la hoja por MCP NO dispara `cacheInvalidate` del Apps Script. La clave `conv` de `cachedGet` en `handleGetConvocatorias` tiene `CACHE_TTL = 120s` (`Código.js:31` y `1035`), asi que el cambio tarda hasta 2 minutos en verse desde la app. Aplica a cualquier edicion futura de la hoja hecha fuera del backend.
+- **Asuncion pendiente de confirmar por Aurora:** la fecha 31/10/2026 de LING. ACDMY se eligio por simetria con abril; nadie confirmo la fecha real de fin de esa convocatoria.
+- **Deuda detectada de paso (NO arreglada):** `prof-marta` (Marta Battistella, activo=TRUE) tiene 0 alumnos en cualquier convocatoria; `prof-sven` (activo=FALSE, despedido) sigue con el alumno `alu-0056` Joaquin Orduno asignado en LING. ACDMY G4.
+- **Siguiente paso sugerido:** confirmar con Aurora la fecha_fin real de LING. ACDMY y decidir sobre las dos deudas de datos.
 
 ### 2026-07-28 — Exclusion de profesores del recordatorio de lista (rama fix/excluir-maria-recordatorio)
 - **Peticion:** Maria Wolf deja de recibir el email de las 20h cuando no ha pasado lista. Sigue activa y usando la app con normalidad; solo cambia el envio.
