@@ -33,18 +33,18 @@ Vercel (React PWA)  --fetch()-->  Google Apps Script (Web App)  -->  Google Shee
 
 | Columna | Tipo | Ejemplo | Notas |
 |---------|------|---------|-------|
-| id | texto | `prof-samuel` | Identificador unico |
-| nombre | texto | `Samuel` | Nombre visible |
-| email | texto | `samuel@lingnova.com` | Para login y notificaciones |
+| id | texto | `prof-ejemplo1` | Identificador unico |
+| nombre | texto | `Profesor Uno` | Nombre visible |
+| email | texto | `profesor1@ejemplo.com` | Para login y notificaciones |
 | activo | boolean | `TRUE` | Si aparece en la app |
 
 **Ejemplo:**
 
 | id | nombre | email | activo |
 |----|--------|-------|--------|
-| prof-samuel | Samuel | samuel@lingnova.com | TRUE |
-| prof-maria | Maria Wolf | maria@lingnova.com | TRUE |
-| prof-nadine | Nadine | nadine@lingnova.com | TRUE |
+| prof-ejemplo1 | Profesor Uno | profesor1@ejemplo.com | TRUE |
+| prof-ejemplo2 | Profesor Dos | profesor2@ejemplo.com | TRUE |
+| prof-ejemplo3 | Profesor Tres | profesor3@ejemplo.com | TRUE |
 
 ---
 

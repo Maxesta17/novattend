@@ -49,7 +49,7 @@
 - **Hallazgos adversariales clave arreglados:** TypeError localeCompare con nombres no-string, guard TOCTOU sin lock, convocatoria cerrada el viernes desaparecia del resumen del lunes, carpetas Drive homonimas, CANARIO_URL hardcodeada, copy de rachas enganoso, tildes en emails a humanos, relectura O(convocatorias x hoja) de computeResumen, gate de dia via Date.UTC.
 - **Verificacion:** node --check 5/5, 287 tests / 46 suites (x2), lint 0, replica Node con stubs GAS y codigo real cargado via vm: 113/113 escenarios PASS (rotacion, canario, recordatorio, resumen, guard/lock). Endpoint ping verificado en prod: 200 status ok, ~2s.
 - **clasp push HECHO** (8 archivos, HEAD). SIN redeploy: doGet/doPost intactos (los triggers ejecutan HEAD).
-- **Pendiente del usuario:** (1) ejecutar installTriggers() UNA vez desde el editor de Apps Script (pedira autorizacion de scopes nuevos: Drive, UrlFetch, triggers); (2) ejecutar una vez cada trigger desde el editor en modo real controlado (DRY_RUN default activo: todo llega a manuruiz826@gmail.com) y validar contenido/destinatarios en el email del dev y en la hoja LOG; (3) rellenar email real de Rafa en PROFESORES col C; (4) SOLO tras validar: Script Property DRY_RUN='false'.
+- **Pendiente del usuario:** (1) ejecutar installTriggers() UNA vez desde el editor de Apps Script (pedira autorizacion de scopes nuevos: Drive, UrlFetch, triggers); (2) ejecutar una vez cada trigger desde el editor en modo real controlado (DRY_RUN default activo: todo llega al email del dev configurado en la Script Property OPS_DEV_EMAIL) y validar contenido/destinatarios en el email del dev y en la hoja LOG; (3) rellenar email real de Rafa en PROFESORES col C; (4) SOLO tras validar: Script Property DRY_RUN='false'.
 - **Siguiente paso sugerido:** validar los 4 triggers en la semana, luego desactivar DRY_RUN.
 - **Addendum (2026-07-15) — validacion + plantilla HTML del resumen CEO (rama feat/plantilla-email-resumen):** los 4 triggers validados end-to-end via Claude Chrome en DRY_RUN (backup en Drive, canario sano 200/1,8s y alerta OK ante 404 forzado, 7 recordatorios con destinatarios reales correctos, resumen CEO; LOG 509-523). Email del CEO relleno en PROFESORES!C12 (decision: el de Aurora). Plantilla HTML nueva para el email del resumen: PlantillasEmail.js (escaparHtml_ sobre todo dato dinamico + tablas con badges naranja/rojo por severidad + tarjeta verde sin-alertas; constructores de texto plano movidos alli — ResumenSemanalCEO.js baja a 197 lineas), opsEnviarEmail_ acepta htmlBody opcional retrocompatible (banner naranja DRY-RUN sobre el HTML). Adversarial: inyeccion/Gmail/regresion sin hallazgos en produccion; 1 hallazgo MEDIO en el arnes de replica (stub descartaba htmlBody) corregido — replica 142/142 con cobertura HTML real. Pendiente: DRY_RUN='false' cuando el usuario valide el email HTML en su bandeja.
 
@@ -380,7 +380,7 @@ Se ejecuto una auditoria completa de UI contra reglas opinionadas de calidad. Se
 ### Sesion 2026-03-30 — Limpieza spreadsheet + clasp + fixes criticos
 
 #### clasp configurado
-- `npm install -g @google/clasp` + `clasp login` (manuruiz826@gmail.com)
+- `npm install -g @google/clasp` + `clasp login` (cuenta Google del dev)
 - Scripts clonados en `apps-script/` (Codigo.js, Gestion convocatorias.js, appsscript.json)
 - Apps Script API habilitada en settings de Google
 - Flujo: editar local → `clasp push` → nuevo deploy desde UI de Apps Script

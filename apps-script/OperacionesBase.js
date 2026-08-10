@@ -13,7 +13,15 @@
  */
 
 // Email del desarrollador: destino de dry-run y de alertas de error/canario.
-const OPS_DEV_EMAIL = 'manuruiz826@gmail.com';
+// Se lee de la Script Property 'OPS_DEV_EMAIL' para no versionar el correo en
+// un repo publico y permitir rotarlo sin tocar codigo. Si la property esta
+// ausente o vacia, cae a un valor por defecto para preservar el fail-safe
+// anti-spam (nunca dejar el destino del dev vacio, o los correos de dry-run se
+// perderian en silencio). Fijar la property real desde el editor de Apps Script.
+const OPS_DEV_EMAIL = (function () {
+  const prop = PropertiesService.getScriptProperties().getProperty('OPS_DEV_EMAIL');
+  return prop && prop.trim() ? prop.trim() : 'dev@novattend.local';
+})();
 
 /**
  * Indica si el sistema operativo esta en modo simulacro (dry-run).

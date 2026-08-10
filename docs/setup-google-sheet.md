@@ -37,13 +37,9 @@ Ve a la hoja **PROFESORES** y anade tus profesores:
 
 | id | nombre | email | activo |
 |----|--------|-------|--------|
-| prof-samuel | Samuel | samuel@lingnova.com | [x] |
-| prof-maria | Maria Wolf | maria@lingnova.com | [x] |
-| prof-nadine | Nadine | nadine@lingnova.com | [x] |
-| prof-marta | Marta Battistella | marta@lingnova.com | [x] |
-| prof-elisabeth | Elisabeth Shick | elisabeth@lingnova.com | [x] |
-| prof-myriam | Myriam Marcia | myriam@lingnova.com | [x] |
-| prof-sonja | Sonja | sonja@lingnova.com | [x] |
+| prof-ejemplo1 | Profesor Uno | profesor1@ejemplo.com | [x] |
+| prof-ejemplo2 | Profesor Dos | profesor2@ejemplo.com | [x] |
+| prof-ejemplo3 | Profesor Tres | profesor3@ejemplo.com | [x] |
 
 ### 4.2 Convocatorias
 

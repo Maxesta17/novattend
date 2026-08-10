@@ -82,7 +82,7 @@ Cada fila es una convocatoria:
 
 | id | nombre | email | activo |
 |----|--------|-------|--------|
-| prof-samuel | Samuel | samuel@lingnova.com | TRUE |
+| prof-ejemplo1 | Profesor Uno | profesor1@ejemplo.com | TRUE |
 
 - **id:** Identificador unico. Formato: `prof-nombre`. NO cambiar una vez creado.
 - **activo:** `TRUE` si da clases actualmente. `FALSE` si ya no trabaja (no se borran datos).
