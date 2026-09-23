@@ -74,7 +74,7 @@ function triggerCanarioDiario() {
     if (!canarioUrl) {
       writeLog('OPERATIVA', 'ERROR_CANARIO', 'falta la Script Property CANARIO_URL');
       opsEnviarEmail_(
-        OPS_DEV_EMAIL,
+        opsDevEmail_(),
         'NovAttend — ERROR en canario diario',
         'El canario diario no pudo ejecutarse: falta la Script Property "CANARIO_URL".\n\n' +
         'Fijala en Apps Script > Configuracion del proyecto > Propiedades del script, ' +
@@ -109,14 +109,14 @@ function triggerCanarioDiario() {
         'Codigo HTTP: ' + code + '\n' +
         'Latencia: ' + latencia + ' ms\n\n' +
         'Respuesta (primeros 500 caracteres):\n' + cuerpoTexto.substring(0, 500);
-      opsEnviarEmail_(OPS_DEV_EMAIL, 'NovAttend — ALERTA canario', detalle);
+      opsEnviarEmail_(opsDevEmail_(), 'NovAttend — ALERTA canario', detalle);
     }
 
     writeLog('OPERATIVA', 'CANARIO', 'code=' + code + ' latencia=' + latencia + 'ms ok=' + sano);
   } catch (err) {
     writeLog('OPERATIVA', 'ERROR_CANARIO', err.message);
     opsEnviarEmail_(
-      OPS_DEV_EMAIL,
+      opsDevEmail_(),
       'NovAttend — ERROR en canario diario',
       'El canario diario fallo:\n\n' + err.message + '\n\n' + (err.stack || '')
     );

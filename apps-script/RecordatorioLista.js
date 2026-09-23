@@ -11,7 +11,7 @@
  * ningun asiento de asistencia hoy para esa convocatoria.
  *
  * Depende de helpers globales definidos en OperacionesBase.js (NO redefinir
- * aqui): OPS_DEV_EMAIL, opsIsDryRun_, opsEnviarEmail_, opsHoyStr_,
+ * aqui): opsDevEmail_(), opsIsDryRun_, opsEnviarEmail_, opsHoyStr_,
  * opsYaEjecutadoHoy_/opsMarcarEjecutadoHoy_, opsConvocatoriasActivas_.
  * Depende tambien de helpers de Código.js: SHEET_NAMES, sheetToObjects,
  * isTruthy, writeLog.
@@ -194,7 +194,7 @@ function triggerRecordatorioLista() {
     const detalle = err && err.message ? err.message : String(err);
     writeLog('OPERATIVA', 'ERROR_RECORDATORIO', detalle);
     opsEnviarEmail_(
-      OPS_DEV_EMAIL,
+      opsDevEmail_(),
       'NovAttend — ERROR en recordatorio de lista',
       'triggerRecordatorioLista fallo con el siguiente error:\n\n' + detalle
     );

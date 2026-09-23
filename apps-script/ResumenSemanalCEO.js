@@ -7,7 +7,7 @@
  * convocatoria -> profesor -> grupo.
  *
  * Reutiliza computeResumen() y mondayOf_() de Código.js: NO duplica ese calculo.
- * Depende de los helpers globales de OperacionesBase.js (OPS_DEV_EMAIL,
+ * Depende de los helpers globales de OperacionesBase.js (opsDevEmail_(),
  * opsIsDryRun_, opsEnviarEmail_, opsHoyStr_, opsYaEjecutadoHoy_,
  * opsMarcarEjecutadoHoy_) y de PlantillasEmail.js (construirCuerpoResumen_,
  * construirHtmlResumenCEO_) para toda la presentacion del email; ninguno se
@@ -150,7 +150,7 @@ function triggerResumenSemanalCEO() {
   } catch (err) {
     writeLog('OPERATIVA', 'ERROR_RESUMEN_CEO', err.message);
     opsEnviarEmail_(
-      OPS_DEV_EMAIL,
+      opsDevEmail_(),
       'NovAttend — ERROR en resumen semanal CEO',
       'triggerResumenSemanalCEO fallo: ' + err.message + (err.stack ? ('\n\n' + err.stack) : '')
     );
@@ -160,7 +160,7 @@ function triggerResumenSemanalCEO() {
 /**
  * Resuelve el destinatario del resumen: la fila de PROFESORES con
  * rol === 'ceo'. Si su email no pasa esEmailValido_ (vacio o placeholder),
- * cae a OPS_DEV_EMAIL y devuelve una nota para anadir al final del cuerpo.
+ * cae a opsDevEmail_() y devuelve una nota para anadir al final del cuerpo.
  * (opsEnviarEmail_ redirige igualmente a dev en DRY_RUN, con prefijo — este
  * fallback es independiente de eso.)
  *
@@ -176,9 +176,9 @@ function resolverDestinatarioCeo_() {
     return { email: emailCeo, tipo: 'ceo', nota: '' };
   }
 
-  writeLog('OPERATIVA', 'RESUMEN_CEO_SIN_EMAIL', 'email de CEO vacio o invalido en PROFESORES; fallback a OPS_DEV_EMAIL');
+  writeLog('OPERATIVA', 'RESUMEN_CEO_SIN_EMAIL', 'email de CEO vacio o invalido en PROFESORES; fallback a opsDevEmail_()');
   return {
-    email: OPS_DEV_EMAIL,
+    email: opsDevEmail_(),
     tipo: 'dev',
     nota: '\n\nAVISO: el email del CEO está vacío en PROFESORES (col C). Rellénalo para que este resumen le llegue directamente.'
   };

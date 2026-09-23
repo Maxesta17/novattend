@@ -56,7 +56,7 @@ function triggerBackupSemanal() {
   } catch (err) {
     writeLog('OPERATIVA', 'ERROR_BACKUP', err.message);
     opsEnviarEmail_(
-      OPS_DEV_EMAIL,
+      opsDevEmail_(),
       'NovAttend — ERROR en backup semanal',
       'El backup semanal fallo:\n\n' + err.message + '\n\n' + (err.stack || '')
     );

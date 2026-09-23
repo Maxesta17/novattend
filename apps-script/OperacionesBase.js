@@ -12,16 +12,66 @@
  * Script Property 'DRY_RUN' se fija EXPLICITAMENTE al string 'false'.
  */
 
-// Email del desarrollador: destino de dry-run y de alertas de error/canario.
-// Se lee de la Script Property 'OPS_DEV_EMAIL' para no versionar el correo en
-// un repo publico y permitir rotarlo sin tocar codigo. Si la property esta
-// ausente o vacia, cae a un valor por defecto para preservar el fail-safe
-// anti-spam (nunca dejar el destino del dev vacio, o los correos de dry-run se
-// perderian en silencio). Fijar la property real desde el editor de Apps Script.
-const OPS_DEV_EMAIL = (function () {
-  const prop = PropertiesService.getScriptProperties().getProperty('OPS_DEV_EMAIL');
-  return prop && prop.trim() ? prop.trim() : 'dev@novattend.local';
-})();
+// Cache en memoria de opsDevEmail_(). Vive lo que dure la invocacion de Apps
+// Script; no se persiste. Solo se rellena con un valor no vacio, de modo que
+// un fallo transitorio se reintenta en la siguiente llamada.
+let opsDevEmailCache_ = null;
+
+/**
+ * Email del desarrollador: destino de dry-run y de alertas de error/canario.
+ *
+ * Se lee de la Script Property 'OPS_DEV_EMAIL' para no versionar el correo en
+ * un repo publico y poder rotarlo sin tocar codigo.
+ *
+ * PEREZOSA Y MEMOIZADA a proposito. Antes era una constante calculada con un
+ * IIFE de nivel superior, y eso tenia tres problemas:
+ *   1. Se evaluaba al CARGAR el proyecto, antes de doGet/doPost. Un fallo
+ *      transitorio de PropertiesService (p.ej. limite de invocaciones) no
+ *      rompia el correo: tumbaba el Web App entero, y con el login,
+ *      asistencia y dashboard.
+ *   2. Anadia un round-trip a ScriptProperties a CADA peticion de la PWA y a
+ *      CADA onEdit de la hoja, aunque solo la usan los triggers operativos.
+ *      Coste puro en el camino critico de un backend con problemas de latencia.
+ *   3. El fallback era 'dev@novattend.local'. El TLD .local esta reservado y
+ *      no es enrutable: sin la property fijada, el canario, el backup, el
+ *      recordatorio y el resumen del CEO se perdian EN SILENCIO mientras
+ *      writeLog los apuntaba como enviados. Paso de verdad, durante semanas.
+ *
+ * Ahora el fallback es el dueño del script, que si es una direccion entregable.
+ * Si tampoco se puede obtener, devuelve cadena vacia y decide el llamante:
+ * esEmailValido_ la rechaza, que es preferible a fingir un envio.
+ *
+ * @returns {string} Email del dev, o '' si no hay ninguno disponible.
+ */
+function opsDevEmail_() {
+  if (opsDevEmailCache_) return opsDevEmailCache_;
+
+  let email = '';
+  try {
+    const prop = PropertiesService.getScriptProperties().getProperty('OPS_DEV_EMAIL');
+    if (prop && prop.trim()) email = prop.trim();
+  } catch (e) {
+    // Fallo transitorio leyendo properties: seguir al fallback, nunca lanzar.
+  }
+
+  if (!email) {
+    try {
+      email = Session.getEffectiveUser().getEmail() || '';
+    } catch (e) {
+      // Contexto sin usuario efectivo o sin permisos: se devuelve ''.
+    }
+    if (email) {
+      try {
+        writeLog('OPERATIVA', 'OPS_DEV_EMAIL_FALLBACK', 'Script Property ausente; usando el dueno del script');
+      } catch (e) {
+        // El log es diagnostico, no debe impedir el envio.
+      }
+    }
+  }
+
+  if (email) opsDevEmailCache_ = email;
+  return email;
+}
 
 /**
  * Indica si el sistema operativo esta en modo simulacro (dry-run).
@@ -45,7 +95,7 @@ function opsIsDryRun_() {
  * anti-spam:
  *  - Rechaza destinatarios invalidos sin enviar nada (reutiliza
  *    esEmailValido_, el mismo validador que el reset de password).
- *  - En dry-run, el correo SIEMPRE llega al dev (OPS_DEV_EMAIL) con el
+ *  - En dry-run, el correo SIEMPRE llega al dev (opsDevEmail_()) con el
  *    destinatario real anotado en el cuerpo, nunca al profesor.
  *  - Cualquier fallo de MailApp (cuota agotada, etc.) se captura y se
  *    loguea sin propagar la excepcion al llamador.
@@ -73,9 +123,9 @@ function opsEnviarEmail_(destinatario, asunto, cuerpo, htmlBody) {
         const bannerHtml = '<div style="background:#FFF3E0;border:1px solid #E65100;padding:8px 12px;' +
           'font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#E65100;">DRY-RUN — Destinatario real: ' +
           escaparHtml_(destinatario) + '</div>';
-        MailApp.sendEmail(OPS_DEV_EMAIL, '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo, { htmlBody: bannerHtml + htmlBody });
+        MailApp.sendEmail(opsDevEmail_(), '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo, { htmlBody: bannerHtml + htmlBody });
       } else {
-        MailApp.sendEmail(OPS_DEV_EMAIL, '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo);
+        MailApp.sendEmail(opsDevEmail_(), '[DRY-RUN] ' + asunto, 'Destinatario real: ' + destinatario + '\n\n' + cuerpo);
       }
       writeLog('OPERATIVA', 'EMAIL_DRYRUN', destinatario + ' | ' + asunto);
     } else {
