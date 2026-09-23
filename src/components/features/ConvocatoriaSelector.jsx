@@ -1,4 +1,29 @@
 /**
+ * Pasa una fecha ISO (yyyy-MM-dd) a dd/mm/yyyy para leerla comoda.
+ * Se invierte el texto en vez de usar Date: con 'yyyy-MM-dd' el constructor
+ * interpreta UTC y puede restar un dia segun la zona horaria.
+ * Cualquier otro formato devuelve cadena vacia.
+ */
+function toDisplayDate(iso) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso ?? '')
+    ? iso.split('-').reverse().join('/')
+    : ''
+}
+
+/**
+ * Etiqueta de una convocatoria: nombre y, si se conocen, sus fechas.
+ * Las fechas son imprescindibles cuando dos convocatorias se llaman igual
+ * (paso en produccion con dos "septiembre 2026"): sin ellas el desplegable
+ * muestra dos opciones identicas e imposibles de distinguir.
+ */
+function buildLabel(conv) {
+  const inicio = toDisplayDate(conv?.fecha_inicio)
+  const fin = toDisplayDate(conv?.fecha_fin)
+  if (!inicio && !fin) return conv.nombre
+  return `${conv.nombre} (${inicio || '?'} - ${fin || '?'})`
+}
+
+/**
  * Selector de convocatoria para el Dashboard CEO.
  * Muestra un dropdown cuando hay 2+ convocatorias activas.
  * @param {object} props
@@ -29,7 +54,7 @@ export default function ConvocatoriaSelector({ convocatorias, selectedId, onChan
             value={conv.id}
             className="bg-burgundy text-white"
           >
-            {conv.nombre}
+            {buildLabel(conv)}
           </option>
         ))}
       </select>
