@@ -1,7 +1,31 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-08-04
+- **Fecha:** 2026-09-23
+- **Hito:** Diagnostico completo del "la app da muchos errores". NO era Google Sheets ni la latencia: eran dos fallos de datos/codigo, uno de ellos arreglado hoy. **PENDIENTE DEL USUARIO: respuesta de Aurora a 8 preguntas** (sobre todo que significa el bloque `B1`/`B2` de las pestanas de abril). Siguiente: con esa respuesta, arreglar el prefijo de hojas; despues, milestone v1.2 (migracion a Supabase).
+
+### 2026-09-23 — Tres alarmas mudas, una convocatoria elegida por azar y 6 hojas que no sincronizan (rama fix/convocatoria-por-defecto)
+- **Sintoma reportado:** "la app da muchos errores, el Google Sheets va muy lento". Aurora reporta por Slack discrepancias entre lo que ve en la hoja y lo que muestra la app.
+- **La premisa era falsa.** El tiempo no se pierde en Sheets: el canario interno mide 1188-2111ms desde dentro de Google y el externo 14-45s desde fuera. Migrar la base de datos sin sacar el runtime de Apps Script no habria cambiado nada de lo que sufre el profesor.
+- **Causa raiz de la discrepancia de Aurora (HALLAZGO PRINCIPAL, sin arreglar):** las pestanas de `conv-abr26` se llaman `ABR26 B1 - Profesor - GN` y `ABR26 B2 - ...`. El espacio dentro del prefijo rompe dos cosas a la vez:
+  1. `onEdit` (`Gestion convocatorias.js:1507`) usa `/^[A-Z0-9]+\s*-\s*.+\s*-\s*G\d+$/i` y `[A-Z0-9]+` no admite espacios. Replica Node contra los 11 nombres reales: **6 de 11 no disparan**. Aurora escribe un alumno en un grupo de abril y no se sincroniza a ALUMNOS; la app no lo ve nunca.
+  2. `actualizarEstadisticasGrupo` (`Gestion convocatorias.js:610`) construye `"ABR26 - Profesor - GN"` desde el `convocatoria_id`, pero la hoja real lleva el sufijo de bloque. No la encuentra -> `Logger.log` + `return` **silencioso**. Las columnas de % de las 6 hojas de abril no se actualizan jamas.
+  - Agrava: `conv-abr26` concentra 3.062 de los 3.409 registros de ASISTENCIA.
+  - **Bloqueado**: hay que saber que significa `B1`/`B2` antes de elegir entre renombrar las pestanas o ampliar el patron. OJO si se renombra: G1 y G2 se repiten entre bloques.
+- **Estado real de CONVOCATORIAS (leido de produccion):** 4 activas a la vez — `conv-abr26` (3.062 registros, actividad el mismo dia), `conv-sept26` (238), `conv-lingnova` (109, ultima el 18/09) y `conv-sept2026` (**0 registros, nunca usada**). Las dos ultimas se llaman igual: "septiembre 2026". Todas caducan el 31/10 o el 23/12, fechas puestas a ojo en agosto.
+- **Arreglado hoy (commit 56d30c6):** `useConvocatorias` preseleccionaba `allConvs[0]`, la primera FILA de la hoja, asi que el Dashboard mostraba "abril 2026" desde agosto — el CEO llevaba semanas leyendo otro curso. Ahora gana la de `fecha_inicio` mas reciente, con caida al comportamiento anterior si no hay fechas usables y sin alterar el orden expuesto al selector. `ConvocatoriaSelector` muestra el rango de fechas en cada opcion: con dos convocatorias homonimas el desplegable ofrecia dos entradas identicas.
+- **Tres canales de alerta estaban mudos a la vez**, por eso los fallos llegaban por Slack y con semanas de retraso:
+  1. La Script Property `OPS_DEV_EMAIL` **no existia**, asi que `OperacionesBase.js` caia al literal `dev@novattend.local` — TLD reservado, no enrutable. Canario, backup, recordatorio y resumen del CEO se perdian en silencio y `writeLog` los apuntaba como enviados. **Creada hoy** con el correo real del dev (verificado 16 -> 17 propiedades, resto intacto).
+  2. La issue #7 del canario externo seguia abierta desde el 04/08 y el workflow no crea otra mientras haya una con la etiqueta: **el canario externo llevaba 7 semanas sin poder alertar**. Cerrada hoy con la explicacion.
+  3. Riesgo latente: si el repo pasa 60 dias sin commits, GitHub desactiva el cron del canario. El ultimo commit era del 10/08.
+- **Revision de codigo del ultimo commit (e19bf54):** 3 hallazgos en `OperacionesBase.js`, todos de la misma raiz — el correo se lee en un IIFE de nivel superior, asi que (a) el fallback es una direccion inentregable, (b) un fallo transitorio de `PropertiesService` tumba el proyecto entero antes de `doGet`/`doPost`, no solo el correo, y (c) anade un round-trip a ScriptProperties a cada peticion de la PWA y a cada `onEdit`. Fix propuesto y NO aplicado: accessor perezoso memoizado con try/catch. **Pendiente.**
+- **Backend sano hoy:** 5 disparadores activos con 0% de errores, ~450 ejecuciones revisadas del 17 al 23/09 sin un solo fallo, y el LOG sin rafagas de LOGIN repetido (solo 2 de un mismo profesor separados 22s). La latencia del borde sigue viva pero no desbocada.
+- **Verificado:** lint 0, **301 tests / 48 suites** (antes 294 / 47). Los 7 casos nuevos se comprobaron reintroduciendo el bug: 2 fallan con `allConvs[0]`.
+- **Decidido:** migracion a **Supabase**, por fases y sin big bang; Aurora tendra **usuario propio con rol admin** (revierte la decision de julio de usar las credenciales del CEO) y un panel que cubra todo lo que hoy hace en la hoja, incluidos alumnos de clase particular 1 a 1 (concepto nuevo: hoy todo alumno exige grupo). El milestone v1.2 se abrio y se **paro a proposito**: primero se limpian los datos, para no migrar basura.
+- **Deuda de datos pendiente de Aurora:** `conv-sept2026` duplicada y vacia; fechas de fin reales; que es `B1`/`B2`; alumnos metidos en grupos de abril que pueden no haberse guardado; Marta Battistella con dos pestanas de grupo; un alumno aun asignado a un profesor dado de baja. Ademas, restos de pruebas en produccion: 6 propiedades `loginfail_*` de usuarios fantasma.
+- **Siguiente paso sugerido:** respuesta de Aurora -> arreglar el prefijo de hojas -> aplicar el fix de `OperacionesBase.js` -> abrir v1.2.
+
+### 2026-08-04 (tarde) — Latencia percibida: race de 8s eliminado + canario externo (rama fix/latencia-y-observabilidad, swarm de 10 agentes)
 - **Hito:** Latencia percibida mitigada y canario ciego arreglado. DESPLEGADO en produccion (Vercel + clasp push). **PENDIENTE OBLIGATORIO DEL USUARIO: fijar la Script Property `CANARIO_URL` en el editor de Apps Script**, o el canario interno dejara de medir y mandara un email de error diario. Siguiente: vigilar la issue del canario externo unos dias.
 
 ### 2026-08-04 (tarde) — Latencia percibida: race de 8s eliminado + canario externo (rama fix/latencia-y-observabilidad, swarm de 10 agentes)

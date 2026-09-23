@@ -57,6 +57,7 @@ Progress: [█████████░] 89%
 | 260630-f75 | fix normaliza fechas dd/mm/yyyy a ISO en sheetToObjects (raiz F1/F2) | 2026-06-30 | 9dbb5ab | [260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en](./quick/260630-f75-fix-normaliza-fechas-dd-mm-yyyy-a-iso-en/) |
 | 260630-wrp | perf warmCache calienta rosters per-profesor + endurece invalidacion (lock + _warm_keys + crearAlumno res_) | 2026-06-30 | f50e1a8 | [260630-wrp-warm-rosters-profesor](./quick/260630-wrp-warm-rosters-profesor/) |
 | 260804-eyg | docs registrar incidente 2026-08-04 de convocatoria de abril caducada | 2026-08-04 | d1cd227 | [260804-eyg-registrar-en-docs-progress-md-el-inciden](./quick/260804-eyg-registrar-en-docs-progress-md-el-inciden/) |
+| 260923-cvd | fix seleccion por defecto de convocatoria en Dashboard CEO (allConvs[0] -> fecha_inicio mas reciente) + fechas en el selector para distinguir homonimas | 2026-09-23 | 56d30c6 | [260923-cvd-fix-convocatoria-por-defecto](./quick/260923-cvd-fix-convocatoria-por-defecto/) |
 | fast | chore ignorar graphify-out en .gitignore (grafo regenerable) | 2026-08-04 | bc7aeb2 | — (via /gsd:fast, sin directorio) |
 
 ## Session Continuity
