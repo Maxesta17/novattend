@@ -1,6 +1,13 @@
 # Deuda tecnica
 
-Registro de deuda tecnica conocida, con contexto y fix propuesto para cada entrada.
+**Archivo de decisiones, no lista de tareas pendientes.** Cada entrada lleva un
+campo `**Estado:**`; a dia de hoy TODAS estan RESUELTAS. Lo que se conserva aqui
+no es el pendiente, sino el **motivo**: por que existia el problema, que opciones
+habia y por cual se opto. Antes de cambiar algo que una entrada explique, leela
+— describe una decision viva aunque el problema este cerrado.
+
+La deuda realmente pendiente se sigue en `docs/progress.md` (bloques "Deuda") y
+en `.planning/`.
 
 ---
 
