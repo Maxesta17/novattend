@@ -94,3 +94,52 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 *Last updated: 2026-04-05 after Phase 06 completion*
+
+## Milestone v1.2 — Migracion a Supabase + Panel de Administracion (en curso, 2026-10-01)
+
+**Por que ahora.** La app empezo a dar fallos visibles para los profesores y para
+Aurora. El diagnostico del 2026-09-23 encontro dos causas distintas, y ninguna
+era "Google Sheets va lento":
+
+1. **Latencia del borde de Apps Script.** El backend responde en 1-2s medido
+   desde dentro de Google y en 14-45s desde fuera, que es por donde entra el
+   profesor. Medido de nuevo el 23/09 tras desplegar: 2,6s / 23,9s / 1,5s en el
+   mismo minuto. No se arregla desde el codigo: solo saliendo de Apps Script.
+2. **La hoja es a la vez base de datos e interfaz de Aurora, y las dos mitades
+   se desincronizan.** Las pestanas de grupo de abril fueron renombradas a mano
+   anadiendo " B1"/" B2", y ese espacio rompe el patron que dispara la
+   sincronizacion: **6 de 11 pestanas no guardan nada**. Aurora escribia alumnos
+   que la app no veia jamas, y las estadisticas de esas hojas no se actualizaban
+   nunca porque el codigo busca un nombre de pestana que no existe y hace
+   `return` en silencio.
+
+**Decisiones tomadas.**
+- Destino: **Supabase** (Postgres gestionado).
+- Corte **por fases**, endpoint a endpoint, con Apps Script vivo de respaldo.
+  7 profesores usan la app a diario: ningun dia sin poder pasar lista.
+- Aurora pasa a **usuario propio con rol admin** y panel web que sustituye su
+  trabajo en la hoja. Revierte la decision de julio de darle las credenciales
+  del CEO: va a poder cambiar datos que lee el CEO, y eso tiene que quedar firmado.
+- Se migra tambien la capa operativa: auth, 13 endpoints, 4 tareas automaticas
+  y las alertas.
+
+**Lo que las respuestas de Aurora (2026-10-01) anadieron al alcance.**
+- La participacion de profesores en una convocatoria debe ser **explicita**. La
+  regla "todos los profesores participan en todas las convocatorias activas"
+  que CLAUDE.md da por buena es **falsa**: el codigo crea 4 grupos por cada
+  profesor activo (36 pestanas) y Aurora las borra una a una.
+- Hacen falta **alumnos sin grupo** (clase particular 1 a 1). Hoy el modelo lo
+  prohibe, y por eso Aurora dice que "esta app no me sirve para las clases privadas".
+- Hay que **cerrar el vocabulario** antes de disenar: Aurora llama "convocatoria"
+  a lo que el sistema llama grupo-de-un-profesor.
+
+**Regla de seguridad del milestone.** Rama `feat/migracion-supabase` y
+**prohibido `clasp push`** mientras dure. Apps Script no tiene ramas: un push
+entra en produccion al instante porque los triggers ejecutan HEAD. La rama de git
+protege el frontend, no el backend.
+
+**Fuera de alcance, a proposito.** Los parches sobre la hoja (prefijo de las
+pestanas, convocatoria duplicada, fechas de fin). Decision del usuario el
+2026-10-01: "no arregles nada, vamos a migrar todo". La verificacion de datos
+entra DENTRO de la migracion, como paso previo al volcado: lo que no este en
+ALUMNOS no existe y no viajara solo.

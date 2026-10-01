@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 Mejoras Post-Auditoria (Olas 1-3)** — Phases 1-3 (shipped 2026-03-31)
 - ✅ **v1.1 Hardening (Olas 4-5)** — Phases 4-6 (shipped 2026-04-05)
+- 🚧 **v1.2 Migracion a Supabase + Panel de Administracion** — Phases 7-14 (en curso desde 2026-10-01)
 
 ## Phases
 
@@ -25,6 +26,22 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [ ] **Phase 4: Documentacion y Accesibilidad** - JSDoc en todos los archivos + WCAG 2.1 Nivel A en componentes interactivos (gap closure pending)
 - [ ] **Phase 5: Cobertura de Tests** - Infraestructura de cobertura V8 + tests contra contratos A11Y estables al 60%
 - [ ] **Phase 6: Seguridad Backend** - Shared secret auth en Apps Script + inyeccion de token en api.js
+
+
+### 🚧 v1.2 Migracion a Supabase + Panel de Administracion (en curso)
+
+**Milestone Goal:** Sacar NovAttend de Google Apps Script y Google Sheets, y dar a Aurora un panel que sustituya su trabajo en la hoja. Un solo sitio donde viven los datos.
+
+**REGLA DE SEGURIDAD (todas las fases):** rama `feat/migracion-supabase` y **PROHIBIDO `clasp push`** mientras dure el milestone. Apps Script no tiene ramas: un push entra en produccion al instante porque los triggers ejecutan HEAD. La rama protege el frontend (Vercel despliega desde `main`), NO el backend.
+
+- [ ] **Phase 7: Vocabulario y modelo de dominio** - Glosario cerrado con Aurora y decision sobre las tandas. Bloquea a todas las demas (VOC-01, VOC-02)
+- [ ] **Phase 8: Esquema y volcado verificado** - Postgres con restricciones + informe de descuadres ANTES de migrar un solo dato (DAT-01..05)
+- [ ] **Phase 9: Autenticacion** - Contrasenas, sesiones y bloqueo por intentos, contra Supabase (API-02, ADM-01)
+- [ ] **Phase 10: Ruta del profesor** - Lectura de alumnos y guardado de asistencia. Es el camino critico diario (API-01, API-03, CUT-01, CUT-02)
+- [ ] **Phase 11: Dashboard del CEO** - Resumen y alertas contra el backend nuevo (API-01)
+- [ ] **Phase 12: Panel de Aurora** - Alumnos, convocatorias con profesores explicitos, profesores, correccion de asistencia con auditoria (ADM-02..06)
+- [ ] **Phase 13: Tareas automaticas y alertas** - Backup, canario, recordatorio y resumen del CEO, fuera de Apps Script (API-04)
+- [ ] **Phase 14: Corte y retirada** - Apagado de Apps Script, rotacion de endpoint en los tres sitios, limpieza del modo simulado (CUT-03)
 
 ## Phase Details
 
@@ -75,6 +92,68 @@ Plans:
 Plans:
 - [x] 06-01-PLAN.md — Backend: validateApiKey en Codigo.js + setApiKey/checkApiKey helpers + doc de deploy
 - [x] 06-02-PLAN.md — Frontend: API_KEY en config/api.js + inyeccion en services/api.js + tests SEC-03
+
+
+### Phase 7: Vocabulario y modelo de dominio
+
+**Objetivo:** cerrar como se llama cada cosa, antes de disenar una sola pantalla.
+
+Aurora y el sistema no hablan el mismo idioma: ella llama "convocatoria" a lo que el sistema llama grupo-de-un-profesor. Dijo "cuatro de septiembre: dos de Myriam, una de Christian, una de Elisabeth" refiriendose a GRUPOS dentro de UNA convocatoria. Construir el panel sin cerrar esto produce la pantalla equivocada.
+
+Decidir ademas si las "tandas" (`B1`/`B2` de abril) son entidad del modelo o etiqueta. Hoy existen solo como texto anadido a mano al nombre de una pestana — y eso rompe `onEdit` y las estadisticas en 6 de 11 pestanas.
+
+**Requisitos:** VOC-01, VOC-02
+**Bloquea:** todas las fases siguientes
+
+### Phase 8: Esquema y volcado verificado
+
+**Objetivo:** Postgres que impida por construccion los lios de hoy, y ni un dato migrado sin cuadrar.
+
+Restricciones que hoy faltan: identificador unico de convocatoria (existen dos "septiembre 2026" porque se tecleo `SEPT2026` y `SEPT26`), alumno sin grupo permitido, participacion de profesor explicita.
+
+El informe de descuadres es parte de la fase, no un paso previo: hay alumnos escritos en pestanas que nunca sincronizaron, y lo que no este en ALUMNOS no viajara solo.
+
+**Requisitos:** DAT-01, DAT-02, DAT-03, DAT-04, DAT-05
+
+### Phase 9: Autenticacion
+
+**Objetivo:** contrasenas, sesiones y bloqueo por intentos contra Supabase, y Aurora con usuario propio de rol admin.
+
+**Requisitos:** API-02, ADM-01
+
+### Phase 10: Ruta del profesor
+
+**Objetivo:** lo que usan 7 personas cada dia. Primera fase con usuarios reales encima, con Apps Script vivo de respaldo y vuelta atras probada.
+
+Meta de latencia: por debajo de 1s en el percentil 95 medido DESDE FUERA. Linea base: 2,6s / 23,9s / 1,5s en el mismo minuto (23/09).
+
+**Requisitos:** API-01, API-03, CUT-01, CUT-02
+
+### Phase 11: Dashboard del CEO
+
+**Objetivo:** resumen, alertas y seleccion de convocatoria contra el backend nuevo.
+
+**Requisitos:** API-01
+
+### Phase 12: Panel de Aurora
+
+**Objetivo:** que Aurora pueda dejar la hoja. La fase mas grande del milestone.
+
+Incluye lo que mas le duele a diario: elegir que profesores participan al crear una convocatoria, en vez de generar 4 grupos por cada profesor activo — 36 pestanas que borra una a una.
+
+**Requisitos:** ADM-02, ADM-03, ADM-04, ADM-05, ADM-06
+
+### Phase 13: Tareas automaticas y alertas
+
+**Objetivo:** backup, canario, recordatorio de las 20h y resumen del CEO de los lunes, fuera de Apps Script.
+
+**Requisitos:** API-04
+
+### Phase 14: Corte y retirada
+
+**Objetivo:** apagar Apps Script, rotar el endpoint en los tres sitios a la vez y retirar el modo simulado (~225 lineas que la auditoria marco y se aplazaron a proposito hasta aqui).
+
+**Requisitos:** CUT-03
 
 ## Progress
 

@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Hardening (Olas 4-5)
-status: verifying
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-04-05T18:37:07.438Z"
-last_activity: 2026-04-05
+milestone: v1.2
+milestone_name: Migracion a Supabase + Panel de Administracion
+status: planning
+stopped_at: ROADMAP v1.2 escrito; siguiente /gsd:plan-phase 7
+last_updated: "2026-10-01T00:00:00.000Z"
+last_activity: 2026-10-01
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
-  percent: 89
+  total_phases: 8
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
