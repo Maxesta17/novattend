@@ -60,3 +60,8 @@ ruvector.db
 # Artefactos runtime de claude-flow/ruflo (swarm local)
 agentdb.rvf
 agentdb.rvf.lock
+
+# Supabase local (no versionar claves ni volcados)
+supabase/.branches
+supabase/.temp
+supabase/.env
