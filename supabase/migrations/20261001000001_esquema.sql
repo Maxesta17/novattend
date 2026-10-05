@@ -16,6 +16,10 @@ create table convocatorias (
   -- Produccion tenia DOS "septiembre 2026" con identico nombre y fecha_inicio
   -- (ids conv-sept2026 y conv-sept26, por teclear dos prefijos distintos).
   -- Esta restriccion lo habria impedido. Se ignoran mayusculas por robustez.
+  --
+  -- NO apretar a unique(nombre) sin la fecha: Aurora confirmo (2026-10-05) que
+  -- dos cursos distintos pueden llamarse igual y solo los separa el periodo.
+  -- Eso tiene que seguir entrando. La prueba 13 de 08-pruebas-esquema.sql lo fija.
   constraint periodo_valido check (fecha_fin >= fecha_inicio)
 );
 create unique index convocatoria_unica

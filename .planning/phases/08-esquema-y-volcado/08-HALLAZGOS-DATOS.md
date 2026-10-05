@@ -44,6 +44,11 @@ las dos primeras filas, no la tercera, porque su `fecha_inicio` difiere. Lo que
 cierra el agujero es la clave primaria sobre el id, que Postgres da y una hoja
 de calculo no tiene. El hallazgo #11 de la revision era correcto en el fondo.
 
+**Segunda correccion (2026-10-05), tras responder Aurora:** el parrafo de arriba
+describe bien el mecanismo pero saca la conclusion equivocada. La tercera fila
+**no debe bloquearse**: es otro curso. Lo unico que sobra es el clon, y ese si lo
+bloquea la restriccion. Ver "Septiembre: dos cursos reales" mas abajo.
+
 ### 2. Dos profesores sin ningun alumno
 
 `LINGNOVA - Marta Battistella - G1` y `- G2` estan vacias: rango `A1:D2`, solo
@@ -79,14 +84,138 @@ Al separar B1 y B2 en dos convocatorias hay que fijar fechas de verdad.
 normaliza al leer, asi que no rompe hoy, pero el volcado debe normalizar
 explicitamente y no fiarse del orden de los campos.
 
+## Respuestas de Aurora (2026-10-05) y segunda lectura de la hoja
+
+### Septiembre: dos cursos reales, no uno — RESUELTO
+
+> "las dos son buenas, son cursos diferentes, los tengo separados por colores"
+
+La hoja tiene tres filas de septiembre, y al leerlas con el formato original se
+ve que **dos son la misma fecha escrita de dos maneras**:
+
+```
+conv-sept2026 | septiembre 2026 | 31/08/2026 | 23/12/2026
+conv-sept26   | septiembre 2026 | 2026-08-31 | 2026-12-23   <- mismo periodo, otro id
+conv-sept26   | septiembre 2026 | 2026-09-28 | 2026-12-18   <- otro periodo, id repetido
+```
+
+Lectura que encaja con la respuesta: **curso A** (31/08-23/12) y **curso B**
+(28/09-18/12, el que declara la pestana separadora `[ SEPT26 ]`), mas un **clon**
+de A creado al teclear el id dos veces.
+
+Consecuencia para el esquema: `unique (lower(nombre), fecha_inicio)` hace
+exactamente lo que hay que hacer — deja convivir A y B, rechaza el clon.
+Verificado como prueba 13 en `08-pruebas-esquema.sql`.
+
+**Lo que NO cubre ninguna restriccion:** los dos cursos se llaman igual. Aurora
+los distingue **por el color de la pestana**, y el color no es un dato: ni la API
+lo lee, ni sobrevive a una exportacion, ni llega al panel del CEO. De ahi que el
+dashboard mostrara dos "septiembre 2026" indistinguibles. El volcado tiene que
+convertir ese color en texto, es decir, **darles dos nombres distintos**.
+
+**Pendiente de verificar en el volcado, no por deduccion:** a que id apuntan de
+verdad las filas de ALUMNOS y ASISTENCIA. El volcado debe contar filas por id y
+**negarse a continuar** si el id que piensa descartar tiene historial colgando.
+
+### El CEO no escribe en la hoja — CONFIRMADO
+
+> "de todos modos Rafa no se mete aqui"
+
+Respalda el rol de solo lectura del CEO, ya implementado y probado (prueba 6 de
+`08-pruebas-rls.sql`: ve todo, no puede escribir nada).
+
+### Fichas de dos personas: pendiente de Aurora, pero el dano ya es medible
+
+> "eso lo tengo que mirar porque asi de momento no lo se"
+
+La segunda lectura permite cuantificarlo sin esperarla. En
+`LINGNOVA - Elisabeth Shick - G2` hay una ficha que funde a dos alumnos en una
+sola linea, al 14% con 28 clases. **Esos mismos dos alumnos figuran por separado
+en `SEPT26 - Elisabeth Shick - G1`, al 100% cada uno.** Las dos cifras llegan al
+dashboard del CEO y se contradicen.
+
+En la misma pestana, un alumno aparece con el nombre completo en una convocatoria
+y abreviado en la otra (14% frente a 74%). El volcado **no puede deduplicar por
+nombre**, y no hace falta: cada convocatoria tiene su propia fila de alumno.
+
+### Un profesor sigue en activo, su bloque acaba ahora
+
+> "Efectivamente estan dando clase acaban ahora"
+
+Importante por un motivo tecnico: las columnas "Ultima clase" y "Total clases" de
+esa pestana marcan **13/05**, cinco meses atras. No es que el grupo este muerto:
+es que esa pestana arrastra el **prefijo con espacio** (`ABR26 B1- Samuel - G2`),
+y `actualizarEstadisticasGrupo` nunca la encuentra. Las estadisticas llevan
+congeladas desde mayo.
+
+**Regla para el volcado:** las columnas de porcentaje y fecha de las pestanas de
+grupo son **derivadas y no fiables**. La unica fuente de verdad es ASISTENCIA.
+
+### Stephanie ya no esta en la academia — RESUELTO
+
+> "Stephanie no sigue con nosotros"
+
+`usuarios.activo = false`. No se borra: su nombre cuelga del historial de
+asistencia de sus alumnos, y `asistencia.alumno_id` es `on delete restrict`
+precisamente para que una baja no se lleve datos por delante.
+
+### Hallazgo nuevo: LING. ACDMY repite el patron de abril
+
+```
+CONVOCATORIAS:        conv-lingnova | fecha_fin 2026-10-31
+Pestana [ LINGNOVA ]: Periodo: 12/05/2026 - 21/08/2026
+```
+
+Mismo parche que se aplico a abril el 2026-08-04: alargar `fecha_fin` para que la
+convocatoria siguiera apareciendo. Hoy (05/10) sale activa aunque su periodo
+declarado acabo el 21/08, y sus pestanas registran clases el 01/10. El volcado
+necesita las **fechas reales**, no las parcheadas.
+
+### Volumen: la hoja crece mientras migramos
+
+| Pestana | 23/09 | 01/10 | 05/10 |
+|---|---|---|---|
+| ASISTENCIA | 3.409 | 3.540 | 3.585 |
+| LOG | — | 1.461 | 1.485 |
+| CONVOCATORIAS | 4 | 5 | 5 |
+
+El volcado apunta a un blanco movil, asi que tiene que ser **repetible**: correrlo
+dos veces no puede duplicar nada. De eso se encargan las claves unicas, ya
+probadas.
+
 ## Lo que el volcado tiene que resolver
 
+Actualizado 2026-10-05 con las respuestas de Aurora.
+
 1. Separar `conv-abr26` en **dos** convocatorias (B1 y B2), con fechas reales.
-2. Elegir una sola convocatoria de septiembre y reasignar su asistencia.
-3. Dividir las fichas de dos personas, repartiendo o duplicando su historial —
-   decision de negocio pendiente.
-4. Normalizar fechas a ISO antes de insertar.
-5. Mapear `ALUMNOS.grupo` (G1..G4) + `profesor_id` a la tabla `grupos` con
+2. **Septiembre: conservar DOS convocatorias y renombrarlas.** Son dos cursos
+   distintos (Aurora), hoy con nombre identico y distinguidos solo por el color
+   de la pestana. Descartar unicamente el clon (mismo nombre y misma
+   `fecha_inicio`), **despues** de contar su historial: si el id que se descarta
+   tiene filas en ALUMNOS o ASISTENCIA, el volcado se para y avisa.
+3. **Fechas reales, no parcheadas:** tomar el periodo de las pestanas
+   separadoras (`[ ABR26 ]`, `[ LINGNOVA ]`, `[ SEPT26 ]`), no la `fecha_fin` de
+   CONVOCATORIAS, que esta alargada a mano en al menos dos convocatorias.
+4. Dividir las fichas de dos personas, repartiendo o duplicando su historial —
+   decision de negocio **pendiente de Aurora**. Hasta que responda, el volcado
+   las marca y no las inventa.
+5. Normalizar fechas a ISO antes de insertar.
+6. Mapear `ALUMNOS.grupo` (G1..G4) + `profesor_id` a la tabla `grupos` con
    nombre libre.
-6. Dejar fuera a quien no sea profesor al migrar `PROFESORES` a `usuarios`:
+7. Dejar fuera a quien no sea profesor al migrar `PROFESORES` a `usuarios`:
    la tabla contiene tambien al CEO y a Aurora.
+8. **Stephanie entra con `activo = false`** (ya no esta en la academia), sin
+   borrar nada: su historial cuelga de la asistencia de sus alumnos.
+9. **Ignorar las columnas de estadisticas** de las pestanas de grupo
+   (porcentaje, ultima clase, total clases). Son derivadas y algunas llevan
+   congeladas desde mayo por el bug del prefijo con espacio. Recalcular todo
+   desde ASISTENCIA.
+
+## Sigue pendiente de Aurora
+
+1. **Las fichas de dos personas:** ¿son dos alumnos que pagan por separado, o
+   una sola matricula? Determina si el historial se duplica o se reparte.
+2. **Los dos grupos de Marta Battistella:** sus pestanas estan vacias. ¿Donde
+   escribio a sus alumnos?
+3. **Nombre para cada curso de septiembre:** hacen falta dos nombres distintos,
+   porque el color de la pestana no viaja a la base de datos.

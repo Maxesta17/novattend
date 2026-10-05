@@ -175,4 +175,34 @@ begin
   raise notice 'OK 12 - vista de activas correcta en hora de Madrid';
 end $$;
 
+-- 13. Las DOS convocatorias de septiembre que Aurora confirma como cursos
+--     distintos tienen que CONVIVIR; el clon de una de ellas, no.
+--     Respuesta de Aurora (2026-10-05): "las dos son buenas, son cursos
+--     diferentes, los tengo separados por colores".
+do $$
+declare n int;
+begin
+  -- Curso A: el periodo largo
+  insert into convocatorias (nombre, fecha_inicio, fecha_fin)
+  values ('septiembre 2026', '2026-08-31', '2026-12-23');
+  -- Curso B: otro curso, otro periodo, mismo nombre. DEBE entrar.
+  insert into convocatorias (nombre, fecha_inicio, fecha_fin)
+  values ('septiembre 2026', '2026-09-28', '2026-12-18');
+
+  select count(*) into n from convocatorias where nombre = 'septiembre 2026';
+  if n <> 2 then
+    raise exception 'FALLO 13a: deberian convivir 2 cursos de septiembre, hay %', n;
+  end if;
+
+  -- El clon: mismo nombre, misma fecha_inicio, solo cambia el formato en origen
+  -- ('31/08/2026' frente a '2026-08-31'). Es el que sobra.
+  begin
+    insert into convocatorias (nombre, fecha_inicio, fecha_fin)
+    values ('septiembre 2026', '2026-08-31', '2026-12-23');
+    raise exception 'FALLO 13b: acepto el clon de septiembre';
+  exception when unique_violation then
+    raise notice 'OK 13 - conviven los 2 cursos de septiembre, el clon se rechaza';
+  end;
+end $$;
+
 rollback;
