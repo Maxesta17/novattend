@@ -215,7 +215,113 @@ Actualizado 2026-10-05 con las respuestas de Aurora.
 
 1. **Las fichas de dos personas:** ¿son dos alumnos que pagan por separado, o
    una sola matricula? Determina si el historial se duplica o se reparte.
-2. **Los dos grupos de Marta Battistella:** sus pestanas estan vacias. ¿Donde
-   escribio a sus alumnos?
+2. ~~**Los dos grupos de Marta Battistella**~~ — RESUELTO con los datos: no
+   existen en ningun sitio. Ya no es una pregunta, es una alta pendiente.
 3. **Nombre para cada curso de septiembre:** hacen falta dos nombres distintos,
    porque el color de la pestana no viaja a la base de datos.
+
+## Lo que dicen los datos completos (2026-10-06)
+
+Hasta ahora solo se veian **muestras** de las primeras filas de cada pestana. Esta
+vez se exporto la hoja entera a `.xlsx` por el conector de Drive y se abrio aqui:
+**las 3.618 filas de ASISTENCIA y los 94 de ALUMNOS, todas**. Dos de las cuatro
+preguntas pendientes se contestan solas con eso.
+
+### Marta Battistella no tiene alumnos. Ni uno. — RESUELTO
+
+```
+ALUMNOS    con profesor_id = prof-marta : 0 filas
+ASISTENCIA con profesor_id = prof-marta : 0 marcas
+Sus dos pestanas de grupo               : vacias
+```
+
+No es que esten "en otro sitio". **No estan en ningun sitio del sistema.** Si da
+clase, esas clases no se registran en ninguna parte: ni en el panel del CEO, ni en
+los porcentajes, ni en la base de datos nueva cuando se vuelque.
+
+El volcado no puede inventarselos. Hay que darlos de alta.
+
+### LING. ACDMY sigue viva — CORRECCION DE UNA AFIRMACION PROPIA
+
+Mas arriba se dijo que repetia el patron de abril, con la `fecha_fin` alargada a
+mano. **Falso.** Hay asistencia hasta el **2026-10-01**, asi que la convocatoria
+esta en marcha en octubre y el `31/10` de CONVOCATORIAS es perfectamente creible.
+Lo obsoleto es la **pestana separadora**, que declara `12/05 - 21/08`.
+
+Es ademas minuscula: 6 alumnos y, en la practica, un solo grupo vivo.
+
+```
+prof-elisabeth G2 | 112 marcas | 28 dias | 2026-05-27 -> 2026-10-01
+prof-elisabeth G1 |   4 marcas |  1 dia  | 2026-05-26
+prof-sven      G4 |   1 marca  |  1 dia  | 2026-05-20   (despedido)
+```
+
+### Septiembre: los dos cursos se separan solos por fecha de inicio
+
+```
+prof-christian G2 | 189 marcas | 2026-08-31 -> 2026-10-05
+prof-elisabeth G1 | 160 marcas | 2026-09-01 -> 2026-10-05
+--------------------------------------------------------- corte
+prof-myriam    G1 |  18 marcas | 2026-09-28 -> 2026-10-05
+prof-myriam    G2 |  12 marcas | 2026-09-29 -> 2026-10-01
+```
+
+Dos bloques limpios que **encajan exactamente con las dos filas de CONVOCATORIAS**:
+el curso que empieza el 31/08 (Christian y Elisabeth) y el que empieza el 28/09
+(los dos grupos de Myriam). Aurora ya solo tiene que ponerles nombre; quien va en
+cada uno lo deciden los datos.
+
+### Abril se parte en dos bloques, y coinciden con los nombres de pestana
+
+```
+BLOQUE DE ABRIL  (las pestanas lo llaman B2)
+  prof-myriam    G2 | 390 marcas | 2026-04-08 -> 2026-08-06
+  prof-sonja     G3 | 333 marcas | 2026-04-08 -> 2026-07-27
+  prof-christian G4 | 448 marcas | 2026-04-13 -> 2026-08-12
+  prof-stephanie G1 | 301 marcas | 2026-04-13 -> 2026-07-30
+
+BLOQUE DE MAYO   (las pestanas lo llaman B1) — SIGUE VIVO
+  prof-nadine    G1 | 610 marcas | 2026-05-04 -> 2026-09-29
+  prof-samuel    G2 | 790 marcas | 2026-05-04 -> 2026-10-05
+  prof-elisabeth G1 | 250 marcas | 2026-05-25 -> 2026-08-31
+```
+
+El corte es nitido: o empiezas la semana del 8 de abril, o la del 4 de mayo. Nadie
+en medio. Esto resuelve el punto 1 de la lista de arriba **sin preguntar a nadie**:
+ya se sabe que grupo va a cada una de las dos convocatorias de abril.
+
+Ojo al detalle contraintuitivo: **B1 es el bloque de mayo y B2 el de abril**, no al
+reves.
+
+### Samuel: la pestana tiene razon, la celda A1 no — RESUELTO
+
+La pestana se llama `ABR26 B1- Samuel - G2` y su celda A1 dice `Samuel - G2 - B2`.
+Su grupo empieza el **2026-05-04**, el mismo dia que el de Nadine, que es B1. Luego
+**es B1** y la celda A1 esta mal. Y sigue dando clase: su ultima marca es de
+**2026-10-05**. Es el grupo con mas actividad de toda la hoja (790 marcas).
+
+### `conv-sept2026` esta muerto — el clon se puede descartar sin riesgo
+
+```
+ALUMNOS    con conv-sept2026 : 0
+ASISTENCIA con conv-sept2026 : 0
+```
+
+Era la duda que quedaba: si el id que se descarta tenia historial colgando. **No
+tiene nada.** Todo lo de septiembre se escribio bajo `conv-sept26`, que es
+precisamente el id que comparten las DOS filas buenas. El problema real no es el
+duplicado: es que **los dos cursos vivos comparten un mismo id**, y el backend
+resuelve por id tomando la primera coincidencia.
+
+### Los 7 alumnos de Stephanie siguen marcados como activos
+
+Todos en `conv-abr26`, grupo G1, `activo = TRUE`. Pero su bloque (el de abril)
+termino el **2026-07-30** y ella ya no esta en la academia. Son activos de una
+convocatoria cerrada. El volcado los migra con su historial intacto, pero no deben
+aparecer como alumnos en curso.
+
+### Abril sigue recibiendo asistencia HOY
+
+`conv-abr26` acumula 3.122 marcas y la ultima es del **2026-10-05**. La convocatoria
+de abril no es un residuo: es, con diferencia, la mas usada de la hoja. Cualquier
+cosa que se haga con ella al volcar afecta a gente que esta dando clase ahora.
