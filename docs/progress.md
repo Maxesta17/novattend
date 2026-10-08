@@ -1,8 +1,63 @@
 # Registro de Progreso - NovAttend
 
 ## Ultimo Hito
-- **Fecha:** 2026-09-23
-- **Hito:** Diagnostico completo del "la app da muchos errores". NO era Google Sheets ni la latencia: eran dos fallos de datos/codigo, uno de ellos arreglado hoy. **PENDIENTE DEL USUARIO: respuesta de Aurora a 8 preguntas** (sobre todo que significa el bloque `B1`/`B2` de las pestanas de abril). Siguiente: con esa respuesta, arreglar el prefijo de hojas; despues, milestone v1.2 (migracion a Supabase).
+- **Fecha:** 2026-10-08
+- **Hito:** Fase 8 de la migracion a Supabase. Esquema, control de acceso y auditoria **escritos y verificados contra Postgres real: 24/24 pruebas verdes**. Hoja de origen leida ENTERA (no muestras) y analizada. Aurora respondio: el volcado ya no esta bloqueado. **Siguiente: escribir el volcado.**
+
+### 2026-10-08 — RELEVO: fase 8 lista para el volcado (rama feat/migracion-supabase)
+
+**Donde esta todo**
+
+- Rama `feat/migracion-supabase`, **subida a GitHub** (antes solo existia en el portatil). Ultimo commit: `2a16e45`.
+- Migraciones en `supabase/migrations/`: esquema, RLS y triggers. Ya aplicadas a la base local.
+- Pruebas en `supabase/tests/`: `08-pruebas-esquema.sql` (14) y `08-pruebas-rls.sql` (10).
+- Hallazgos de datos en `.planning/phases/08-esquema-y-volcado/08-HALLAZGOS-DATOS.md`. **Leerlo entero antes de tocar el volcado**: contiene las decisiones y tres correcciones a afirmaciones erroneas mias.
+
+**Como levantar y comprobar la base**
+
+Docker Desktop arranca los contenedores solo. El unico que hace falta es `supabase_db_novattend` (puertos 544xx, no 543xx: los 543xx los ocupa otro proyecto).
+
+```
+docker exec -i supabase_db_novattend psql -U postgres -d postgres < supabase/tests/08-pruebas-esquema.sql
+docker exec -i supabase_db_novattend psql -U postgres -d postgres < supabase/tests/08-pruebas-rls.sql
+```
+
+Comprobado el 2026-10-08: 14/14 y 10/10, cero fallos. Las cinco tablas estan **vacias**, esperando el volcado.
+
+**Fuente de datos para el volcado**
+
+Los conectores de Google Drive y n8n se cayeron al final de la sesion. Hay un volcado completo de la hoja guardado como `.xlsx` en el scratchpad de la sesion anterior:
+
+```
+C:\Users\Usuario\AppData\Local\Temp\claude\c--Users-Usuario-Desktop-novattend\593395ac-ea01-4442-b634-0bc1bd14cd0c\scratchpad\hoja.xlsx
+```
+
+Junto a el, `leer_hoja.py` y `analisis.py`, que lo abren con `zipfile` + `xml.etree`, sin dependencias. **Es del 2026-10-06**: sirve para escribir y probar la transformacion, pero el volcado definitivo necesita re-exportar, porque abril y septiembre reciben asistencia a diario.
+
+**Decisiones ya cerradas (no volver a abrirlas)**
+
+| Que | Decision |
+|---|---|
+| `conv-abr26` | Se parte en DOS: bloque de abril (cerrado, 08/04-12/08) y bloque de mayo (vivo, desde 04/05). En las pestanas, **B2 es abril y B1 es mayo** — contraintuitivo, pero es lo que dicen las fechas |
+| Septiembre | DOS convocatorias: `Septiembre 2026 - Intensivo` (31/08-23/12: Christian G2, Elisabeth G1) y `Septiembre 2026 - Especial` (28/09-18/12: Myriam G1 y G2). Nombres dados por Aurora |
+| `conv-sept2026` | Se descarta: 0 alumnos, 0 marcas. El volcado lo re-comprueba y **aborta** si encuentra algo colgando |
+| `conv-lingnova` | Fin 31/10, confirmado por Aurora. La pestana separadora (12/05-21/08) esta obsoleta |
+| Fichas con dos nombres | **Son clases en pareja.** Una matricula, una fila. NO se parten |
+| Samuel | Es B1: su grupo empieza el mismo dia que el de Nadine. La celda A1 de su pestana esta mal |
+| Stephanie | Causa baja: `usuarios.activo = false`. Sus 7 alumnos van al bloque de abril, ya cerrado |
+| Estadisticas de las pestanas | Derivadas y no fiables (algunas congeladas desde mayo por el bug del prefijo). Recalcular todo desde ASISTENCIA |
+
+**Lo unico pendiente de Aurora**
+
+Dar de alta a los alumnos de Marta Battistella. **No bloquea el volcado**: estan a cero en ALUMNOS y a cero en ASISTENCIA, asi que no hay nada que migrar. Si da clase, esas clases no se registran en ningun sitio.
+
+**Canal con Aurora**
+
+Se monto un bot de Slack via n8n para preguntarle. **Entrega bien, pero ella contesta a Manu, no al bot.** La revision automatica en la nube que vigilaba ese mensaje directo disparo 15 veces para nada y quedo **apagada** el 2026-10-08. Identificadores y gotchas en la memoria del proyecto (`project_slack_aurora`).
+
+**Siguiente paso**
+
+Escribir el volcado. Dos reglas acordadas: **repetible** (ejecutarlo dos veces no duplica nada; de eso se encargan las claves unicas ya probadas) y **se para si duda** (si una fila no encaja, aborta en vez de inventar un dato).
 
 ### 2026-09-23 — Tres alarmas mudas, una convocatoria elegida por azar y 6 hojas que no sincronizan (rama fix/convocatoria-por-defecto)
 - **Sintoma reportado:** "la app da muchos errores, el Google Sheets va muy lento". Aurora reporta por Slack discrepancias entre lo que ve en la hoja y lo que muestra la app.
