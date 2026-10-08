@@ -188,17 +188,17 @@ probadas.
 Actualizado 2026-10-05 con las respuestas de Aurora.
 
 1. Separar `conv-abr26` en **dos** convocatorias (B1 y B2), con fechas reales.
-2. **Septiembre: conservar DOS convocatorias y renombrarlas.** Son dos cursos
-   distintos (Aurora), hoy con nombre identico y distinguidos solo por el color
-   de la pestana. Descartar unicamente el clon (mismo nombre y misma
-   `fecha_inicio`), **despues** de contar su historial: si el id que se descarta
-   tiene filas en ALUMNOS o ASISTENCIA, el volcado se para y avisa.
+2. **Septiembre: dos convocatorias, con los nombres que dio Aurora.**
+   `Septiembre 2026 - Intensivo` (31/08-23/12: Christian G2, Elisabeth G1) y
+   `Septiembre 2026 - Especial` (28/09-18/12: Myriam G1 y G2). El id
+   `conv-sept2026` se descarta: comprobado que no tiene ni un alumno ni una
+   marca. El volcado vuelve a comprobarlo antes de descartar, y se para si
+   encuentra algo colgando.
 3. **Fechas reales, no parcheadas:** tomar el periodo de las pestanas
    separadoras (`[ ABR26 ]`, `[ LINGNOVA ]`, `[ SEPT26 ]`), no la `fecha_fin` de
    CONVOCATORIAS, que esta alargada a mano en al menos dos convocatorias.
-4. Dividir las fichas de dos personas, repartiendo o duplicando su historial —
-   decision de negocio **pendiente de Aurora**. Hasta que responda, el volcado
-   las marca y no las inventa.
+4. **NO dividir las fichas de dos personas.** Aurora confirmo que son clases en
+   pareja: una matricula, una fila, un porcentaje. Se migran tal cual.
 5. Normalizar fechas a ISO antes de insertar.
 6. Mapear `ALUMNOS.grupo` (G1..G4) + `profesor_id` a la tabla `grupos` con
    nombre libre.
@@ -213,12 +213,15 @@ Actualizado 2026-10-05 con las respuestas de Aurora.
 
 ## Sigue pendiente de Aurora
 
-1. **Las fichas de dos personas:** ¿son dos alumnos que pagan por separado, o
-   una sola matricula? Determina si el historial se duplica o se reparte.
-2. ~~**Los dos grupos de Marta Battistella**~~ — RESUELTO con los datos: no
-   existen en ningun sitio. Ya no es una pregunta, es una alta pendiente.
-3. **Nombre para cada curso de septiembre:** hacen falta dos nombres distintos,
-   porque el color de la pestana no viaja a la base de datos.
+Al 2026-10-08 queda **una sola cosa**, y no es una pregunta sino un alta.
+
+1. ~~**Las fichas de dos personas**~~ — RESUELTO: son clases en pareja. Una fila.
+2. ~~**Los dos grupos de Marta Battistella**~~ — la pregunta de "donde estan" esta
+   RESUELTA con los datos: no existen en ningun sitio. Pero **sus alumnos siguen
+   sin dar de alta**. Aurora respondio *"Tengo que mirarlo"* el 2026-10-08.
+   Es lo unico que falta, y no bloquea el volcado: no hay nada que migrar.
+3. ~~**Nombre para cada curso de septiembre**~~ — RESUELTO: "Especial" e
+   "Intensivo".
 
 ## Lo que dicen los datos completos (2026-10-06)
 
@@ -319,6 +322,52 @@ Todos en `conv-abr26`, grupo G1, `activo = TRUE`. Pero su bloque (el de abril)
 termino el **2026-07-30** y ella ya no esta en la academia. Son activos de una
 convocatoria cerrada. El volcado los migra con su historial intacto, pero no deben
 aparecer como alumnos en curso.
+
+### Las dos convocatorias de septiembre ya tienen nombre — RESUELTO
+
+Respuesta de Aurora (2026-10-08), literal:
+
+> "Septiembre 2026 – Especial (es el de Myriam) y Septiembre 2026 - Intensivo
+> (los de Christian y Elisabeth)"
+
+**Coincide exactamente con el corte que habian marcado las fechas de clase.** El
+reparto no era una suposicion: era correcto.
+
+```
+Septiembre 2026 - Intensivo | 31/08 - 23/12 | Christian G2, Elisabeth G1
+Septiembre 2026 - Especial  | 28/09 - 18/12 | Myriam G1, Myriam G2
+```
+
+### Las fichas de dos nombres son clases en pareja — RESUELTO
+
+> "Son clases en pareja, efectivamente"
+
+Una pareja, una matricula, un porcentaje. **Se migran como una sola fila**, que es
+como estan registradas hoy. Partirlas en dos seria inventar un historial que nadie
+ha llevado nunca.
+
+**Correccion a una afirmacion propia:** se escribio mas arriba que esas dos
+personas "figuran por separado al 100% en el grupo de septiembre y al 14% en la
+ficha conjunta, y las dos cifras se contradicen". **No se contradicen.** Son dos
+matriculas distintas en dos convocatorias distintas: en LINGNOVA van en pareja y
+en septiembre van cada uno por su cuenta. El modelo nuevo lo soporta sin tocar
+nada, porque cada convocatoria tiene su propia fila de alumno.
+
+### LING. ACDMY acaba el 31/10 — RESUELTO
+
+> "El 31/10 es la fecha buena."
+
+Confirma lo que ya decian los datos: la convocatoria esta viva y la fecha de
+CONVOCATORIAS es la correcta. La obsoleta es la pestana separadora (`12/05 - 21/08`).
+
+### Nota sobre el canal: contesto a Manu, no al bot
+
+Las preguntas le llegaron por el mensaje directo del bot y **las leyo** — sus cuatro
+respuestas van numeradas y en orden. Pero contesto en su conversacion con Manu, no
+al bot. La revision automatica que vigila el DM nunca lo habria visto.
+
+Conclusion practica: **el bot sirve para preguntar, no para escuchar.** Las
+respuestas hay que recogerlas por donde ella escribe de verdad.
 
 ### Abril sigue recibiendo asistencia HOY
 
